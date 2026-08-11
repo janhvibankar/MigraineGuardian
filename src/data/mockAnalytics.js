@@ -1,0 +1,202 @@
+/**
+ * Mock Datasets for MigraineGuardian Analytics Workspace
+ */
+
+export const MOCK_ANALYTICS_DATA = {
+  '7days': {
+    timeframeLabel: 'Last 7 Days',
+    summary: {
+      migraineDays: 2,
+      avgRisk: '54%',
+      avgSleep: '6.4h',
+      avgStress: '6.2/10',
+      avgScreen: '7.1h',
+    },
+    riskTrend: [
+      { date: 'Mon', risk: 24, label: 'Monday' },
+      { date: 'Tue', risk: 30, label: 'Tuesday' },
+      { date: 'Wed', risk: 68, isMigraineDay: true, label: 'Wednesday (Migraine)' },
+      { date: 'Thu', risk: 42, label: 'Thursday' },
+      { date: 'Fri', risk: 35, label: 'Friday' },
+      { date: 'Sat', risk: 75, isMigraineDay: true, label: 'Saturday (Migraine)' },
+      { date: 'Sun', risk: 72, label: 'Today (Sunday)' },
+    ],
+    frequency: [
+      { period: 'Mon-Tue', count: 0, label: 'Early Week' },
+      { period: 'Wed-Thu', count: 1, label: 'Mid Week' },
+      { period: 'Fri-Sat', count: 1, label: 'Weekend' },
+      { period: 'Sun', count: 0, label: 'Sunday' },
+    ],
+    sleepTrend: [
+      { date: 'Mon', hours: 7.5, target: 7.5 },
+      { date: 'Tue', hours: 7.2, target: 7.5 },
+      { date: 'Wed', hours: 5.5, target: 7.5 },
+      { date: 'Thu', hours: 6.8, target: 7.5 },
+      { date: 'Fri', hours: 7.0, target: 7.5 },
+      { date: 'Sat', hours: 5.2, target: 7.5 },
+      { date: 'Sun', hours: 5.8, target: 7.5 },
+    ],
+    stressTrend: [
+      { date: 'Mon', stress: 3 },
+      { date: 'Tue', stress: 4 },
+      { date: 'Wed', stress: 8 },
+      { date: 'Thu', stress: 5 },
+      { date: 'Fri', stress: 4 },
+      { date: 'Sat', stress: 9 },
+      { date: 'Sun', stress: 8 },
+    ],
+    screenTrend: [
+      { date: 'Mon', hours: 6.2 },
+      { date: 'Tue', hours: 6.8 },
+      { date: 'Wed', hours: 8.2 },
+      { date: 'Thu', hours: 7.0 },
+      { date: 'Fri', hours: 6.5 },
+      { date: 'Sat', hours: 8.4 },
+      { date: 'Sun', hours: 8.2 },
+    ],
+    severityTrend: [
+      { date: 'Wed', severity: 6, duration: '4h', note: 'Unilateral throbbing + photophobia' },
+      { date: 'Sat', severity: 8, duration: '6h', note: 'Sensory aura + acute neck tension' },
+    ],
+    patternAnalysis: [
+      { factor: 'Stress', contribution: 34, description: 'High daily stress levels' },
+      { factor: 'Sleep', contribution: 28, description: 'Rest deficit under 6 hours' },
+      { factor: 'Screen time', contribution: 22, description: 'Continuous exposure >7.5h' },
+      { factor: 'Hydration', contribution: 16, description: 'Fluid intake under 1.8L' },
+    ],
+  },
+
+  '30days': {
+    timeframeLabel: 'Last 30 Days',
+    summary: {
+      migraineDays: 5,
+      avgRisk: '42%',
+      avgSleep: '7.1h',
+      avgStress: '5.1/10',
+      avgScreen: '6.6h',
+    },
+    riskTrend: [
+      { date: 'W1-M', risk: 20 }, { date: 'W1-W', risk: 65, isMigraineDay: true }, { date: 'W1-F', risk: 32 }, { date: 'W1-S', risk: 28 },
+      { date: 'W2-M', risk: 25 }, { date: 'W2-W', risk: 30 }, { date: 'W2-F', risk: 70, isMigraineDay: true }, { date: 'W2-S', risk: 40 },
+      { date: 'W3-M', risk: 22 }, { date: 'W3-W', risk: 24 }, { date: 'W3-F', risk: 72, isMigraineDay: true }, { date: 'W3-S', risk: 35 },
+      { date: 'W4-M', risk: 24 }, { date: 'W4-W', risk: 68, isMigraineDay: true }, { date: 'W4-F', risk: 35 }, { date: 'W4-S', risk: 75, isMigraineDay: true }, { date: 'Today', risk: 72 },
+    ],
+    frequency: [
+      { period: 'Week 1', count: 1, label: 'Oct 1 - Oct 7' },
+      { period: 'Week 2', count: 1, label: 'Oct 8 - Oct 14' },
+      { period: 'Week 3', count: 1, label: 'Oct 15 - Oct 21' },
+      { period: 'Week 4', count: 2, label: 'Oct 22 - Oct 28' },
+    ],
+    sleepTrend: [
+      { date: 'Oct 1', hours: 7.8, target: 7.5 }, { date: 'Oct 5', hours: 5.6, target: 7.5 },
+      { date: 'Oct 10', hours: 7.4, target: 7.5 }, { date: 'Oct 15', hours: 5.4, target: 7.5 },
+      { date: 'Oct 20', hours: 7.6, target: 7.5 }, { date: 'Oct 25', hours: 5.2, target: 7.5 },
+      { date: 'Oct 30', hours: 5.8, target: 7.5 },
+    ],
+    stressTrend: [
+      { date: 'Oct 1', stress: 3 }, { date: 'Oct 5', stress: 8 },
+      { date: 'Oct 10', stress: 4 }, { date: 'Oct 15', stress: 7 },
+      { date: 'Oct 20', stress: 3 }, { date: 'Oct 25', stress: 9 },
+      { date: 'Oct 30', stress: 8 },
+    ],
+    screenTrend: [
+      { date: 'Oct 1', hours: 5.8 }, { date: 'Oct 5', hours: 8.0 },
+      { date: 'Oct 10', hours: 6.2 }, { date: 'Oct 15', hours: 7.9 },
+      { date: 'Oct 20', hours: 6.0 }, { date: 'Oct 25', hours: 8.4 },
+      { date: 'Oct 30', hours: 8.2 },
+    ],
+    severityTrend: [
+      { date: 'Oct 3', severity: 5, duration: '3h', note: 'Mild aura' },
+      { date: 'Oct 12', severity: 6, duration: '4h', note: 'Photophobia' },
+      { date: 'Oct 19', severity: 7, duration: '5h', note: 'Neck stiffness' },
+      { date: 'Oct 24', severity: 6, duration: '4h', note: 'Tension + headache' },
+      { date: 'Oct 28', severity: 8, duration: '6h', note: 'Severe throbbing' },
+    ],
+    patternAnalysis: [
+      { factor: 'Stress', contribution: 36, description: 'High daily stress levels' },
+      { factor: 'Sleep', contribution: 30, description: 'Rest deficit under 6 hours' },
+      { factor: 'Screen time', contribution: 20, description: 'Continuous exposure >7.5h' },
+      { factor: 'Hydration', contribution: 14, description: 'Fluid intake under 1.8L' },
+    ],
+  },
+
+  '90days': {
+    timeframeLabel: 'Last 90 Days (Quarterly)',
+    summary: {
+      migraineDays: 11,
+      avgRisk: '38%',
+      avgSleep: '7.3h',
+      avgStress: '4.8/10',
+      avgScreen: '6.4h',
+    },
+    riskTrend: [
+      { date: 'Aug W1', risk: 25 }, { date: 'Aug W3', risk: 60, isMigraineDay: true },
+      { date: 'Sep W1', risk: 30 }, { date: 'Sep W3', risk: 55, isMigraineDay: true },
+      { date: 'Oct W1', risk: 28 }, { date: 'Oct W3', risk: 65, isMigraineDay: true },
+      { date: 'Current', risk: 72 },
+    ],
+    frequency: [
+      { period: 'August', count: 4, label: 'August 2024' },
+      { period: 'September', count: 3, label: 'September 2024' },
+      { period: 'October', count: 4, label: 'October 2024' },
+    ],
+    sleepTrend: [
+      { date: 'Aug', hours: 7.2, target: 7.5 },
+      { date: 'Sep', hours: 7.5, target: 7.5 },
+      { date: 'Oct', hours: 7.0, target: 7.5 },
+    ],
+    stressTrend: [
+      { date: 'Aug', stress: 5.2 },
+      { date: 'Sep', stress: 4.4 },
+      { date: 'Oct', stress: 5.8 },
+    ],
+    screenTrend: [
+      { date: 'Aug', hours: 6.5 },
+      { date: 'Sep', hours: 6.1 },
+      { date: 'Oct', hours: 6.9 },
+    ],
+    severityTrend: [
+      { date: 'Aug Avg', severity: 6.5, duration: '4.5h', note: 'Quarterly average' },
+      { date: 'Sep Avg', severity: 5.8, duration: '3.8h', note: 'Quarterly average' },
+      { date: 'Oct Avg', severity: 6.8, duration: '4.8h', note: 'Quarterly average' },
+    ],
+    patternAnalysis: [
+      { factor: 'Stress', contribution: 38, description: 'High daily stress levels' },
+      { factor: 'Sleep', contribution: 32, description: 'Rest deficit under 6 hours' },
+      { factor: 'Screen time', contribution: 18, description: 'Continuous exposure >7.5h' },
+      { factor: 'Hydration', contribution: 12, description: 'Fluid intake under 1.8L' },
+    ],
+  },
+};
+
+// 28-day Calendar Matrix for Chart 8 (subtle natural / sage / terracotta states)
+export const MOCK_CALENDAR_DAYS = [
+  { day: 1, date: 'Oct 1', risk: 18, state: 'sage', episode: false, sleep: '7.8h', stress: '3/10' },
+  { day: 2, date: 'Oct 2', risk: 22, state: 'sage', episode: false, sleep: '7.5h', stress: '3/10' },
+  { day: 3, date: 'Oct 3', risk: 65, state: 'terracotta', episode: true, sleep: '5.5h', stress: '7/10' },
+  { day: 4, date: 'Oct 4', risk: 38, state: 'neutral', episode: false, sleep: '6.8h', stress: '4/10' },
+  { day: 5, date: 'Oct 5', risk: 25, state: 'sage', episode: false, sleep: '7.2h', stress: '3/10' },
+  { day: 6, date: 'Oct 6', risk: 20, state: 'sage', episode: false, sleep: '7.9h', stress: '2/10' },
+  { day: 7, date: 'Oct 7', risk: 24, state: 'sage', episode: false, sleep: '7.4h', stress: '3/10' },
+  { day: 8, date: 'Oct 8', risk: 28, state: 'sage', episode: false, sleep: '7.2h', stress: '4/10' },
+  { day: 9, date: 'Oct 9', risk: 32, state: 'neutral', episode: false, sleep: '7.0h', stress: '4/10' },
+  { day: 10, date: 'Oct 10', risk: 35, state: 'neutral', episode: false, sleep: '6.9h', stress: '5/10' },
+  { day: 11, date: 'Oct 11', risk: 48, state: 'neutral', episode: false, sleep: '6.2h', stress: '6/10' },
+  { day: 12, date: 'Oct 12', risk: 68, state: 'terracotta', episode: true, sleep: '5.4h', stress: '8/10' },
+  { day: 13, date: 'Oct 13', risk: 42, state: 'neutral', episode: false, sleep: '6.8h', stress: '5/10' },
+  { day: 14, date: 'Oct 14', risk: 25, state: 'sage', episode: false, sleep: '7.6h', stress: '3/10' },
+  { day: 15, date: 'Oct 15', risk: 22, state: 'sage', episode: false, sleep: '7.8h', stress: '2/10' },
+  { day: 16, date: 'Oct 16', risk: 20, state: 'sage', episode: false, sleep: '7.5h', stress: '3/10' },
+  { day: 17, date: 'Oct 17', risk: 30, state: 'sage', episode: false, sleep: '7.1h', stress: '4/10' },
+  { day: 18, date: 'Oct 18', risk: 52, state: 'neutral', episode: false, sleep: '6.4h', stress: '6/10' },
+  { day: 19, date: 'Oct 19', risk: 72, state: 'terracotta', episode: true, sleep: '5.2h', stress: '8/10' },
+  { day: 20, date: 'Oct 20', risk: 40, state: 'neutral', episode: false, sleep: '6.9h', stress: '4/10' },
+  { day: 21, date: 'Oct 21', risk: 26, state: 'sage', episode: false, sleep: '7.4h', stress: '3/10' },
+  { day: 22, date: 'Oct 22', risk: 24, state: 'sage', episode: false, sleep: '7.5h', stress: '3/10' },
+  { day: 23, date: 'Oct 23', risk: 30, state: 'sage', episode: false, sleep: '7.2h', stress: '4/10' },
+  { day: 24, date: 'Oct 24', risk: 68, state: 'terracotta', episode: true, sleep: '5.5h', stress: '8/10' },
+  { day: 25, date: 'Oct 25', risk: 42, state: 'neutral', episode: false, sleep: '6.8h', stress: '5/10' },
+  { day: 26, date: 'Oct 26', risk: 35, state: 'sage', episode: false, sleep: '7.0h', stress: '4/10' },
+  { day: 27, date: 'Oct 27', risk: 75, state: 'terracotta', episode: true, sleep: '5.2h', stress: '9/10' },
+  { day: 28, date: 'Today', risk: 72, state: 'terracotta', episode: false, sleep: '5.8h', stress: '8/10', isToday: true },
+];
