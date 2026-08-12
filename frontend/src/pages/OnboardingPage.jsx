@@ -89,9 +89,9 @@ export function OnboardingPage() {
     }
   };
 
-  const saveProfileData = () => {
-    const updatedName = name.trim() || currentUser?.name || 'Sakshi';
-    authService.updateUserProfile({
+  const saveProfileData = async () => {
+    const updatedName = name.trim() || currentUser?.name || 'User';
+    await authService.updateUserProfile({
       name: updatedName,
       age,
       gender,
@@ -114,6 +114,7 @@ export function OnboardingPage() {
       selectedFactors,
     });
   };
+
 
   // Step navigation helpers
   const handleNext = () => {

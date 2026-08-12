@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "firebase": "^12.17.1",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.475.0",
     "react": "^18.3.1",

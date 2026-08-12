@@ -32,10 +32,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+import predictionRoutes from './routes/predictionRoutes.js';
+
 // Protected API Domain Routes
 app.use('/api/user', userRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/pss', pssRoutes);
+app.use('/api/predictions', predictionRoutes);
+
 
 
 

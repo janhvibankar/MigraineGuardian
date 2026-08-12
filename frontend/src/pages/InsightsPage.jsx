@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -30,16 +29,39 @@ import {
   Check,
   Layers,
   ChevronRight,
+  AlertCircle,
+  Loader2,
+  CalendarCheck,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 export function InsightsPage() {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [weeklyData, setWeeklyData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Service calls
-  const weeklyData = insightsService.getWeeklyInsights();
-  const noticedPatterns = insightsService.getNoticedPatterns();
-  const nextWeekFocus = insightsService.getNextWeekFocus();
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchInsights() {
+      setLoading(true);
+      try {
+        const data = await insightsService.getWeeklyInsights();
+        if (isMounted) {
+          setWeeklyData(data);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.warn('[InsightsPage] Error loading insights:', err.message);
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchInsights();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const hasData = Boolean(weeklyData && weeklyData.hasData);
 
   const handleDownload = async () => {
     await reportService.generatePdfReport('weekly');
@@ -47,359 +69,126 @@ export function InsightsPage() {
     setTimeout(() => setDownloadSuccess(false), 3000);
   };
 
-  // 4 Core Highlight Metrics (Balanced, clean, and spacious)
-  const coreMetrics = [
-    {
-      label: 'Migraine Days',
-      value: `${weeklyData.summary.migraineDays} Days`,
-      subtext: '2 logged episodes this week',
-      icon: Calendar,
-      badge: 'Episode Log',
-      badgeVariant: 'alert',
-      accent: 'border-alert-muted/40 bg-alert-muted/10 text-[#8F443B]',
-    },
-    {
-      label: 'Average Risk',
-      value: weeklyData.summary.avgRisk,
-      subtext: '7-day mean forecast index',
-      icon: Activity,
-      badge: 'Moderate',
-      badgeVariant: 'teal',
-      accent: 'border-brand-teal/40 bg-brand-teal/10 text-brand-teal-dark',
-    },
-    {
-      label: 'Average Sleep',
-      value: weeklyData.summary.avgSleep,
-      subtext: '-1.2h below 7.6h baseline',
-      icon: Moon,
-      badge: 'Deficit',
-      badgeVariant: 'alert',
-      accent: 'border-brand-sage/50 bg-brand-sage/15 text-brand-dark',
-    },
-    {
-      label: 'Hydration Buffer',
-      value: weeklyData.summary.avgHydration || '2.2 L',
-      subtext: '+0.6L improvement vs last week',
-      icon: Droplets,
-      badge: 'Progress',
-      badgeVariant: 'sage',
-      accent: 'border-brand-teal/40 bg-brand-teal/10 text-brand-teal',
-    },
-  ];
-
   return (
-    <div className="max-w-6xl mx-auto space-y-10 py-2 pb-24 animate-in fade-in duration-200">
-      {/* =========================================================================
-          1. CLASSY HEADER & DOWNLOAD ACTION
-         ========================================================================= */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-brand-sage/35">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-brand-sage/20 border border-brand-sage/45 text-meta-sm text-brand-dark font-medium mb-1">
-            <span className="w-2 h-2 rounded-full bg-brand-teal animate-pulse" />
-            <span>Weekly Synthesis • 7-Day Longitudinal Horizon</span>
-          </div>
-          <h1 className="text-app-xl sm:text-[34px] font-extrabold text-brand-dark tracking-tight leading-tight">
-            Your Weekly Insights
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-200 text-left">
+      {/* HEADER & TOP ACTIONS */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-muted-border/60">
+        <div>
+          <h1 className="text-app-xl sm:text-[32px] font-semibold text-brand-dark tracking-tight leading-tight">
+            Weekly Insights & Patterns
           </h1>
-          <p className="text-body-md text-[#555B55]">
-            Discover actionable trigger patterns, baseline variances, and recovery habits from the past 7 days.
+          <p className="text-body-md text-muted-text mt-0.5">
+            Empirical pattern discoveries based on your daily check-in signals.
           </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
           <Button
             variant="outline"
             size="md"
             onClick={handleDownload}
             icon={Download}
-            className="shadow-sm font-semibold"
           >
-            {downloadSuccess ? 'Summary Generated' : 'Download Weekly PDF'}
+            Export Summary
           </Button>
-          <Link to={ROUTES.ANALYTICS}>
-            <Button variant="secondary" size="md" iconRight={ArrowRight} className="font-semibold">
-              Detailed Analytics
-            </Button>
-          </Link>
-        </div>
-      </div>
 
-      {downloadSuccess && (
-        <div className="p-4 rounded-[18px] bg-brand-teal/15 border-2 border-brand-teal/40 text-brand-dark text-meta-md flex items-center justify-between shadow-sm animate-in fade-in duration-200">
-          <div className="flex items-center gap-2.5 font-medium">
-            <CheckCircle2 className="w-5 h-5 text-brand-teal" />
-            <span>Weekly summary PDF generated successfully. Saved to your local records folder.</span>
-          </div>
-          <Link to={ROUTES.REPORTS} className="text-meta-sm font-bold underline text-brand-dark hover:text-brand-teal">
-            View Reports →
-          </Link>
-        </div>
-      )}
-
-      {/* =========================================================================
-          2. TOP 4 KEY HIGHLIGHT METRICS (Spacious & Clean)
-         ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {coreMetrics.map((item, idx) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={idx}
-              className="p-5 sm:p-6 rounded-[22px] bg-white border-2 border-brand-sage/50 shadow-soft hover:shadow-soft-md transition-all space-y-3.5"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-brand-dark text-white flex items-center justify-center shadow-soft">
-                  <Icon className="w-5 h-5 text-brand-teal" />
-                </div>
-                <Badge variant={item.badgeVariant} size="sm">
-                  {item.badge}
-                </Badge>
-              </div>
-
-              <div>
-                <span className="text-meta-sm font-bold text-muted-text block uppercase tracking-wider">
-                  {item.label}
-                </span>
-                <div className="text-[30px] font-black text-brand-dark leading-tight mt-0.5">
-                  {item.value}
-                </div>
-              </div>
-
-              <div className="text-meta-sm text-[#666C66] pt-2 border-t border-brand-sage/25 font-medium">
-                {item.subtext}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* =========================================================================
-          3. DISCOVERED PATTERNS (Classy 2-Column Grid with Clear Highlights)
-         ========================================================================= */}
-      <div className="space-y-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Sparkles className="w-5 h-5 text-brand-teal" />
-            <h2 className="text-section-lg sm:text-app-lg font-bold text-brand-dark">
-              Key Pattern Discoveries
-            </h2>
-          </div>
-          <span className="text-meta-sm text-muted-text bg-white px-3 py-1 rounded-full border border-brand-sage/40">
-            4 Observed Trends
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-          {/* Pattern 1: Sleep */}
-          <div className="p-6 rounded-[24px] bg-white border-2 border-brand-sage/50 shadow-soft hover:shadow-soft-md transition-all space-y-4 text-left">
-            <div className="flex items-center justify-between pb-3 border-b border-brand-sage/30">
-              <div className="flex items-center gap-2 text-brand-dark font-bold text-meta-md">
-                <Moon className="w-4 h-4 text-brand-teal" />
-                <span>Sleep Continuity Deficit</span>
-              </div>
-              <Badge variant="alert" size="sm">
-                High Association
-              </Badge>
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-section-md font-extrabold text-brand-dark leading-snug">
-                Shorter sleep preceded both migraine episodes
-              </h3>
-              <p className="text-meta-md text-[#555B55] leading-relaxed">
-                Nights before logged migraine events averaged 5.4 hours compared to your 7.6-hour baseline rest duration.
-              </p>
-            </div>
-
-            <div className="p-3.5 rounded-[16px] bg-alert-muted/10 border border-alert-muted/30 flex items-center justify-between text-meta-md">
-              <span className="text-muted-text-dark font-medium">Measured Variance:</span>
-              <span className="font-bold text-[#8F443B]">5.4h vs 7.6h baseline (-2.2h)</span>
-            </div>
-          </div>
-
-          {/* Pattern 2: Stress */}
-          <div className="p-6 rounded-[24px] bg-white border-2 border-brand-sage/50 shadow-soft hover:shadow-soft-md transition-all space-y-4 text-left">
-            <div className="flex items-center justify-between pb-3 border-b border-brand-sage/30">
-              <div className="flex items-center gap-2 text-brand-dark font-bold text-meta-md">
-                <Brain className="w-4 h-4 text-brand-teal" />
-                <span>Autonomic Stress Surge</span>
-              </div>
-              <Badge variant="alert" size="sm">
-                Contributing Factor
-              </Badge>
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-section-md font-extrabold text-brand-dark leading-snug">
-                Elevated sympathetic tension prior to onset
-              </h3>
-              <p className="text-meta-md text-[#555B55] leading-relaxed">
-                Stress ratings averaged 8.2 / 10 in the 24-hour windows leading up to Wednesday and Saturday.
-              </p>
-            </div>
-
-            <div className="p-3.5 rounded-[16px] bg-alert-muted/10 border border-alert-muted/30 flex items-center justify-between text-meta-md">
-              <span className="text-muted-text-dark font-medium">Measured Variance:</span>
-              <span className="font-bold text-[#8F443B]">8.2/10 preceding episodes (+4.2)</span>
-            </div>
-          </div>
-
-          {/* Pattern 3: Screen Glare */}
-          <div className="p-6 rounded-[24px] bg-white border-2 border-brand-sage/50 shadow-soft hover:shadow-soft-md transition-all space-y-4 text-left">
-            <div className="flex items-center justify-between pb-3 border-b border-brand-sage/30">
-              <div className="flex items-center gap-2 text-brand-dark font-bold text-meta-md">
-                <SunMedium className="w-4 h-4 text-brand-teal" />
-                <span>Screen Exposure & Glare</span>
-              </div>
-              <Badge variant="teal" size="sm">
-                Sensory Strain
-              </Badge>
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-section-md font-extrabold text-brand-dark leading-snug">
-                Extended display sessions without pauses
-              </h3>
-              <p className="text-meta-md text-[#555B55] leading-relaxed">
-                Continuous screen time reached 8.2 hours without scheduled 20-minute visual recovery intervals.
-              </p>
-            </div>
-
-            <div className="p-3.5 rounded-[16px] bg-brand-teal/10 border border-brand-teal/30 flex items-center justify-between text-meta-md">
-              <span className="text-muted-text-dark font-medium">Measured Variance:</span>
-              <span className="font-bold text-brand-dark">8.2h vs 6.0h baseline (+1.1h)</span>
-            </div>
-          </div>
-
-          {/* Pattern 4: Hydration Progress */}
-          <div className="p-6 rounded-[24px] bg-white border-2 border-brand-sage/50 shadow-soft hover:shadow-soft-md transition-all space-y-4 text-left">
-            <div className="flex items-center justify-between pb-3 border-b border-brand-sage/30">
-              <div className="flex items-center gap-2 text-brand-dark font-bold text-meta-md">
-                <Droplets className="w-4 h-4 text-brand-teal" />
-                <span>Hydration Buffer Consistency</span>
-              </div>
-              <Badge variant="sage" size="sm">
-                Protective Habit
-              </Badge>
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-section-md font-extrabold text-brand-dark leading-snug">
-                Daily fluid intake improved by +0.6L
-              </h3>
-              <p className="text-meta-md text-[#555B55] leading-relaxed">
-                You maintained 2.2L daily, building a supportive buffer against afternoon physiological fatigue.
-              </p>
-            </div>
-
-            <div className="p-3.5 rounded-[16px] bg-brand-sage/20 border border-brand-sage/45 flex items-center justify-between text-meta-md">
-              <span className="text-muted-text-dark font-medium">Positive Gain:</span>
-              <span className="font-bold text-brand-teal-dark">+0.6 L/day increase</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          4. CALIBRATED ACTION PLAN (Next Week's Focus - Clean Editorial Stepper)
-         ========================================================================= */}
-      <Card variant="warm" className="p-7 sm:p-9 border-2 border-brand-sage/60 rounded-[28px] shadow-soft space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-brand-sage/35">
-          <div className="flex items-center gap-2.5 text-brand-dark">
-            <HeartHandshake className="w-5 h-5 text-brand-teal" />
-            <h2 className="text-section-lg font-bold">
-              Your Focus for Next Week
-            </h2>
-          </div>
-          <span className="text-meta-sm font-semibold text-[#555B55]">
-            Target: Circadian Regularity & Hydration
-          </span>
-        </div>
-
-        {/* 3 Step Actionable Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-          {/* Step 1 */}
-          <div className="p-5 rounded-[20px] bg-white border-2 border-brand-sage/45 shadow-sm space-y-2.5 text-left">
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] font-bold text-brand-dark bg-brand-sage/25 px-2.5 py-0.5 rounded-full border border-brand-sage/45 uppercase tracking-wider">
-                Step 01
-              </span>
-              <Moon className="w-4 h-4 text-brand-teal" />
-            </div>
-            <h4 className="text-body-md font-bold text-brand-dark">
-              Consistent Bedtime Window
-            </h4>
-            <p className="text-meta-sm text-[#555B55] leading-relaxed">
-              Keep bedtime within a 30-minute window, even on weekends, to stabilize your circadian threshold.
-            </p>
-          </div>
-
-          {/* Step 2 */}
-          <div className="p-5 rounded-[20px] bg-white border-2 border-brand-sage/45 shadow-sm space-y-2.5 text-left">
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] font-bold text-brand-dark bg-brand-teal/20 px-2.5 py-0.5 rounded-full border border-brand-teal/40 uppercase tracking-wider">
-                Step 02
-              </span>
-              <Brain className="w-4 h-4 text-brand-teal" />
-            </div>
-            <h4 className="text-body-md font-bold text-brand-dark">
-              Daily Stress Micro-Log
-            </h4>
-            <p className="text-meta-sm text-[#555B55] leading-relaxed">
-              Continue capturing 60-second midday stress ratings to pinpoint tasks that trigger evening tension.
-            </p>
-          </div>
-
-          {/* Step 3 */}
-          <div className="p-5 rounded-[20px] bg-white border-2 border-brand-sage/45 shadow-sm space-y-2.5 text-left">
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] font-bold text-brand-dark bg-brand-sage/25 px-2.5 py-0.5 rounded-full border border-brand-sage/45 uppercase tracking-wider">
-                Step 03
-              </span>
-              <Droplets className="w-4 h-4 text-brand-teal" />
-            </div>
-            <h4 className="text-body-md font-bold text-brand-dark">
-              Pre-3 PM Fluid Target
-            </h4>
-            <p className="text-meta-sm text-[#555B55] leading-relaxed">
-              Maintain this week's 2.2L water target before 3:00 PM to protect against atmospheric pressure drops.
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* =========================================================================
-          5. COMPLIANCE & NAVIGATION (Ample Spacing)
-         ========================================================================= */}
-      <div className="p-4 rounded-[18px] bg-white border border-brand-sage/40 flex items-start gap-3 text-meta-sm text-muted-text shadow-sm">
-        <ShieldCheck className="w-5 h-5 text-brand-teal flex-shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          These weekly insights describe personal correlation patterns in your tracked check-in history. They do not constitute medical diagnosis or replace professional clinical evaluation.
-        </p>
-      </div>
-
-      {/* Quick Navigation Action Row */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-        <Link to={ROUTES.DASHBOARD}>
-          <Button variant="outline" size="lg" className="w-full sm:w-auto font-bold">
-            ← Return to Dashboard
-          </Button>
-        </Link>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <Link to={ROUTES.ANALYTICS}>
-            <Button variant="secondary" size="lg" className="w-full sm:w-auto font-bold" iconRight={ArrowRight}>
-              View Detailed Analytics
-            </Button>
-          </Link>
           <Link to={ROUTES.CHAT}>
-            <Button variant="primary" size="lg" className="w-full sm:w-auto font-bold" icon={Bot}>
-              Ask MigraineGuardian
+            <Button
+              variant="primary"
+              size="md"
+              icon={MessageSquare}
+              iconRight={ArrowRight}
+            >
+              Ask Assistant
             </Button>
           </Link>
         </div>
       </div>
+
+      {loading ? (
+        <div className="min-h-[300px] flex flex-col items-center justify-center space-y-3 py-12">
+          <Loader2 className="w-8 h-8 text-brand-teal animate-spin" />
+          <span className="text-body-md font-semibold text-brand-dark">
+            Discovering your pattern insights...
+          </span>
+        </div>
+      ) : !hasData ? (
+        /* EMPTY STATE FOR NEW USERS */
+        <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
+            <AlertCircle className="w-7 h-7 text-brand-teal" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-section-lg font-bold text-brand-dark">
+              No pattern insights discovered yet
+            </h2>
+            <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
+              Log your daily sleep, stress, screen time, and hydration to generate evidence-based pattern insights.
+            </p>
+          </div>
+          <Link to={ROUTES.DAILY_CHECKIN} className="inline-block pt-2">
+            <Button variant="primary" size="lg" icon={CalendarCheck} iconRight={ArrowRight}>
+              Complete Today's Check-in
+            </Button>
+          </Link>
+        </Card>
+      ) : (
+        <>
+          {/* SUMMARY TILES */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
+              <span className="text-meta-sm text-muted-text font-medium">Logged Migraine Days</span>
+              <div className="text-app-xl font-bold text-brand-dark">
+                {weeklyData.summary.migraineDays} days
+              </div>
+              <span className="text-[11px] text-muted-text">Past 7 days</span>
+            </div>
+
+            <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
+              <span className="text-meta-sm text-muted-text font-medium">Average Sleep</span>
+              <div className="text-app-xl font-bold text-brand-dark">
+                {weeklyData.summary.avgSleep}
+              </div>
+              <span className="text-[11px] text-muted-text">Target: 7.5 hrs</span>
+            </div>
+
+            <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
+              <span className="text-meta-sm text-muted-text font-medium">Average Stress</span>
+              <div className="text-app-xl font-bold text-brand-dark">
+                {weeklyData.summary.avgStress}
+              </div>
+              <span className="text-[11px] text-muted-text">Target: &lt; 5.0</span>
+            </div>
+          </div>
+
+          {/* DISCOVERED PATTERNS */}
+          <div className="space-y-4">
+            <h2 className="text-section-lg font-bold text-brand-dark">
+              Discovered Behavioral Patterns
+            </h2>
+
+            {weeklyData.noticedPatterns && weeklyData.noticedPatterns.length > 0 ? (
+              <div className="space-y-3">
+                {weeklyData.noticedPatterns.map((p, idx) => (
+                  <Card key={idx} className="p-5 bg-white border border-muted-border rounded-card shadow-soft space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-section-md font-bold text-brand-dark">{p.title}</h3>
+                      <Badge variant={p.impact === 'High' ? 'alert' : 'teal'} size="sm">
+                        {p.impact} Impact
+                      </Badge>
+                    </div>
+                    <p className="text-meta-md text-[#555B55] leading-relaxed">{p.description}</p>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="p-6 bg-white border border-muted-border rounded-card text-muted-text text-center">
+                No high-impact risk pattern disruptions detected over your past logs.
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

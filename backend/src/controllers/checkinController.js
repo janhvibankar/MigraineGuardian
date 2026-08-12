@@ -1,4 +1,5 @@
 import { firestoreService } from '../services/firestoreService.js';
+import { mlInferenceService } from '../services/mlInferenceService.js';
 
 export async function submitDailyCheckinController(req, res, next) {
   try {
@@ -91,18 +92,61 @@ export async function submitDailyCheckinController(req, res, next) {
       });
     }
 
+    // 1. Save check-in document to Firestore
     const result = await firestoreService.saveDailyCheckin(userId, req.body);
+    const date = result.entry.date || new Date().toISOString().split('T')[0];
+
+    // 2. Fetch baseline stats & recent 7-day episode count from Firestore
+    const baselineStats = await firestoreService.getUserBaselineStats(userId);
+    const recentEpisodesCount = await firestoreService.getRecentEpisodesCount(userId, 7);
+
+    // 3. Construct FastAPI ML payload
+    const mlPayload = {
+      user_id: userId,
+      latest_log: {
+        sleep_hours: Number(req.body.sleep_hours),
+        sleep_quality: Number(req.body.sleep_quality),
+        daily_stress: Number(req.body.daily_stress),
+        mood: Number(req.body.mood ?? 3),
+        screen_time: Number(req.body.screen_time),
+        hydration: Number(req.body.hydration),
+      },
+      baseline_stats: {
+        avg_sleep: Number(baselineStats.avg_sleep),
+        avg_stress: Number(baselineStats.avg_stress),
+        pss_score: Number(baselineStats.pss_score),
+      },
+      recent_episodes_count_7d: Number(recentEpisodesCount),
+    };
+
+    // 4. Send request to FastAPI ML service (/predict)
+    const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+
+    let forecastDoc = null;
+    let forecastSaved = false;
+
+    if (mlResult.success && mlResult.data) {
+      // 5. Save prediction, elevatedFactors, xai, and focusAreas to Firestore users/{userId}/risk_forecasts/{date}
+      const forecastSaveResult = await firestoreService.saveRiskForecast(userId, date, mlResult.data);
+      forecastDoc = forecastSaveResult.forecast;
+      forecastSaved = true;
+    }
 
     return res.status(200).json({
       success: true,
       timestamp: new Date().toISOString(),
-      message: 'Check-in gently recorded in Firestore.',
+      message: forecastSaved ? 'Check-in and risk forecast recorded.' : 'Check-in recorded; ML prediction service unavailable.',
       entry: result.entry,
+      checkinSaved: true,
+      forecastAvailable: forecastSaved,
+      forecast: forecastDoc,
+      mlWarning: !forecastSaved ? (mlResult.error?.message || 'ML prediction service unavailable') : null,
     });
   } catch (error) {
     next(error);
   }
 }
+
 
 export async function getDailyLogsController(req, res, next) {
   try {

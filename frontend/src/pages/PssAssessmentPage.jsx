@@ -6,6 +6,8 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { storageService } from '../services/storageService';
+import { pssService } from '../services/pssService';
+
 import {
   calculatePssScore,
   PSS_RESPONSE_OPTIONS,

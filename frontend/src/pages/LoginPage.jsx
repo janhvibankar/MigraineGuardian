@@ -27,6 +27,7 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotMsg, setShowForgotMsg] = useState(false);
 
+  const [serverError, setServerError] = useState(null);
   const [errors, setErrors] = useState({});
 
   const validateForm = () => {
@@ -50,14 +51,40 @@ export function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setServerError(null);
     if (!validateForm()) return;
 
     setIsLoading(true);
     try {
-      await authService.login(email.trim(), password);
-      navigate(ROUTES.DASHBOARD);
+      const res = await authService.login(email.trim(), password);
+      if (res && res.success) {
+        navigate(ROUTES.DASHBOARD);
+      } else {
+        const errMsg = res?.error || 'Invalid email or password. Please try again.';
+        setServerError(errMsg);
+      }
     } catch (err) {
       console.error(err);
+      setServerError('An unexpected error occurred during sign in.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setServerError(null);
+    try {
+      const res = await authService.loginWithGoogle();
+      if (res && res.success) {
+        navigate(ROUTES.DASHBOARD);
+      } else if (res && res.error) {
+        setServerError(res.error);
+      }
+    } catch (err) {
+      console.error(err);
+      setServerError('Google sign-in failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -143,6 +170,12 @@ export function LoginPage() {
             </CardDescription>
           </CardHeader>
 
+          {serverError && (
+            <div className="p-4 rounded-[14px] bg-alert-muted/15 border-2 border-alert-muted/50 text-brand-dark text-meta-md font-semibold animate-in fade-in duration-200" role="alert">
+              <span>{serverError}</span>
+            </div>
+          )}
+
           {showForgotMsg && (
             <div className="p-3.5 rounded-[14px] bg-brand-teal/15 border border-brand-teal/40 text-brand-dark text-meta-md flex items-center justify-between animate-in fade-in duration-200">
               <span>Password reset instructions simulated. Check your inbox.</span>
@@ -223,7 +256,7 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {/* Optional Social Login Placeholder */}
+          {/* Social Login */}
           <div className="pt-2">
             <div className="relative flex items-center justify-center my-3">
               <div className="border-t border-brand-sage/35 w-full" />
@@ -234,9 +267,10 @@ export function LoginPage() {
 
             <button
               type="button"
-              disabled
-              className="w-full py-2.5 px-4 rounded-[14px] border-2 border-brand-sage/40 bg-white/70 text-muted-text-dark text-meta-md font-semibold flex items-center justify-center gap-2.5 cursor-not-allowed opacity-75"
-              title="Social login placeholder (Disabled)"
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+              className="w-full py-2.5 px-4 rounded-[14px] border-2 border-brand-sage/50 bg-white hover:bg-brand-sage/10 text-brand-dark text-meta-md font-semibold flex items-center justify-center gap-2.5 transition-all shadow-sm cursor-pointer"
+              title="Sign in with Google"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -256,7 +290,7 @@ export function LoginPage() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span>Continue with Google (Demo only)</span>
+              <span>Continue with Google</span>
             </button>
           </div>
 

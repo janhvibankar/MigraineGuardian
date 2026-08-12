@@ -37,7 +37,11 @@ export function Sidebar({ className }) {
               <span className="w-2 h-2 rounded-full bg-brand-sage animate-pulse" />
               <span className="text-meta-sm font-medium text-brand-dark">Active Monitoring</span>
             </div>
-            <span className="text-[11px] text-brand-teal-dark uppercase font-semibold">18% Risk</span>
+            <span className="text-[11px] text-brand-teal-dark uppercase font-semibold">
+              {currentUser?.currentRiskScore !== null && currentUser?.currentRiskScore !== undefined
+                ? `${currentUser.currentRiskScore}% Risk`
+                : 'NO DATA'}
+            </span>
           </div>
         </div>
 

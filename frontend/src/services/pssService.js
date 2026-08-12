@@ -1,44 +1,17 @@
-/**
- * PSS Service (Phase 3 - Firebase & Express Backend Integration)
- *
- * Manages PSS-10 standardized questions retrieval, assessment submission,
- * and latest evaluation scores from Express API Gateway / Cloud Firestore.
- */
-
-import { storageService } from './storageService';
-import { calculatePssScore } from '../utils/pssCalculator';
-
-const API_BASE_URL = 'http://localhost:5000/api/pss';
-
-function getAuthHeaders() {
-  const token = storageService.getItem('migraineguardian_token', null) || localStorage.getItem('mg_v1_migraineguardian_token');
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
+import { apiClient } from './apiClient.js';
+import { storageService } from './storageService.js';
+import { calculatePssScore } from '../utils/pssCalculator.js';
 
 export const pssService = {
   /**
    * Retrieves PSS-10 question definitions.
    */
   getPssQuestions: async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/questions`);
-      if (response.ok) {
-        const json = await response.json();
-        if (json.success && Array.isArray(json.questions)) {
-          return json.questions;
-        }
-      }
-    } catch (e) {
-      console.warn('[pssService] Network error fetching PSS questions:', e.message);
+    const res = await apiClient.get('/pss/questions');
+    if (res.ok && res.raw && Array.isArray(res.raw.questions)) {
+      return res.raw.questions;
     }
 
-    // Default static question items
     return [
       { id: 1, text: 'In the last month, how often have you been upset because of something that happened unexpectedly?' },
       { id: 2, text: 'In the last month, how often have you felt that you were unable to control the important things in your life?' },
@@ -57,69 +30,47 @@ export const pssService = {
    * Submits completed 10-item answers to Express API Gateway (`POST /api/pss/submit`).
    */
   submitAssessment: async (answers) => {
-    const finalScore = calculatePssScore(answers);
+    const calculatedScore = calculatePssScore(answers);
     const completedAt = new Date().toISOString();
 
     const localRecord = {
-      score: finalScore,
+      score: calculatedScore,
       completedAt,
       answers,
     };
 
-    // Cache locally for instantaneous offline support
     storageService.setItem('pss_score_latest', localRecord);
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/submit`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ answers }),
-      });
+    const res = await apiClient.post('/pss/submit', { answers });
 
-      const json = await response.json();
-
-      if (!response.ok) {
-        console.warn('[pssService] Server validation or auth error:', json);
-        return {
-          success: false,
-          score: finalScore,
-          error: json.error || { message: `Server error (${response.status})` },
-        };
-      }
-
+    if (!res.ok) {
+      console.warn('[pssService] Backend error submitting PSS assessment:', res.error);
       return {
-        success: true,
-        assessmentId: json.assessmentId,
-        score: json.score,
-        category: json.category,
-        interpretation: json.interpretation,
-        completedAt: json.completedAt,
+        success: false,
+        score: calculatedScore,
+        error: res.error,
       };
-    } catch (e) {
-      console.warn('[pssService] Network error submitting PSS assessment, saved locally:', e.message);
-      return { success: true, score: finalScore, offline: true };
     }
+
+    const json = res.raw || {};
+    return {
+      success: true,
+      assessmentId: json.assessmentId,
+      score: json.score !== undefined ? json.score : calculatedScore,
+      category: json.category || 'Standard Assessment',
+      interpretation: json.interpretation || '',
+      completedAt: json.completedAt || completedAt,
+    };
   },
 
   /**
    * Retrieves user's latest PSS assessment record.
    */
   getLatestAssessment: async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/latest`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        const json = await response.json();
-        if (json.success && json.data) {
-          storageService.setItem('pss_score_latest', json.data);
-          return json.data;
-        }
-      }
-    } catch (e) {
-      console.warn('[pssService] Network error fetching latest PSS result:', e.message);
+    const res = await apiClient.get('/pss/latest');
+    if (res.ok && res.data) {
+      storageService.setItem('pss_score_latest', res.data);
+      return res.data;
     }
 
     return storageService.getItem('pss_score_latest', null);

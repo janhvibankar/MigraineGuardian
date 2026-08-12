@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 // Layouts
 import { PublicLayout } from './layouts/PublicLayout';
@@ -32,37 +33,39 @@ import { ROUTES } from './utils/constants';
 
 export function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public Informational Routes */}
-        <Route element={<PublicLayout />}>
-          <Route path={ROUTES.HOME} element={<LandingPage />} />
-          <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
+          {/* Public Informational Routes */}
+          <Route element={<PublicLayout />}>
+            <Route path={ROUTES.HOME} element={<LandingPage />} />
+            <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
 
-        {/* Auth & Onboarding Flow */}
-        <Route element={<AuthLayout />}>
-          <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-          <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
-          <Route path={ROUTES.ONBOARDING} element={<OnboardingPage />} />
-        </Route>
+          {/* Auth & Onboarding Flow */}
+          <Route element={<AuthLayout />}>
+            <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+            <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
+            <Route path={ROUTES.ONBOARDING} element={<OnboardingPage />} />
+          </Route>
 
-        {/* Protected App Workspace Routes */}
-        <Route element={<AppLayout />}>
-          <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-          <Route path={ROUTES.DAILY_CHECKIN} element={<DailyCheckinPage />} />
-          <Route path={ROUTES.RISK_ANALYSIS} element={<RiskAnalysisPage />} />
-          <Route path={ROUTES.INSIGHTS} element={<InsightsPage />} />
-          <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
-          <Route path={ROUTES.REPORTS} element={<ReportsPage />} />
-          <Route path={ROUTES.CHAT} element={<ChatPage />} />
-          <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
-          <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
-          <Route path={ROUTES.PSS_ASSESSMENT} element={<PssAssessmentPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+          {/* Protected App Workspace Routes */}
+          <Route element={<AppLayout />}>
+            <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+            <Route path={ROUTES.DAILY_CHECKIN} element={<DailyCheckinPage />} />
+            <Route path={ROUTES.RISK_ANALYSIS} element={<RiskAnalysisPage />} />
+            <Route path={ROUTES.INSIGHTS} element={<InsightsPage />} />
+            <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
+            <Route path={ROUTES.REPORTS} element={<ReportsPage />} />
+            <Route path={ROUTES.CHAT} element={<ChatPage />} />
+            <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+            <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+            <Route path={ROUTES.PSS_ASSESSMENT} element={<PssAssessmentPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

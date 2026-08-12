@@ -26,9 +26,10 @@ export function SignupPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [consentAgreed, setConsentAgreed] = useState(false);
-
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState(null);
+
 
   const validateForm = () => {
     const newErrors = {};
@@ -65,18 +66,48 @@ export function SignupPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setServerError(null);
     if (!validateForm()) return;
 
     setIsLoading(true);
     try {
-      await authService.signup({
+      const res = await authService.signup({
         name: fullName.trim(),
         email: email.trim(),
         password,
       });
-      navigate(ROUTES.ONBOARDING);
+
+      if (res && res.success) {
+        navigate(ROUTES.ONBOARDING);
+      } else {
+        const errMsg = res?.error || 'Registration failed. Please try again.';
+        setServerError(errMsg);
+        if (errMsg.toLowerCase().includes('email')) {
+          setErrors((prev) => ({ ...prev, email: errMsg }));
+        }
+      }
     } catch (err) {
       console.error(err);
+      setServerError('An error occurred during account creation.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setServerError(null);
+    try {
+      const res = await authService.loginWithGoogle();
+      if (res && res.success) {
+        navigate(ROUTES.ONBOARDING);
+      } else if (res && res.error) {
+        setServerError(res.error);
+      }
+    } catch (err) {
+      console.error(err);
+      setServerError('Google sign-in failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -161,6 +192,12 @@ export function SignupPage() {
               Join MigraineGuardian to begin gentle, evidence-based pattern tracking.
             </CardDescription>
           </CardHeader>
+
+          {serverError && (
+            <div className="p-4 rounded-[14px] bg-alert-muted/15 border-2 border-alert-muted/50 text-brand-dark text-meta-md font-semibold animate-in fade-in duration-200" role="alert">
+              <span>{serverError}</span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4 pt-1">
             <Input
@@ -265,7 +302,7 @@ export function SignupPage() {
             </Button>
           </form>
 
-          {/* Social login placeholder */}
+          {/* Social login */}
           <div className="pt-2">
             <div className="relative flex items-center justify-center my-3">
               <div className="border-t border-brand-sage/35 w-full" />
@@ -276,9 +313,10 @@ export function SignupPage() {
 
             <button
               type="button"
-              disabled
-              className="w-full py-2.5 px-4 rounded-[14px] border-2 border-brand-sage/40 bg-white/70 text-muted-text-dark text-meta-md font-semibold flex items-center justify-center gap-2.5 cursor-not-allowed opacity-75"
-              title="Social login placeholder (Demo only)"
+              onClick={handleGoogleSignIn}
+              disabled={isLoading}
+              className="w-full py-2.5 px-4 rounded-[14px] border-2 border-brand-sage/50 bg-white hover:bg-brand-sage/10 text-brand-dark text-meta-md font-semibold flex items-center justify-center gap-2.5 transition-all shadow-sm cursor-pointer"
+              title="Sign in with Google"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -298,7 +336,7 @@ export function SignupPage() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span>Continue with Google (Demo only)</span>
+              <span>Continue with Google</span>
             </button>
           </div>
 
@@ -314,3 +352,4 @@ export function SignupPage() {
     </div>
   );
 }
+

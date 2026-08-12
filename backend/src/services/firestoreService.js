@@ -56,8 +56,8 @@ export const firestoreService = {
         secondaryAction: 'Cold compress, dark room, 500ml electrolyte water',
         emergencyContact: 'Neurology Clinic - (555) 392-8110',
       },
-      currentRiskScore: 18,
-      riskCategory: 'LOW',
+      currentRiskScore: null,
+      riskCategory: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -281,6 +281,182 @@ export const firestoreService = {
 
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   },
+
+  /**
+   * Computes user's baseline statistics (avg_sleep, avg_stress, pss_score)
+   * from recent check-ins and user profile.
+   */
+  getUserBaselineStats: async (userId) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    // Default fallback baselines
+    let avg_sleep = 7.5;
+    let avg_stress = 4.0;
+    let pss_score = 14;
+
+    try {
+      // 1. Fetch user profile for latest pssScore
+      const userDoc = await db.collection('users').doc(userId).get();
+      if (userDoc.exists && userDoc.data()?.pssScore?.score !== undefined) {
+        pss_score = Number(userDoc.data().pssScore.score);
+      }
+
+      // 2. Fetch past 14 daily check-ins to compute averages
+      const checkinsSnap = await db
+        .collection('users')
+        .doc(userId)
+        .collection('daily_checkins')
+        .orderBy('date', 'desc')
+        .limit(14)
+        .get();
+
+      if (!checkinsSnap.empty) {
+        let totalSleep = 0;
+        let totalStress = 0;
+        let count = 0;
+
+        checkinsSnap.forEach((doc) => {
+          const data = doc.data();
+          if (data.sleep_hours !== undefined && data.daily_stress !== undefined) {
+            totalSleep += Number(data.sleep_hours);
+            totalStress += Number(data.daily_stress);
+            count++;
+          }
+        });
+
+        if (count > 0) {
+          avg_sleep = Math.round((totalSleep / count) * 10) / 10;
+          avg_stress = Math.round((totalStress / count) * 10) / 10;
+        }
+      }
+    } catch (e) {
+      console.warn('[firestoreService] Error computing baseline stats, using defaults:', e.message);
+    }
+
+    return { avg_sleep, avg_stress, pss_score };
+  },
+
+  /**
+   * Counts migraine episodes recorded by user in the last N days (default 7 days).
+   */
+  getRecentEpisodesCount: async (userId, days = 7) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const cutoffISO = cutoffDate.toISOString().split('T')[0];
+
+      const snapshot = await db
+        .collection('users')
+        .doc(userId)
+        .collection('daily_checkins')
+        .where('date', '>=', cutoffISO)
+        .get();
+
+      if (snapshot.empty) {
+        return 0;
+      }
+
+      let count = 0;
+      snapshot.forEach((doc) => {
+        if (doc.data().migraine_occurrence === true) {
+          count++;
+        }
+      });
+
+      return count;
+    } catch (e) {
+      console.warn('[firestoreService] Error counting recent episodes:', e.message);
+      return 0;
+    }
+  },
+
+  /**
+   * Saves risk forecast document to `users/{userId}/risk_forecasts/{date}`.
+   */
+  saveRiskForecast: async (userId, date, forecastData) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    const forecastRef = db.collection('users').doc(userId).collection('risk_forecasts').doc(targetDate);
+
+    const score = Number(forecastData.score);
+    const level = String(forecastData.level);
+
+    const forecastDoc = {
+      forecastId: targetDate,
+      forecastDate: targetDate,
+      score,
+      level,
+      headline: forecastData.headline || `${level} Migraine Risk Forecast`,
+      summary: forecastData.summary || `Model estimates a ${score}% probability of migraine risk based on latest log signals.`,
+      elevatedFactors: forecastData.elevatedFactors || [],
+      focusAreas: forecastData.focusAreas || [],
+      xai: forecastData.xai || null,
+      disclaimer: "MigraineGuardian provides wellness risk estimates and is not a substitute for professional medical diagnosis or clinical advice.",
+      updatedAt: new Date().toISOString(),
+    };
+
+    const existingDoc = await forecastRef.get();
+    if (!existingDoc.exists) {
+      forecastDoc.createdAt = new Date().toISOString();
+    }
+
+    await forecastRef.set(forecastDoc, { merge: true });
+
+    // Update summary risk values on user profile
+    const userRef = db.collection('users').doc(userId);
+    await userRef.set(
+      {
+        currentRiskScore: score,
+        riskCategory: level.toUpperCase(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    return { success: true, forecast: forecastDoc };
+  },
+
+  /**
+   * Retrieves latest risk forecast document for user.
+   */
+  getLatestRiskForecast: async (userId, targetDate = null) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const date = targetDate || new Date().toISOString().split('T')[0];
+    const forecastRef = db.collection('users').doc(userId).collection('risk_forecasts').doc(date);
+    const doc = await forecastRef.get();
+
+    if (doc.exists) {
+      return { id: doc.id, ...doc.data() };
+    }
+
+    // Fallback query for most recent forecast
+    const snap = await db
+      .collection('users')
+      .doc(userId)
+      .collection('risk_forecasts')
+      .orderBy('forecastDate', 'desc')
+      .limit(1)
+      .get();
+
+    if (!snap.empty) {
+      return { id: snap.docs[0].id, ...snap.docs[0].data() };
+    }
+
+    return null;
+  },
 };
+
 
 
