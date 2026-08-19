@@ -169,8 +169,22 @@ export const weatherApiService = {
       throw new Error('Invalid coordinates for historical weather fetch.');
     }
 
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    // Compute date range for completed historical calendar days (excluding today and future dates)
+    const endDateObj = new Date(now);
+    endDateObj.setDate(endDateObj.getDate() - 1);
+    const endDateStr = endDateObj.toISOString().split('T')[0];
+
+    const startDateObj = new Date(now);
+    startDateObj.setDate(startDateObj.getDate() - numDays);
+    const startDateStr = startDateObj.toISOString().split('T')[0];
+
+    console.log(`[weatherApiService] Requesting historical weather range: ${startDateStr} to ${endDateStr} (${numDays} completed days)`);
+
     try {
-      const omUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=${numDays}&daily=weather_code,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,surface_pressure_mean,precipitation_sum,wind_speed_10m_max&timezone=auto`;
+      const omUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${startDateStr}&end_date=${endDateStr}&daily=weather_code,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,surface_pressure_mean,precipitation_sum,wind_speed_10m_max&timezone=auto`;
       const res = await fetch(omUrl, { signal: AbortSignal.timeout(8000) });
 
       if (!res.ok) {
@@ -192,6 +206,12 @@ export const weatherApiService = {
 
       for (let i = 0; i < dates.length; i++) {
         const dateStr = dates[i];
+
+        // Safety gate: NEVER process today or future dates as historical exposure
+        if (dateStr >= todayStr) {
+          continue;
+        }
+
         const code = weatherCodeArr[i] ?? 0;
         const wmoMeta = WMO_WEATHER_CODES[code] || { condition: 'Clear', description: 'Clear sky' };
         const tempMax = Math.round((tempMaxArr[i] ?? 22) * 10) / 10;
@@ -230,17 +250,19 @@ export const weatherApiService = {
         pressureDelta = Math.round((lastP - firstP) * 10) / 10;
       }
 
-      const todayRecord = dailyRecords[dailyRecords.length - 1] || null;
+      const latestCompletedRecord = dailyRecords[dailyRecords.length - 1] || null;
 
       const summary = {
         daysFetched: dailyRecords.length,
-        avgTemperature: todayRecord ? todayRecord.temperature : 22,
-        avgHumidity: todayRecord ? todayRecord.humidity : 60,
-        latestPressure: todayRecord ? todayRecord.pressure : 1013,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        avgTemperature: latestCompletedRecord ? latestCompletedRecord.temperature : 22,
+        avgHumidity: latestCompletedRecord ? latestCompletedRecord.humidity : 60,
+        latestPressure: latestCompletedRecord ? latestCompletedRecord.pressure : 1013,
         pressureDelta,
         pressureTrend: pressureDelta < -3 ? 'dropping' : pressureDelta > 3 ? 'rising' : 'steady',
-        latestCondition: todayRecord ? todayRecord.weatherCondition : 'Clear',
-        latestDescription: todayRecord ? todayRecord.weatherDescription : 'clear sky',
+        latestCondition: latestCompletedRecord ? latestCompletedRecord.weatherCondition : 'Clear',
+        latestDescription: latestCompletedRecord ? latestCompletedRecord.weatherDescription : 'clear sky',
       };
 
       return {

@@ -161,7 +161,10 @@ export function DailyCheckinPage() {
   };
 
   const handleSearchCity = async (e) => {
-    e?.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!locationSearchQuery.trim()) return;
     setIsSearchingLocation(true);
     const results = await weatherService.searchLocation(locationSearchQuery);
@@ -169,7 +172,11 @@ export function DailyCheckinPage() {
     setSearchResults(results);
   };
 
-  const handleSelectLocationResult = async (item) => {
+  const handleSelectLocationResult = async (item, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const locObj = {
       name: item.label || item.name,
       latitude: item.latitude,
@@ -219,7 +226,11 @@ export function DailyCheckinPage() {
     }
   };
 
-  const handleUseBrowserGpsForUsualLocation = async () => {
+  const handleUseBrowserGpsForUsualLocation = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setIsFetchingWeather(true);
     const locRes = await weatherService.requestBrowserLocation();
     if (!locRes.success) {
@@ -1081,7 +1092,7 @@ export function DailyCheckinPage() {
                 {historicalRecords && historicalRecords.length > 0 ? (
                   <div className="space-y-2 pt-1">
                     <span className="text-meta-sm font-semibold text-brand-dark block uppercase tracking-wider text-[11px]">
-                      Past {historicalRecords.length} Days Weather Exposure
+                      {historicalRecords.length > 1 ? `PAST ${historicalRecords.length} DAYS WEATHER EXPOSURE` : 'RECENT WEATHER EXPOSURE'}
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       {historicalRecords.map((rec) => (
@@ -1142,7 +1153,9 @@ export function DailyCheckinPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setShowLocationModal(false);
                       setSettingUsualTarget(false);
                     }}
@@ -1156,18 +1169,35 @@ export function DailyCheckinPage() {
                   Search any city or region to automatically retrieve historical weather metrics without enabling GPS.
                 </p>
 
-                <form onSubmit={handleSearchCity} className="flex gap-2">
+                <div className="flex gap-2">
                   <input
                     type="text"
                     value={locationSearchQuery}
                     onChange={(e) => setLocationSearchQuery(e.target.value)}
-                    placeholder="Enter city name (e.g. Seattle, London, Mumbai)..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSearchCity(e);
+                      }
+                    }}
+                    placeholder="Enter city name (e.g. Sangola, Islampur, Seattle)..."
                     className="flex-1 px-3 py-2 text-meta-md rounded border border-muted-border focus:outline-none focus:border-brand-teal bg-white"
                   />
-                  <Button type="submit" variant="primary" size="sm" isLoading={isSearchingLocation}>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    isLoading={isSearchingLocation}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSearchCity(e);
+                    }}
+                  >
                     Search
                   </Button>
-                </form>
+                </div>
 
                 {settingUsualTarget && (
                   <div className="pt-1">
@@ -1189,7 +1219,7 @@ export function DailyCheckinPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => handleSelectLocationResult(item)}
+                        onClick={(e) => handleSelectLocationResult(item, e)}
                         className="w-full text-left p-2 rounded hover:bg-brand-sage/20 border border-transparent hover:border-brand-sage/30 text-meta-md text-brand-dark flex items-center justify-between"
                       >
                         <span>{item.label}</span>
