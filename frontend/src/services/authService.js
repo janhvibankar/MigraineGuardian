@@ -181,9 +181,7 @@ export const authService = {
     } catch (e) {
       console.warn('[authService] Sign out error:', e.message);
     }
-    storageService.removeItem('migraineguardian_authenticated');
-    storageService.removeItem('migraineguardian_token');
-    storageService.removeItem('migraineguardian_user');
+    storageService.clearAll();
     notifyUserChanged(null);
     return { success: true };
   },

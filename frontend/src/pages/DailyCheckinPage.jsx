@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { auth } from '../config/firebase.js';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -95,9 +96,23 @@ export function DailyCheckinPage() {
   const [serverError, setServerError] = useState(null);
 
   useEffect(() => {
-    async function loadLog() {
+    let isMounted = true;
+
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (!isMounted) return;
+
+      // Always reset weather & log state on auth state change
+      setUsualLocation(null);
+      setWeatherData(null);
+      setHistoricalSummary(null);
+      setHistoricalRecords([]);
+      setWeatherMode(null);
+      setWeatherNotice(null);
+
+      if (!user) return;
+
       const todayData = await trackingService.fetchTodayLog();
-      if (todayData) {
+      if (isMounted && todayData) {
         if (todayData.sleep_hours !== undefined) setSleepHours(todayData.sleep_hours);
         if (todayData.sleep_quality !== undefined) setSleepQuality(todayData.sleep_quality);
         if (todayData.daily_stress !== undefined) setDailyStress(todayData.daily_stress);
@@ -113,19 +128,23 @@ export function DailyCheckinPage() {
         if (todayData.symptoms !== undefined && Array.isArray(todayData.symptoms)) setMigraineSymptoms(todayData.symptoms);
       }
 
-      // Check for saved usual location
+      // Check for saved usual location strictly for current authenticated user
       const savedUsual = await weatherService.getUsualLocation();
-      if (savedUsual) {
-        setUsualLocation(savedUsual);
+      if (isMounted) {
+        setUsualLocation(savedUsual || null);
       }
 
-      // Check for today's recorded weather context
+      // Check for today's recorded weather context strictly for current authenticated user
       const existingWeather = await weatherService.fetchTodayWeather();
-      if (existingWeather) {
-        setWeatherData(existingWeather);
+      if (isMounted) {
+        setWeatherData(existingWeather || null);
       }
-    }
-    loadLog();
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const handleUseUsualLocation = async () => {
@@ -186,6 +205,7 @@ export function DailyCheckinPage() {
     if (settingUsualTarget) {
       await weatherService.saveUsualLocation(locObj);
       setUsualLocation(locObj);
+      setWeatherMode('usual');
       setSettingUsualTarget(false);
       setShowLocationModal(false);
       setLocationSearchQuery('');
@@ -1071,20 +1091,38 @@ export function DailyCheckinPage() {
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span className="text-body-md font-semibold text-brand-dark">
-                      {historicalSummary?.locationName || usualLocation?.name || 'Historical Weather Connected'}
+                      {weatherMode === 'travel'
+                        ? `Travel Location: ${historicalSummary?.locationName || 'Selected Location'}`
+                        : `Home / Usual Location: ${usualLocation?.name || historicalSummary?.locationName || 'Saved Location'}`}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-body-md font-bold text-brand-teal">
                       {weatherData.temperature}°C • {weatherData.humidity}% humidity • {weatherData.weatherDescription || weatherData.weatherCondition}
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleResetWeatherMode}
-                      className="text-meta-sm text-muted-text hover:text-brand-dark underline ml-2"
-                    >
-                      Reset
-                    </button>
+                    {weatherMode === 'travel' ? (
+                      <button
+                        type="button"
+                        onClick={handleResetWeatherMode}
+                        className="text-meta-sm text-muted-text hover:text-brand-dark underline ml-2"
+                      >
+                        Clear travel location
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSettingUsualTarget(true);
+                          setShowLocationModal(true);
+                        }}
+                        className="text-meta-sm text-brand-teal font-semibold hover:underline ml-2 flex items-center gap-1"
+                      >
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span>Change usual location</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1148,7 +1186,11 @@ export function DailyCheckinPage() {
                   <div className="flex items-center gap-2">
                     <Search className="w-4 h-4 text-brand-teal" />
                     <span className="text-body-md font-semibold text-brand-dark">
-                      {settingUsualTarget ? 'Set Your Usual Location' : 'Search Travel Location'}
+                      {settingUsualTarget
+                        ? usualLocation
+                          ? 'Change Your Usual Location'
+                          : 'Set Your Usual Location'
+                        : 'Search Travel Location'}
                     </span>
                   </div>
                   <button

@@ -78,6 +78,10 @@ export const weatherService = {
    * Sends coordinates to Node.js Express API Gateway (`POST /api/weather/current`)
    * to retrieve current weather and store it under authenticated user's Firestore path.
    */
+  /**
+   * Sends coordinates to Node.js Express API Gateway (`POST /api/weather/current`)
+   * to retrieve current weather and store it under authenticated user's Firestore path.
+   */
   fetchCurrentWeather: async (latitude, longitude, date = null) => {
     const payload = {
       latitude,
@@ -85,14 +89,14 @@ export const weatherService = {
       date: date || new Date().toISOString().split('T')[0],
     };
 
-    console.log('[Weather Debug] frontend Firebase UID:', auth?.currentUser?.uid || 'Not Signed In');
-    console.log('[Weather Debug] request UID/session present:', !!auth?.currentUser?.uid);
+    const uid = auth?.currentUser?.uid || 'guest';
+    console.log('[Weather Debug] frontend Firebase UID:', uid);
     console.log('[Weather] requesting backend weather...');
     const res = await apiClient.post('/weather/current', payload);
     console.log('[Weather] backend response:', res.data);
 
     if (res.ok && res.data) {
-      storageService.setItem('migraineguardian_today_weather', res.data);
+      storageService.setItem(`migraineguardian_today_weather_${uid}`, res.data);
       return {
         success: true,
         data: res.data,
@@ -110,13 +114,15 @@ export const weatherService = {
    * Retrieves today's cached or saved weather record for current authenticated user.
    */
   fetchTodayWeather: async () => {
+    const uid = auth?.currentUser?.uid || 'guest';
     const res = await apiClient.get('/weather/today');
     if (res.ok && res.data) {
-      storageService.setItem('migraineguardian_today_weather', res.data);
+      storageService.setItem(`migraineguardian_today_weather_${uid}`, res.data);
       return res.data;
     }
-
-    return storageService.getItem('migraineguardian_today_weather', null);
+    // If backend returns null or unauthenticated, clear local user key and return null
+    storageService.removeItem(`migraineguardian_today_weather_${uid}`);
+    return null;
   },
 
   /**
@@ -141,9 +147,10 @@ export const weatherService = {
     const res = await apiClient.post('/weather/historical', payload);
 
     if (res.ok && res.raw?.success) {
+      const uid = auth?.currentUser?.uid || 'guest';
       if (res.raw.records && res.raw.records.length > 0) {
         const latestRecord = res.raw.records[res.raw.records.length - 1];
-        storageService.setItem('migraineguardian_today_weather', latestRecord);
+        storageService.setItem(`migraineguardian_today_weather_${uid}`, latestRecord);
       }
       return {
         success: true,
@@ -165,21 +172,25 @@ export const weatherService = {
    * Retrieves saved usual location for authenticated user.
    */
   getUsualLocation: async () => {
+    const uid = auth?.currentUser?.uid || 'guest';
     const res = await apiClient.get('/weather/usual-location');
     if (res.ok && res.data) {
-      storageService.setItem('migraineguardian_usual_location', res.data);
+      storageService.setItem(`migraineguardian_usual_location_${uid}`, res.data);
       return res.data;
     }
-    return storageService.getItem('migraineguardian_usual_location', null);
+    // Strict isolation: if backend returns null, clear cached location for this user UID and return null
+    storageService.removeItem(`migraineguardian_usual_location_${uid}`);
+    return null;
   },
 
   /**
    * Saves or updates usual location for authenticated user.
    */
   saveUsualLocation: async (locationData) => {
+    const uid = auth?.currentUser?.uid || 'guest';
     const res = await apiClient.post('/weather/usual-location', locationData);
     if (res.ok && res.data) {
-      storageService.setItem('migraineguardian_usual_location', res.data);
+      storageService.setItem(`migraineguardian_usual_location_${uid}`, res.data);
       return { success: true, data: res.data };
     }
     return {
