@@ -540,6 +540,85 @@ export const firestoreService = {
 
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   },
+
+  /**
+   * Batch saves multiple historical daily weather records under `users/{userId}/weather_records/{date}`.
+   */
+  saveHistoricalWeatherRecords: async (userId, recordsArray) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+    if (!Array.isArray(recordsArray) || recordsArray.length === 0) {
+      return { success: true, savedCount: 0, records: [] };
+    }
+
+    const batch = db.batch();
+    const savedRecords = [];
+
+    for (const record of recordsArray) {
+      const date = record.date || new Date().toISOString().split('T')[0];
+      const ref = db.collection('users').doc(userId).collection('weather_records').doc(date);
+
+      const recordDoc = {
+        weatherRecordId: date,
+        date,
+        timestamp: record.timestamp || new Date().toISOString(),
+        latitude: Number(record.latitude),
+        longitude: Number(record.longitude),
+        temperature: Number(record.temperature),
+        feelsLike: Number(record.feelsLike ?? record.temperature),
+        humidity: Number(record.humidity),
+        pressure: Number(record.pressure),
+        weatherCondition: String(record.weatherCondition || 'Clear'),
+        weatherDescription: String(record.weatherDescription || 'clear sky'),
+        windSpeed: Number(record.windSpeed || 0),
+        precipitation: Number(record.precipitation || 0),
+        source: String(record.source || 'openmeteo_historical'),
+        updatedAt: new Date().toISOString(),
+      };
+
+      batch.set(ref, recordDoc, { merge: true });
+      savedRecords.push(recordDoc);
+    }
+
+    await batch.commit();
+    return { success: true, savedCount: savedRecords.length, records: savedRecords };
+  },
+
+  /**
+   * Saves or updates the user's usual location on `users/{userId}` profile document.
+   */
+  updateUsualLocation: async (userId, locationData) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    const usualLocationDoc = {
+      name: String(locationData.name || 'Home Location'),
+      latitude: Number(locationData.latitude),
+      longitude: Number(locationData.longitude),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await userRef.set({ usualLocation: usualLocationDoc, updatedAt: new Date().toISOString() }, { merge: true });
+    return { success: true, usualLocation: usualLocationDoc };
+  },
+
+  /**
+   * Retrieves the user's usual location from `users/{userId}` profile document.
+   */
+  getUsualLocation: async (userId) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (userDoc.exists && userDoc.data()?.usualLocation) {
+      return userDoc.data().usualLocation;
+    }
+    return null;
+  },
 };
 
 

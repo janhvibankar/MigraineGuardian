@@ -118,4 +118,73 @@ export const weatherService = {
 
     return storageService.getItem('migraineguardian_today_weather', null);
   },
+
+  /**
+   * Searches city/location by query string using backend geocoding endpoint.
+   */
+  searchLocation: async (query) => {
+    if (!query || typeof query !== 'string' || !query.trim()) {
+      return [];
+    }
+    const res = await apiClient.get(`/weather/geocode?query=${encodeURIComponent(query.trim())}`);
+    if (res.ok && Array.isArray(res.data)) {
+      return res.data;
+    }
+    return [];
+  },
+
+  /**
+   * Fetches past 1 to 3 days of historical weather records for coordinates.
+   */
+  fetchHistoricalWeather: async (latitude, longitude, days = 3, locationName = null) => {
+    const payload = { latitude, longitude, days, locationName };
+    const res = await apiClient.post('/weather/historical', payload);
+
+    if (res.ok && res.raw?.success) {
+      if (res.raw.records && res.raw.records.length > 0) {
+        const latestRecord = res.raw.records[res.raw.records.length - 1];
+        storageService.setItem('migraineguardian_today_weather', latestRecord);
+      }
+      return {
+        success: true,
+        summary: res.raw.summary,
+        records: res.raw.records || [],
+        locationName: res.raw.locationName || locationName,
+      };
+    }
+
+    return {
+      success: false,
+      message: res.raw?.message || res.error?.message || 'Historical weather data was unavailable.',
+      summary: null,
+      records: [],
+    };
+  },
+
+  /**
+   * Retrieves saved usual location for authenticated user.
+   */
+  getUsualLocation: async () => {
+    const res = await apiClient.get('/weather/usual-location');
+    if (res.ok && res.data) {
+      storageService.setItem('migraineguardian_usual_location', res.data);
+      return res.data;
+    }
+    return storageService.getItem('migraineguardian_usual_location', null);
+  },
+
+  /**
+   * Saves or updates usual location for authenticated user.
+   */
+  saveUsualLocation: async (locationData) => {
+    const res = await apiClient.post('/weather/usual-location', locationData);
+    if (res.ok && res.data) {
+      storageService.setItem('migraineguardian_usual_location', res.data);
+      return { success: true, data: res.data };
+    }
+    return {
+      success: false,
+      message: res.raw?.message || res.error?.message || 'Failed to save usual location.',
+    };
+  },
 };

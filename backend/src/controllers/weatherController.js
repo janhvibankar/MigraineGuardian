@@ -110,3 +110,145 @@ export async function getWeatherHistoryController(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Controller to handle GET /api/weather/geocode?query=...
+ */
+export async function searchLocationController(req, res, next) {
+  try {
+    const query = req.query.query || '';
+    if (!query.trim()) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const results = await weatherApiService.searchLocationGeocode(query);
+    return res.status(200).json({
+      success: true,
+      count: results.length,
+      data: results,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Controller to handle POST /api/weather/historical
+ * Body: { latitude, longitude, days, locationName }
+ */
+export async function getHistoricalWeatherController(req, res, next) {
+  try {
+    const userId = req.user.uid;
+    const { latitude, longitude, days = 3, locationName = null } = req.body;
+
+    if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Latitude and longitude are required for historical weather fetch.',
+        },
+      });
+    }
+
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+
+    if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lon) || lon < -180 || lon > 180) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_COORDINATES',
+          message: 'Invalid coordinates provided.',
+        },
+      });
+    }
+
+    const result = await weatherApiService.fetchHistoricalWeather(lat, lon, days);
+
+    // Save daily records to Firestore users/{userId}/weather_records/{date}
+    if (result.dailyRecords && result.dailyRecords.length > 0) {
+      try {
+        await firestoreService.saveHistoricalWeatherRecords(userId, result.dailyRecords);
+      } catch (fsErr) {
+        console.warn('[Weather] Firestore save historical records error:', fsErr.message);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      locationName: locationName || `${lat}, ${lon}`,
+      summary: result.summary,
+      records: result.dailyRecords,
+    });
+  } catch (error) {
+    console.warn('[Weather] Historical fetch error:', error.message);
+    return res.status(200).json({
+      success: false,
+      message: 'Historical weather data was unavailable.',
+      error: error.message,
+      summary: null,
+      records: [],
+    });
+  }
+}
+
+/**
+ * Controller to handle GET /api/weather/usual-location
+ */
+export async function getUsualLocationController(req, res, next) {
+  try {
+    const userId = req.user.uid;
+    const usualLocation = await firestoreService.getUsualLocation(userId);
+    return res.status(200).json({
+      success: true,
+      data: usualLocation,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Controller to handle POST /api/weather/usual-location
+ * Body: { name, latitude, longitude }
+ */
+export async function updateUsualLocationController(req, res, next) {
+  try {
+    const userId = req.user.uid;
+    const { name, latitude, longitude } = req.body;
+
+    if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Name, latitude, and longitude are required for usual location.',
+        },
+      });
+    }
+
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+
+    if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lon) || lon < -180 || lon > 180) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_COORDINATES',
+          message: 'Invalid latitude or longitude.',
+        },
+      });
+    }
+
+    const result = await firestoreService.updateUsualLocation(userId, {
+      name: name || 'Home Location',
+      latitude: lat,
+      longitude: lon,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Usual location updated successfully.',
+      data: result.usualLocation,
+    });
+  } catch (error) {
+    next(error);
+  }
+}

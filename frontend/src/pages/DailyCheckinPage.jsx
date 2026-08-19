@@ -30,6 +30,10 @@ import {
   ClipboardList,
   CloudSun,
   MapPin,
+  Search,
+  Navigation,
+  Plane,
+  X,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
@@ -71,8 +75,19 @@ export function DailyCheckinPage() {
 
   // Section 9: Weather & Environmental Context State
   const [weatherData, setWeatherData] = useState(null);
+  const [historicalSummary, setHistoricalSummary] = useState(null);
+  const [historicalRecords, setHistoricalRecords] = useState([]);
+  const [weatherMode, setWeatherMode] = useState(null); // 'usual' | 'travel' | 'skip' | null
+  const [usualLocation, setUsualLocation] = useState(null);
   const [isFetchingWeather, setIsFetchingWeather] = useState(false);
   const [weatherNotice, setWeatherNotice] = useState(null);
+
+  // Location search state for travel / setting usual location
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [settingUsualTarget, setSettingUsualTarget] = useState(false);
 
   // Completion & Error State
   const [isSaved, setIsSaved] = useState(false);
@@ -98,6 +113,12 @@ export function DailyCheckinPage() {
         if (todayData.symptoms !== undefined && Array.isArray(todayData.symptoms)) setMigraineSymptoms(todayData.symptoms);
       }
 
+      // Check for saved usual location
+      const savedUsual = await weatherService.getUsualLocation();
+      if (savedUsual) {
+        setUsualLocation(savedUsual);
+      }
+
       // Check for today's recorded weather context
       const existingWeather = await weatherService.fetchTodayWeather();
       if (existingWeather) {
@@ -107,10 +128,99 @@ export function DailyCheckinPage() {
     loadLog();
   }, []);
 
-  const handleDetectWeather = async () => {
-    setIsFetchingWeather(true);
+  const handleUseUsualLocation = async () => {
+    setWeatherMode('usual');
     setWeatherNotice(null);
 
+    let loc = usualLocation;
+    if (!loc) {
+      loc = await weatherService.getUsualLocation();
+      if (loc) setUsualLocation(loc);
+    }
+
+    if (!loc) {
+      setSettingUsualTarget(true);
+      setShowLocationModal(true);
+      return;
+    }
+
+    setIsFetchingWeather(true);
+    const histRes = await weatherService.fetchHistoricalWeather(loc.latitude, loc.longitude, 3, loc.name);
+    setIsFetchingWeather(false);
+
+    if (histRes.success) {
+      setHistoricalSummary(histRes.summary);
+      setHistoricalRecords(histRes.records);
+      if (histRes.records && histRes.records.length > 0) {
+        setWeatherData(histRes.records[histRes.records.length - 1]);
+      }
+      setWeatherNotice(null);
+    } else {
+      setWeatherNotice(histRes.message || 'Historical weather data was unavailable.');
+    }
+  };
+
+  const handleSearchCity = async (e) => {
+    e?.preventDefault();
+    if (!locationSearchQuery.trim()) return;
+    setIsSearchingLocation(true);
+    const results = await weatherService.searchLocation(locationSearchQuery);
+    setIsSearchingLocation(false);
+    setSearchResults(results);
+  };
+
+  const handleSelectLocationResult = async (item) => {
+    const locObj = {
+      name: item.label || item.name,
+      latitude: item.latitude,
+      longitude: item.longitude,
+    };
+
+    if (settingUsualTarget) {
+      await weatherService.saveUsualLocation(locObj);
+      setUsualLocation(locObj);
+      setSettingUsualTarget(false);
+      setShowLocationModal(false);
+      setLocationSearchQuery('');
+      setSearchResults([]);
+
+      setIsFetchingWeather(true);
+      const histRes = await weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name);
+      setIsFetchingWeather(false);
+      if (histRes.success) {
+        setHistoricalSummary(histRes.summary);
+        setHistoricalRecords(histRes.records);
+        if (histRes.records && histRes.records.length > 0) {
+          setWeatherData(histRes.records[histRes.records.length - 1]);
+        }
+        setWeatherNotice(null);
+      }
+      return;
+    }
+
+    setShowLocationModal(false);
+    setLocationSearchQuery('');
+    setSearchResults([]);
+    setWeatherMode('travel');
+    setIsFetchingWeather(true);
+
+    const histRes = await weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name);
+    setIsFetchingWeather(false);
+
+    if (histRes.success) {
+      setHistoricalSummary(histRes.summary);
+      setHistoricalRecords(histRes.records);
+      if (histRes.records && histRes.records.length > 0) {
+        setWeatherData(histRes.records[histRes.records.length - 1]);
+      }
+      setWeatherNotice(null);
+    } else {
+      setWeatherNotice(histRes.message || 'Historical weather data was unavailable.');
+    }
+  };
+
+  const handleUseBrowserGpsForUsualLocation = async () => {
+    setIsFetchingWeather(true);
     const locRes = await weatherService.requestBrowserLocation();
     if (!locRes.success) {
       setIsFetchingWeather(false);
@@ -118,15 +228,44 @@ export function DailyCheckinPage() {
       return;
     }
 
-    const weatherRes = await weatherService.fetchCurrentWeather(locRes.coords.latitude, locRes.coords.longitude);
+    const locObj = {
+      name: `Home (${Math.round(locRes.coords.latitude * 100) / 100}°, ${Math.round(locRes.coords.longitude * 100) / 100}°)`,
+      latitude: locRes.coords.latitude,
+      longitude: locRes.coords.longitude,
+    };
+
+    await weatherService.saveUsualLocation(locObj);
+    setUsualLocation(locObj);
+    setSettingUsualTarget(false);
+    setShowLocationModal(false);
+
+    const histRes = await weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name);
     setIsFetchingWeather(false);
 
-    if (weatherRes.success && weatherRes.data) {
-      setWeatherData(weatherRes.data);
+    if (histRes.success) {
+      setHistoricalSummary(histRes.summary);
+      setHistoricalRecords(histRes.records);
+      if (histRes.records && histRes.records.length > 0) {
+        setWeatherData(histRes.records[histRes.records.length - 1]);
+      }
       setWeatherNotice(null);
-    } else {
-      setWeatherNotice(weatherRes.message || "Location access was not provided. Today's risk assessment can continue without local weather data.");
     }
+  };
+
+  const handleSkipWeather = () => {
+    setWeatherMode('skip');
+    setWeatherData(null);
+    setHistoricalSummary(null);
+    setHistoricalRecords([]);
+    setWeatherNotice("Location access & weather context skipped for today's check-in. Risk assessment can continue without local weather data.");
+  };
+
+  const handleResetWeatherMode = () => {
+    setWeatherMode(null);
+    setWeatherData(null);
+    setHistoricalSummary(null);
+    setHistoricalRecords([]);
+    setWeatherNotice(null);
   };
 
 
@@ -847,11 +986,11 @@ export function DailyCheckinPage() {
                   <h3 className="text-section-md font-semibold text-brand-dark">
                     Environmental Context
                   </h3>
-                  <span className="text-meta-sm text-muted-text">Local weather & barometric conditions</span>
+                  <span className="text-meta-sm text-muted-text">Historical weather & barometric conditions</span>
                 </div>
               </div>
-              <Badge variant={weatherData ? 'teal' : 'neutral'} size="sm">
-                {weatherData ? 'Local weather detected' : 'Environmental Signal'}
+              <Badge variant={weatherData ? 'teal' : weatherMode === 'skip' ? 'neutral' : 'sage'} size="sm">
+                {weatherData ? 'Historical weather retrieved' : weatherMode === 'skip' ? 'Weather Skipped' : 'Environmental Signal'}
               </Badge>
             </div>
 
@@ -859,56 +998,206 @@ export function DailyCheckinPage() {
               Local weather conditions can provide additional environmental context for your migraine risk assessment.
             </p>
 
-            {weatherData ? (
-              <div className="p-4 rounded-card-sm bg-white border border-brand-sage/40 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-sage/20 pb-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span className="text-body-md font-semibold text-brand-dark">Local weather detected</span>
-                  </div>
-                  <div className="text-body-md font-bold text-brand-teal">
-                    {weatherData.temperature}°C • {weatherData.humidity}% humidity • {weatherData.weatherDescription || weatherData.weatherCondition}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-meta-md">
-                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
-                    <span className="text-meta-sm text-muted-text block">Temperature:</span>
-                    <span className="font-bold text-brand-dark">{weatherData.temperature}°C (Feels {weatherData.feelsLike}°C)</span>
-                  </div>
-                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
-                    <span className="text-meta-sm text-muted-text block">Condition:</span>
-                    <span className="font-bold text-brand-dark capitalize">{weatherData.weatherDescription}</span>
-                  </div>
-                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
-                    <span className="text-meta-sm text-muted-text block">Pressure:</span>
-                    <span className="font-bold text-brand-dark">{weatherData.pressure} hPa</span>
-                  </div>
-                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
-                    <span className="text-meta-sm text-muted-text block">Humidity:</span>
-                    <span className="font-bold text-brand-dark">{weatherData.humidity}%</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 rounded-card-sm bg-white/70 border border-muted-border space-y-3">
-                {weatherNotice && (
-                  <p className="text-meta-md text-muted-text-dark leading-relaxed">
-                    {weatherNotice}
-                  </p>
-                )}
-
+            {/* THREE PRIVACY-FIRST LOCATION OPTIONS */}
+            {!weatherData && weatherMode !== 'skip' && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 <Button
                   type="button"
                   variant="primary"
                   size="sm"
-                  isLoading={isFetchingWeather}
-                  onClick={handleDetectWeather}
-                  icon={MapPin}
-                  className="font-semibold shadow-soft"
+                  isLoading={isFetchingWeather && weatherMode === 'usual'}
+                  onClick={handleUseUsualLocation}
+                  icon={Navigation}
+                  className="font-semibold shadow-soft justify-center"
                 >
-                  {isFetchingWeather ? 'Retrieving Weather...' : 'Allow & Detect Local Weather'}
+                  Use my usual location
                 </Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  isLoading={isFetchingWeather && weatherMode === 'travel'}
+                  onClick={() => {
+                    setSettingUsualTarget(false);
+                    setShowLocationModal(true);
+                  }}
+                  icon={Plane}
+                  className="font-semibold justify-center"
+                >
+                  I travelled recently
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSkipWeather}
+                  icon={X}
+                  className="font-semibold border-brand-sage/50 text-muted-text hover:text-brand-dark justify-center"
+                >
+                  Skip weather
+                </Button>
+              </div>
+            )}
+
+            {/* SKIPPED STATE */}
+            {weatherMode === 'skip' && (
+              <div className="p-4 rounded-card-sm bg-white/70 border border-muted-border flex items-center justify-between gap-3">
+                <p className="text-meta-md text-muted-text-dark leading-relaxed">
+                  {weatherNotice || "Location access & weather context skipped for today. Today's risk assessment can continue without local weather data."}
+                </p>
+                <Button type="button" variant="outline" size="sm" onClick={handleResetWeatherMode} icon={RotateCcw}>
+                  Change
+                </Button>
+              </div>
+            )}
+
+            {/* HISTORICAL WEATHER DATA PRESENT */}
+            {weatherData && (
+              <div className="p-4 rounded-card-sm bg-white border border-brand-sage/40 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-sage/20 pb-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span className="text-body-md font-semibold text-brand-dark">
+                      {historicalSummary?.locationName || usualLocation?.name || 'Historical Weather Connected'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-body-md font-bold text-brand-teal">
+                      {weatherData.temperature}°C • {weatherData.humidity}% humidity • {weatherData.weatherDescription || weatherData.weatherCondition}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleResetWeatherMode}
+                      className="text-meta-sm text-muted-text hover:text-brand-dark underline ml-2"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+
+                {/* 1-3 DAYS HISTORICAL EXPOSURE GRID */}
+                {historicalRecords && historicalRecords.length > 0 ? (
+                  <div className="space-y-2 pt-1">
+                    <span className="text-meta-sm font-semibold text-brand-dark block uppercase tracking-wider text-[11px]">
+                      Past {historicalRecords.length} Days Weather Exposure
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {historicalRecords.map((rec) => (
+                        <div key={rec.date} className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30 space-y-1">
+                          <div className="flex items-center justify-between text-meta-sm">
+                            <span className="font-semibold text-brand-dark">{rec.date}</span>
+                            <span className="text-brand-teal capitalize text-[11px]">{rec.weatherCondition}</span>
+                          </div>
+                          <div className="text-meta-sm text-muted-text">
+                            <div>Temp: <span className="font-semibold text-brand-dark">{rec.temperature}°C</span> ({rec.tempMin}°–{rec.tempMax}°)</div>
+                            <div>Pressure: <span className="font-semibold text-brand-dark">{rec.pressure} hPa</span></div>
+                            <div>Humidity: <span className="font-semibold text-brand-dark">{rec.humidity}%</span></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {historicalSummary?.pressureDelta !== undefined && historicalSummary.pressureDelta !== 0 && (
+                      <div className="text-meta-sm text-muted-text pt-1 flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5 text-brand-teal" />
+                        <span>
+                          Barometric trend over past 3 days: <strong className="text-brand-dark">{historicalSummary.pressureDelta > 0 ? `+${historicalSummary.pressureDelta}` : historicalSummary.pressureDelta} hPa</strong> ({historicalSummary.pressureTrend}).
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-meta-md">
+                    <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                      <span className="text-meta-sm text-muted-text block">Temperature:</span>
+                      <span className="font-bold text-brand-dark">{weatherData.temperature}°C</span>
+                    </div>
+                    <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                      <span className="text-meta-sm text-muted-text block">Condition:</span>
+                      <span className="font-bold text-brand-dark capitalize">{weatherData.weatherDescription}</span>
+                    </div>
+                    <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                      <span className="text-meta-sm text-muted-text block">Pressure:</span>
+                      <span className="font-bold text-brand-dark">{weatherData.pressure} hPa</span>
+                    </div>
+                    <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                      <span className="text-meta-sm text-muted-text block">Humidity:</span>
+                      <span className="font-bold text-brand-dark">{weatherData.humidity}%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* LOCATION SEARCH MODAL / SUB-PANEL */}
+            {showLocationModal && (
+              <div className="p-4 rounded-card-sm bg-white border border-brand-teal/40 space-y-3 shadow-soft animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-brand-sage/20 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Search className="w-4 h-4 text-brand-teal" />
+                    <span className="text-body-md font-semibold text-brand-dark">
+                      {settingUsualTarget ? 'Set Your Usual Location' : 'Search Travel Location'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLocationModal(false);
+                      setSettingUsualTarget(false);
+                    }}
+                    className="text-muted-text hover:text-brand-dark p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-meta-sm text-muted-text">
+                  Search any city or region to automatically retrieve historical weather metrics without enabling GPS.
+                </p>
+
+                <form onSubmit={handleSearchCity} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={locationSearchQuery}
+                    onChange={(e) => setLocationSearchQuery(e.target.value)}
+                    placeholder="Enter city name (e.g. Seattle, London, Mumbai)..."
+                    className="flex-1 px-3 py-2 text-meta-md rounded border border-muted-border focus:outline-none focus:border-brand-teal bg-white"
+                  />
+                  <Button type="submit" variant="primary" size="sm" isLoading={isSearchingLocation}>
+                    Search
+                  </Button>
+                </form>
+
+                {settingUsualTarget && (
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={handleUseBrowserGpsForUsualLocation}
+                      className="text-meta-sm font-semibold text-brand-teal hover:underline flex items-center gap-1.5"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>Or click to detect & save current GPS coordinates as usual location</span>
+                    </button>
+                  </div>
+                )}
+
+                {searchResults.length > 0 && (
+                  <div className="space-y-1.5 pt-2 max-h-48 overflow-y-auto">
+                    <span className="text-meta-sm font-semibold text-muted-text block">Select a location:</span>
+                    {searchResults.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectLocationResult(item)}
+                        className="w-full text-left p-2 rounded hover:bg-brand-sage/20 border border-transparent hover:border-brand-sage/30 text-meta-md text-brand-dark flex items-center justify-between"
+                      >
+                        <span>{item.label}</span>
+                        <span className="text-meta-sm text-muted-text">({item.latitude}°, {item.longitude}°)</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </Card>
