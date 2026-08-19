@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { trackingService } from '../services/trackingService';
+import { weatherService } from '../services/weatherService';
 import {
   Moon,
   Brain,
@@ -27,6 +28,8 @@ import {
   ChevronUp,
   RotateCcw,
   ClipboardList,
+  CloudSun,
+  MapPin,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
@@ -66,6 +69,11 @@ export function DailyCheckinPage() {
   const [migraineDuration, setMigraineDuration] = useState(savedDraft?.migraine_duration ?? savedDraft?.migraineDuration ?? '2–4 hours');
   const [migraineSymptoms, setMigraineSymptoms] = useState(savedDraft?.symptoms ?? savedDraft?.migraineSymptoms ?? ['Light sensitivity']);
 
+  // Section 9: Weather & Environmental Context State
+  const [weatherData, setWeatherData] = useState(null);
+  const [isFetchingWeather, setIsFetchingWeather] = useState(false);
+  const [weatherNotice, setWeatherNotice] = useState(null);
+
   // Completion & Error State
   const [isSaved, setIsSaved] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,9 +97,37 @@ export function DailyCheckinPage() {
         if (todayData.migraine_duration !== undefined && todayData.migraine_duration !== null) setMigraineDuration(todayData.migraine_duration);
         if (todayData.symptoms !== undefined && Array.isArray(todayData.symptoms)) setMigraineSymptoms(todayData.symptoms);
       }
+
+      // Check for today's recorded weather context
+      const existingWeather = await weatherService.fetchTodayWeather();
+      if (existingWeather) {
+        setWeatherData(existingWeather);
+      }
     }
     loadLog();
   }, []);
+
+  const handleDetectWeather = async () => {
+    setIsFetchingWeather(true);
+    setWeatherNotice(null);
+
+    const locRes = await weatherService.requestBrowserLocation();
+    if (!locRes.success) {
+      setIsFetchingWeather(false);
+      setWeatherNotice(locRes.message || "Location access was not provided. Today's risk assessment can continue without local weather data.");
+      return;
+    }
+
+    const weatherRes = await weatherService.fetchCurrentWeather(locRes.coords.latitude, locRes.coords.longitude);
+    setIsFetchingWeather(false);
+
+    if (weatherRes.success && weatherRes.data) {
+      setWeatherData(weatherRes.data);
+      setWeatherNotice(null);
+    } else {
+      setWeatherNotice(weatherRes.message || "Location access was not provided. Today's risk assessment can continue without local weather data.");
+    }
+  };
 
 
   // Sleep Quality Options (1-5)
@@ -144,6 +180,29 @@ export function DailyCheckinPage() {
     e?.preventDefault();
     setIsSubmitting(true);
     setServerError(null);
+
+    // Auto-detect location & weather context if not fetched yet
+    let currentWeatherData = weatherData;
+    if (!currentWeatherData) {
+      try {
+        console.log('[Weather] Auto-detecting location & weather context during check-in save...');
+        const locRes = await weatherService.requestBrowserLocation();
+        if (locRes.success && locRes.coords) {
+          const weatherRes = await weatherService.fetchCurrentWeather(
+            locRes.coords.latitude,
+            locRes.coords.longitude
+          );
+          if (weatherRes.success && weatherRes.data) {
+            currentWeatherData = weatherRes.data;
+            setWeatherData(weatherRes.data);
+          }
+        } else {
+          console.log('[Weather] Location access not granted — proceeding with lifestyle check-in save.');
+        }
+      } catch (wErr) {
+        console.warn('[Weather] Non-blocking error during weather check-in save:', wErr.message);
+      }
+    }
 
     const logData = {
       sleep_hours: sleepHours,
@@ -773,6 +832,83 @@ export function DailyCheckinPage() {
                     * Recorded for lifestyle correlation. MigraineGuardian does not provide medical diagnoses.
                   </span>
                 </div>
+              </div>
+            )}
+          </Card>
+
+          {/* SECTION 9: ENVIRONMENTAL CONTEXT (WEATHER) */}
+          <Card variant="warm" className="p-6 sm:p-7 space-y-4 border-card-warm-border shadow-soft">
+            <div className="flex items-center justify-between pb-3 border-b border-muted-border/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-sage/20 border border-brand-sage/35 flex items-center justify-center text-brand-dark">
+                  <CloudSun className="w-4 h-4 text-brand-teal" />
+                </div>
+                <div>
+                  <h3 className="text-section-md font-semibold text-brand-dark">
+                    Environmental Context
+                  </h3>
+                  <span className="text-meta-sm text-muted-text">Local weather & barometric conditions</span>
+                </div>
+              </div>
+              <Badge variant={weatherData ? 'teal' : 'neutral'} size="sm">
+                {weatherData ? 'Local weather detected' : 'Environmental Signal'}
+              </Badge>
+            </div>
+
+            <p className="text-meta-md text-muted-text-dark leading-relaxed">
+              Local weather conditions can provide additional environmental context for your migraine risk assessment.
+            </p>
+
+            {weatherData ? (
+              <div className="p-4 rounded-card-sm bg-white border border-brand-sage/40 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-sage/20 pb-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span className="text-body-md font-semibold text-brand-dark">Local weather detected</span>
+                  </div>
+                  <div className="text-body-md font-bold text-brand-teal">
+                    {weatherData.temperature}°C • {weatherData.humidity}% humidity • {weatherData.weatherDescription || weatherData.weatherCondition}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-meta-md">
+                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                    <span className="text-meta-sm text-muted-text block">Temperature:</span>
+                    <span className="font-bold text-brand-dark">{weatherData.temperature}°C (Feels {weatherData.feelsLike}°C)</span>
+                  </div>
+                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                    <span className="text-meta-sm text-muted-text block">Condition:</span>
+                    <span className="font-bold text-brand-dark capitalize">{weatherData.weatherDescription}</span>
+                  </div>
+                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                    <span className="text-meta-sm text-muted-text block">Pressure:</span>
+                    <span className="font-bold text-brand-dark">{weatherData.pressure} hPa</span>
+                  </div>
+                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                    <span className="text-meta-sm text-muted-text block">Humidity:</span>
+                    <span className="font-bold text-brand-dark">{weatherData.humidity}%</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-card-sm bg-white/70 border border-muted-border space-y-3">
+                {weatherNotice && (
+                  <p className="text-meta-md text-muted-text-dark leading-relaxed">
+                    {weatherNotice}
+                  </p>
+                )}
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  isLoading={isFetchingWeather}
+                  onClick={handleDetectWeather}
+                  icon={MapPin}
+                  className="font-semibold shadow-soft"
+                >
+                  {isFetchingWeather ? 'Retrieving Weather...' : 'Allow & Detect Local Weather'}
+                </Button>
               </div>
             )}
           </Card>

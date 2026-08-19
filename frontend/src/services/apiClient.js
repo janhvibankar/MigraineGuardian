@@ -4,15 +4,25 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 
 async function getAuthToken() {
   try {
-    if (auth && auth.currentUser) {
-      return await auth.currentUser.getIdToken();
+    if (auth) {
+      if (typeof auth.authStateReady === 'function') {
+        await auth.authStateReady();
+      }
+      if (auth.currentUser) {
+        return await auth.currentUser.getIdToken();
+      }
     }
   } catch (e) {
     console.warn('[apiClient] Failed to obtain Firebase ID token from auth.currentUser:', e.message);
   }
 
-  // Fallback to local storage token if available
-  return localStorage.getItem('migraineguardian_token') || localStorage.getItem('mg_v1_migraineguardian_token');
+  // Fallback to local storage token if available and valid JWT structure
+  const storedToken = localStorage.getItem('migraineguardian_token') || localStorage.getItem('mg_v1_migraineguardian_token');
+  if (storedToken && storedToken.startsWith('eyJ')) {
+    return storedToken;
+  }
+
+  return null;
 }
 
 async function request(endpoint, options = {}) {

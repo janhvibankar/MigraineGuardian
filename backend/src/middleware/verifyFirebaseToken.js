@@ -36,6 +36,8 @@ export async function verifyFirebaseToken(req, res, next) {
     // Verify token with Firebase Admin Auth
     const decodedToken = await auth.verifyIdToken(idToken);
 
+    console.log('[Weather Debug] backend authenticated UID:', decodedToken.uid);
+
     // Attach decoded user info to express request object
     req.user = {
       uid: decodedToken.uid,

@@ -456,7 +456,92 @@ export const firestoreService = {
 
     return null;
   },
+
+  /**
+   * Saves weather record document under `users/{userId}/weather_records/{date}`.
+   */
+  saveWeatherRecord: async (userId, targetDate, weatherData) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const date = targetDate || new Date().toISOString().split('T')[0];
+    const firestorePath = `users/${userId}/weather_records/${date}`;
+    console.log(`[Weather Debug] FINAL FIRESTORE WRITE PATH:\n${firestorePath}`);
+
+    const weatherRef = db.collection('users').doc(userId).collection('weather_records').doc(date);
+
+    const recordDoc = {
+      weatherRecordId: date,
+      date,
+      timestamp: weatherData.timestamp || new Date().toISOString(),
+      latitude: Number(weatherData.latitude),
+      longitude: Number(weatherData.longitude),
+      temperature: Number(weatherData.temperature),
+      feelsLike: Number(weatherData.feelsLike ?? weatherData.temperature),
+      humidity: Number(weatherData.humidity),
+      pressure: Number(weatherData.pressure),
+      weatherCondition: String(weatherData.weatherCondition || 'Clear'),
+      weatherDescription: String(weatherData.weatherDescription || 'clear sky'),
+      windSpeed: Number(weatherData.windSpeed || 0),
+      precipitation: Number(weatherData.precipitation || 0),
+      source: String(weatherData.source || 'weather_api'),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const existingDoc = await weatherRef.get();
+    if (!existingDoc.exists) {
+      recordDoc.createdAt = new Date().toISOString();
+    }
+
+    await weatherRef.set(recordDoc, { merge: true });
+    console.log(`[Weather Debug] WEATHER FIRESTORE WRITE SUCCESS:\n${firestorePath}`);
+
+    return { success: true, record: recordDoc };
+  },
+
+  /**
+   * Retrieves today's weather record for user.
+   */
+  getTodayWeatherRecord: async (userId, targetDate = null) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const date = targetDate || new Date().toISOString().split('T')[0];
+    const weatherRef = db.collection('users').doc(userId).collection('weather_records').doc(date);
+    const doc = await weatherRef.get();
+
+    if (doc.exists) {
+      return { id: doc.id, ...doc.data() };
+    }
+    return null;
+  },
+
+  /**
+   * Retrieves user's historical weather records up to limit.
+   */
+  getWeatherHistory: async (userId, limit = 30) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const snap = await db
+      .collection('users')
+      .doc(userId)
+      .collection('weather_records')
+      .orderBy('date', 'desc')
+      .limit(limit)
+      .get();
+
+    if (snap.empty) {
+      return [];
+    }
+
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  },
 };
+
 
 
 
