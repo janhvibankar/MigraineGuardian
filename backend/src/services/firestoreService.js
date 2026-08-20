@@ -395,6 +395,7 @@ export const firestoreService = {
       forecastDate: targetDate,
       score,
       level,
+      model_used: forecastData.model_used || 'MODEL_A_LIFESTYLE_BASELINE',
       headline: forecastData.headline || `${level} Migraine Risk Forecast`,
       summary: forecastData.summary || `Model estimates a ${score}% probability of migraine risk based on latest log signals.`,
       elevatedFactors: forecastData.elevatedFactors || [],

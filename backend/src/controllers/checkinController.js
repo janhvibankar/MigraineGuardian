@@ -100,7 +100,40 @@ export async function submitDailyCheckinController(req, res, next) {
     const baselineStats = await firestoreService.getUserBaselineStats(userId);
     const recentEpisodesCount = await firestoreService.getRecentEpisodesCount(userId, 7);
 
-    // 3. Construct FastAPI ML payload
+    // 3. Attempt weather records retrieval for target date (date) and previous date (date - 1)
+    let weatherTodayBlock = null;
+    let weatherYesterdayBlock = null;
+
+    try {
+      const checkinDateObj = new Date(`${date}T12:00:00Z`);
+      checkinDateObj.setDate(checkinDateObj.getDate() - 1);
+      const previousDate = checkinDateObj.toISOString().split('T')[0];
+
+      const todayRec = await firestoreService.getTodayWeatherRecord(userId, date);
+      const yesterdayRec = await firestoreService.getTodayWeatherRecord(userId, previousDate);
+
+      const isValidNum = (v) => v !== undefined && v !== null && typeof Number(v) === 'number' && !isNaN(Number(v));
+
+      if (todayRec && yesterdayRec &&
+          isValidNum(todayRec.temperature) && isValidNum(todayRec.humidity) && isValidNum(todayRec.pressure) &&
+          isValidNum(yesterdayRec.pressure) && isValidNum(yesterdayRec.temperature)) {
+        weatherTodayBlock = {
+          temperature: Number(todayRec.temperature),
+          humidity: Number(todayRec.humidity),
+          pressure: Number(todayRec.pressure),
+          precipitation: Number(todayRec.precipitation || 0),
+          wind_speed: Number(todayRec.windSpeed || 0),
+        };
+        weatherYesterdayBlock = {
+          pressure: Number(yesterdayRec.pressure),
+          temperature: Number(yesterdayRec.temperature),
+        };
+      }
+    } catch (wErr) {
+      console.warn('[checkinController] Weather retrieval for ML payload skipped:', wErr.message);
+    }
+
+    // 4. Construct FastAPI ML payload
     const mlPayload = {
       user_id: userId,
       latest_log: {
@@ -118,6 +151,11 @@ export async function submitDailyCheckinController(req, res, next) {
       },
       recent_episodes_count_7d: Number(recentEpisodesCount),
     };
+
+    if (weatherTodayBlock && weatherYesterdayBlock) {
+      mlPayload.weather_today = weatherTodayBlock;
+      mlPayload.weather_yesterday = weatherYesterdayBlock;
+    }
 
     // 4. Send request to FastAPI ML service (/predict)
     const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);

@@ -23,11 +23,26 @@ class BaselineStatsInput(BaseModel):
     pss_score: Optional[float] = Field(None, description="Perceived Stress Scale baseline score (0-40)")
 
 
+class WeatherTodayInput(BaseModel):
+    temperature: Optional[float] = Field(None, description="Current day mean temperature in °C")
+    humidity: Optional[float] = Field(None, description="Current day relative humidity percentage")
+    pressure: Optional[float] = Field(None, description="Current day sea-level barometric pressure in hPa")
+    precipitation: Optional[float] = Field(None, description="Current day total precipitation in mm")
+    wind_speed: Optional[float] = Field(None, description="Current day wind speed in km/h")
+
+
+class WeatherYesterdayInput(BaseModel):
+    pressure: Optional[float] = Field(None, description="Previous day barometric pressure in hPa")
+    temperature: Optional[float] = Field(None, description="Previous day mean temperature in °C")
+
+
 class PredictRequest(BaseModel):
     user_id: str = Field(..., description="Unique user identifier")
     latest_log: LatestLogInput
     baseline_stats: Optional[BaselineStatsInput] = None
     recent_episodes_count_7d: int = Field(0, description="Count of migraine episodes in last 7 days")
+    weather_today: Optional[WeatherTodayInput] = None
+    weather_yesterday: Optional[WeatherYesterdayInput] = None
 
 
 class FeatureAttribution(BaseModel):
@@ -59,6 +74,7 @@ class XAiOutput(BaseModel):
 class PredictResponse(BaseModel):
     score: float = Field(..., description="Migraine risk score (0-100 probability percentage)")
     level: str = Field(..., description="Risk level category: Low | Moderate | High")
+    model_used: Optional[str] = Field("MODEL_A_LIFESTYLE_BASELINE", description="ML model pipeline executed: MODEL_A_LIFESTYLE_BASELINE | MODEL_B_WEATHER_AWARE")
     elevatedFactors: Optional[List[ElevatedFactor]] = Field(None, description="Factor breakdown with status tags")
     xai: Optional[XAiOutput] = Field(None, description="SHAP feature attribution explanations")
     focusAreas: Optional[List[FocusArea]] = Field(None, description="Prioritized wellness focus areas")
@@ -81,7 +97,15 @@ async def predict_migraine_risk(request: PredictRequest):
             "screen_time": request.latest_log.screen_time,
         }
 
-        score, level = model_manager.predict_risk(raw_features)
+        weather_today_dict = request.weather_today.model_dump() if request.weather_today else None
+        weather_yesterday_dict = request.weather_yesterday.model_dump() if request.weather_yesterday else None
+
+        score, level, model_used = model_manager.predict_risk(
+            raw_features=raw_features,
+            weather_today=weather_today_dict,
+            weather_yesterday=weather_yesterday_dict,
+            return_meta=True,
+        )
 
         baseline_dict = request.baseline_stats.model_dump() if request.baseline_stats else None
         latest_dict = request.latest_log.model_dump()
@@ -104,6 +128,7 @@ async def predict_migraine_risk(request: PredictRequest):
         return PredictResponse(
             score=score,
             level=level,
+            model_used=model_used,
             elevatedFactors=explanation.get("elevatedFactors"),
             xai=XAiOutput(
                 method="SHAP",

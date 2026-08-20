@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     # Absolute path to serialized scikit-learn pipeline model
     MODEL_PATH: Path = Path(__file__).resolve().parent.parent / "models" / "migraine_pipeline.pkl"
+    EXPERIMENTAL_MODEL_PATH: Path = Path(__file__).resolve().parent.parent.parent / "data" / "models" / "migraine_weather_pipeline_experimental.pkl"
 
     # Project-level configurable risk score probability thresholds (0-100)
     # score < LOW_THRESHOLD -> "Low"
