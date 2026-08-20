@@ -1,0 +1,272 @@
+{
+  "dataset_summary": {
+    "file_path": "e:\\Migraine\\ml-service\\data\\raw\\synthetic_migraine_weather_dataset.csv",
+    "total_rows": 2000,
+    "total_users": 50,
+    "migraine_prevalence": 0.281
+  },
+  "split_summary": {
+    "training_users_count": 40,
+    "testing_users_count": 10,
+    "training_rows": 1600,
+    "testing_rows": 400,
+    "train_users": [
+      "user_001",
+      "user_002",
+      "user_003",
+      "user_004",
+      "user_005",
+      "user_006",
+      "user_007",
+      "user_008",
+      "user_009",
+      "user_010",
+      "user_011",
+      "user_012",
+      "user_013",
+      "user_015",
+      "user_016",
+      "user_017",
+      "user_019",
+      "user_021",
+      "user_022",
+      "user_023",
+      "user_024",
+      "user_025",
+      "user_028",
+      "user_029",
+      "user_030",
+      "user_032",
+      "user_034",
+      "user_035",
+      "user_036",
+      "user_037",
+      "user_038",
+      "user_039",
+      "user_041",
+      "user_042",
+      "user_043",
+      "user_044",
+      "user_045",
+      "user_047",
+      "user_048",
+      "user_050"
+    ],
+    "test_users": [
+      "user_014",
+      "user_018",
+      "user_020",
+      "user_026",
+      "user_027",
+      "user_031",
+      "user_033",
+      "user_040",
+      "user_046",
+      "user_049"
+    ]
+  },
+  "model_a_configuration": {
+    "name": "Model A (Lifestyle Only Baseline)",
+    "feature_count": 12,
+    "pipeline": [
+      "StandaloneLifestyleFeatureEngineer",
+      "StandardScaler",
+      "LogisticRegression(L2, C=1.0, balanced)"
+    ]
+  },
+  "model_b_configuration": {
+    "name": "Model B (Lifestyle + Weather Experimental)",
+    "feature_count": 23,
+    "pipeline": [
+      "StandaloneExpandedFeatureEngineer",
+      "StandardScaler",
+      "LogisticRegression(L2, C=1.0, balanced)"
+    ]
+  },
+  "cross_validation_results": {
+    "strategy": "StratifiedGroupKFold(5)",
+    "folds": 5,
+    "model_a_auc_scores": [
+      0.65,
+      0.735,
+      0.7442,
+      0.6592,
+      0.7181
+    ],
+    "model_a_auc_mean": 0.7013,
+    "model_b_auc_scores": [
+      0.6923,
+      0.762,
+      0.736,
+      0.729,
+      0.7119
+    ],
+    "model_b_auc_mean": 0.7263,
+    "cv_auc_difference": 0.025
+  },
+  "test_metrics": {
+    "default_threshold_0_50": {
+      "model_a": {
+        "threshold": 0.5,
+        "roc_auc": 0.6601,
+        "pr_auc": 0.4208,
+        "accuracy": 0.5975,
+        "precision": 0.408,
+        "recall": 0.6613,
+        "f1_score": 0.5046,
+        "brier_score": 0.2378,
+        "confusion_matrix": [
+          [
+            157,
+            119
+          ],
+          [
+            42,
+            82
+          ]
+        ]
+      },
+      "model_b": {
+        "threshold": 0.5,
+        "roc_auc": 0.7026,
+        "pr_auc": 0.5503,
+        "accuracy": 0.6175,
+        "precision": 0.4271,
+        "recall": 0.6855,
+        "f1_score": 0.5263,
+        "brier_score": 0.2257,
+        "confusion_matrix": [
+          [
+            162,
+            114
+          ],
+          [
+            39,
+            85
+          ]
+        ]
+      },
+      "differences": {
+        "roc_auc": 0.0425,
+        "pr_auc": 0.1295,
+        "accuracy": 0.02,
+        "precision": 0.0191,
+        "recall": 0.0242,
+        "f1_score": 0.0217,
+        "brier_score": -0.0121
+      }
+    },
+    "train_tuned_optimal_threshold": {
+      "model_a": {
+        "threshold": 0.47,
+        "roc_auc": 0.6601,
+        "pr_auc": 0.4208,
+        "accuracy": 0.555,
+        "precision": 0.3856,
+        "recall": 0.7339,
+        "f1_score": 0.5056,
+        "brier_score": 0.2378,
+        "confusion_matrix": [
+          [
+            131,
+            145
+          ],
+          [
+            33,
+            91
+          ]
+        ]
+      },
+      "model_b": {
+        "threshold": 0.49,
+        "roc_auc": 0.7026,
+        "pr_auc": 0.5503,
+        "accuracy": 0.6125,
+        "precision": 0.4236,
+        "recall": 0.6935,
+        "f1_score": 0.526,
+        "brier_score": 0.2257,
+        "confusion_matrix": [
+          [
+            159,
+            117
+          ],
+          [
+            38,
+            86
+          ]
+        ]
+      }
+    }
+  },
+  "calibration_results": {
+    "model_a": {
+      "bin_centers": [
+        0.1,
+        0.3,
+        0.5,
+        0.7,
+        0.9
+      ],
+      "mean_predicted_prob": [
+        0.1467,
+        0.3127,
+        0.5025,
+        0.6826,
+        0.8275
+      ],
+      "fraction_of_positives": [
+        0.0,
+        0.198,
+        0.2778,
+        0.4836,
+        0.5
+      ]
+    },
+    "model_b": {
+      "bin_centers": [
+        0.1,
+        0.3,
+        0.5,
+        0.7,
+        0.9
+      ],
+      "mean_predicted_prob": [
+        0.1393,
+        0.31,
+        0.5048,
+        0.698,
+        0.8821
+      ],
+      "fraction_of_positives": [
+        0.0732,
+        0.1881,
+        0.2824,
+        0.451,
+        0.76
+      ]
+    }
+  },
+  "statistical_comparison": {
+    "auc_a_test": 0.6601,
+    "auc_b_test": 0.7026,
+    "observed_auc_diff": 0.0426,
+    "ci_95_lower": 0.0073,
+    "ci_95_upper": 0.0792,
+    "p_value": 0.016,
+    "is_statistically_significant": true
+  },
+  "sanity_checks": {
+    "user_group_isolation": true,
+    "scaler_in_pipeline": true,
+    "no_target_in_features": true,
+    "weather_lags_backward_looking": true,
+    "no_missing_values": true,
+    "probabilities_in_valid_range": true,
+    "identical_test_eval_records": true
+  },
+  "conclusion": {
+    "classification": "WEATHER IMPROVES MODEL",
+    "disclaimer": "These results are based on synthetic data and do not establish clinical effectiveness."
+  }
+}

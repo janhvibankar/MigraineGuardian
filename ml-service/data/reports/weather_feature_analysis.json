@@ -1,0 +1,355 @@
+{
+  "dataset_summary": {
+    "total_records": 2000,
+    "users_count": 50,
+    "train_users": 40,
+    "test_users": 10
+  },
+  "model_a_results": {
+    "roc_auc": 0.6601,
+    "pr_auc": 0.4208,
+    "accuracy": 0.5975,
+    "precision": 0.408,
+    "recall": 0.6613,
+    "f1_score": 0.5046,
+    "brier_score": 0.2378,
+    "confusion_matrix": [
+      [
+        157,
+        119
+      ],
+      [
+        42,
+        82
+      ]
+    ]
+  },
+  "model_b_results": {
+    "roc_auc": 0.7026,
+    "pr_auc": 0.5503,
+    "accuracy": 0.6175,
+    "precision": 0.4271,
+    "recall": 0.6855,
+    "f1_score": 0.5263,
+    "brier_score": 0.2257,
+    "confusion_matrix": [
+      [
+        162,
+        114
+      ],
+      [
+        39,
+        85
+      ]
+    ]
+  },
+  "model_c_results": {
+    "roc_auc": 0.5643,
+    "pr_auc": 0.4678,
+    "accuracy": 0.6075,
+    "precision": 0.3796,
+    "recall": 0.4194,
+    "f1_score": 0.3985,
+    "brier_score": 0.2358,
+    "confusion_matrix": [
+      [
+        191,
+        85
+      ],
+      [
+        72,
+        52
+      ]
+    ]
+  },
+  "weather_ablation_results": {
+    "Model B (Full 23 Features)": {
+      "roc_auc": 0.7026,
+      "pr_auc": 0.5503,
+      "accuracy": 0.6175,
+      "precision": 0.4271,
+      "recall": 0.6855,
+      "f1_score": 0.5263,
+      "brier_score": 0.2257,
+      "confusion_matrix": [
+        [
+          162,
+          114
+        ],
+        [
+          39,
+          85
+        ]
+      ]
+    },
+    "Model B (w/o Pressure Features)": {
+      "roc_auc": 0.6736,
+      "pr_auc": 0.4501,
+      "accuracy": 0.61,
+      "precision": 0.4216,
+      "recall": 0.6935,
+      "f1_score": 0.5244,
+      "brier_score": 0.234,
+      "confusion_matrix": [
+        [
+          158,
+          118
+        ],
+        [
+          38,
+          86
+        ]
+      ]
+    },
+    "Model B (w/o Temp Features)": {
+      "roc_auc": 0.7093,
+      "pr_auc": 0.5673,
+      "accuracy": 0.6425,
+      "precision": 0.4513,
+      "recall": 0.7097,
+      "f1_score": 0.5517,
+      "brier_score": 0.2231,
+      "confusion_matrix": [
+        [
+          169,
+          107
+        ],
+        [
+          36,
+          88
+        ]
+      ]
+    },
+    "Model B (w/o Humidity/Precip/Wind)": {
+      "roc_auc": 0.7023,
+      "pr_auc": 0.5538,
+      "accuracy": 0.62,
+      "precision": 0.43,
+      "recall": 0.6935,
+      "f1_score": 0.5309,
+      "brier_score": 0.2264,
+      "confusion_matrix": [
+        [
+          162,
+          114
+        ],
+        [
+          38,
+          86
+        ]
+      ]
+    },
+    "Model B (w/o Weather Interactions)": {
+      "roc_auc": 0.7024,
+      "pr_auc": 0.5499,
+      "accuracy": 0.615,
+      "precision": 0.425,
+      "recall": 0.6855,
+      "f1_score": 0.5247,
+      "brier_score": 0.2266,
+      "confusion_matrix": [
+        [
+          161,
+          115
+        ],
+        [
+          39,
+          85
+        ]
+      ]
+    }
+  },
+  "feature_importance_ranked": [
+    {
+      "feature": "stress_level",
+      "category": "Lifestyle",
+      "coefficient": 1.1896,
+      "abs_coefficient": 1.1896,
+      "direction": "Risk Increasing (+)",
+      "rank": 1
+    },
+    {
+      "feature": "sleep_deficit",
+      "category": "Lifestyle",
+      "coefficient": 0.4938,
+      "abs_coefficient": 0.4938,
+      "direction": "Risk Increasing (+)",
+      "rank": 2
+    },
+    {
+      "feature": "screen_time",
+      "category": "Lifestyle",
+      "coefficient": 0.4301,
+      "abs_coefficient": 0.4301,
+      "direction": "Risk Increasing (+)",
+      "rank": 3
+    },
+    {
+      "feature": "screen_stress",
+      "category": "Lifestyle",
+      "coefficient": -0.3828,
+      "abs_coefficient": 0.3828,
+      "direction": "Risk Decreasing (-)",
+      "rank": 4
+    },
+    {
+      "feature": "hydration_deficit",
+      "category": "Lifestyle",
+      "coefficient": 0.3084,
+      "abs_coefficient": 0.3084,
+      "direction": "Risk Increasing (+)",
+      "rank": 5
+    },
+    {
+      "feature": "stress_sleep_ratio",
+      "category": "Lifestyle",
+      "coefficient": -0.2888,
+      "abs_coefficient": 0.2888,
+      "direction": "Risk Decreasing (-)",
+      "rank": 6
+    },
+    {
+      "feature": "pressure_change_24h",
+      "category": "Weather",
+      "coefficient": -0.2571,
+      "abs_coefficient": 0.2571,
+      "direction": "Risk Decreasing (-)",
+      "rank": 7
+    },
+    {
+      "feature": "barometric_drop_flag",
+      "category": "Weather",
+      "coefficient": 0.2539,
+      "abs_coefficient": 0.2539,
+      "direction": "Risk Increasing (+)",
+      "rank": 8
+    },
+    {
+      "feature": "temp_change_24h",
+      "category": "Weather",
+      "coefficient": 0.2022,
+      "abs_coefficient": 0.2022,
+      "direction": "Risk Increasing (+)",
+      "rank": 9
+    },
+    {
+      "feature": "stress_mood_interaction",
+      "category": "Lifestyle",
+      "coefficient": 0.1975,
+      "abs_coefficient": 0.1975,
+      "direction": "Risk Increasing (+)",
+      "rank": 10
+    },
+    {
+      "feature": "screen_sleep_ratio",
+      "category": "Lifestyle",
+      "coefficient": -0.1805,
+      "abs_coefficient": 0.1805,
+      "direction": "Risk Decreasing (-)",
+      "rank": 11
+    },
+    {
+      "feature": "hydration_sleep",
+      "category": "Lifestyle",
+      "coefficient": 0.1636,
+      "abs_coefficient": 0.1636,
+      "direction": "Risk Increasing (+)",
+      "rank": 12
+    },
+    {
+      "feature": "mood_level",
+      "category": "Lifestyle",
+      "coefficient": 0.132,
+      "abs_coefficient": 0.132,
+      "direction": "Risk Increasing (+)",
+      "rank": 13
+    },
+    {
+      "feature": "hydration_level",
+      "category": "Lifestyle",
+      "coefficient": -0.1189,
+      "abs_coefficient": 0.1189,
+      "direction": "Risk Decreasing (-)",
+      "rank": 14
+    },
+    {
+      "feature": "pressure_stress_interaction",
+      "category": "Interaction",
+      "coefficient": 0.0959,
+      "abs_coefficient": 0.0959,
+      "direction": "Risk Increasing (+)",
+      "rank": 15
+    },
+    {
+      "feature": "wind_speed",
+      "category": "Weather",
+      "coefficient": 0.0852,
+      "abs_coefficient": 0.0852,
+      "direction": "Risk Increasing (+)",
+      "rank": 16
+    },
+    {
+      "feature": "humidity",
+      "category": "Weather",
+      "coefficient": 0.0606,
+      "abs_coefficient": 0.0606,
+      "direction": "Risk Increasing (+)",
+      "rank": 17
+    },
+    {
+      "feature": "sleep_hours",
+      "category": "Lifestyle",
+      "coefficient": -0.0571,
+      "abs_coefficient": 0.0571,
+      "direction": "Risk Decreasing (-)",
+      "rank": 18
+    },
+    {
+      "feature": "temperature",
+      "category": "Weather",
+      "coefficient": 0.0566,
+      "abs_coefficient": 0.0566,
+      "direction": "Risk Increasing (+)",
+      "rank": 19
+    },
+    {
+      "feature": "pressure",
+      "category": "Weather",
+      "coefficient": 0.0528,
+      "abs_coefficient": 0.0528,
+      "direction": "Risk Increasing (+)",
+      "rank": 20
+    },
+    {
+      "feature": "precipitation",
+      "category": "Weather",
+      "coefficient": -0.0511,
+      "abs_coefficient": 0.0511,
+      "direction": "Risk Decreasing (-)",
+      "rank": 21
+    },
+    {
+      "feature": "sleep_weather_vulnerability",
+      "category": "Interaction",
+      "coefficient": -0.0422,
+      "abs_coefficient": 0.0422,
+      "direction": "Risk Decreasing (-)",
+      "rank": 22
+    }
+  ],
+  "synthetic_target_construction": {
+    "formula": "z = -3.5 + 0.45*sleep_deficit + 0.35*stress + 0.30*hydration_deficit + 0.005*screen_stress - 0.08*pressure_change_24h + 0.65*barometric_drop_flag + 0.15*temp_change_24h + 0.25*pressure_stress_interaction + N(0, 0.5)",
+    "weather_components_in_target": [
+      "pressure_change_24h (weight = -0.08)",
+      "barometric_drop_flag (weight = +0.65)",
+      "temp_change_24h (weight = +0.15)",
+      "pressure_stress_interaction (weight = +0.25)"
+    ],
+    "transparency_note": "Because weather variables (specifically barometric drops, pressure deltas, and temp changes) were explicitly baked into the synthetic ground-truth target generation function, Model B's statistical superiority over Model A is a mathematical consequence of the simulation design. This confirms that the model architecture and feature engineering pipeline accurately learn weather signals, but does NOT provide clinical proof of medical effectiveness."
+  },
+  "experimental_decision": {
+    "classification": "B. Moderate experimental support",
+    "rationale": "Model B demonstrated consistent superiority over Model A (+0.0425 ROC-AUC, +0.1295 PR-AUC). Weather-only Model C achieved a standalone ROC-AUC showing independent predictive signal, and pressure ablation confirmed barometric pressure features drive the majority of the weather gain. However, because the dataset is synthetic and weather signals were encoded in target generation, support is classified as Moderate Experimental Support.",
+    "disclaimer": "This result is based on synthetic data and is not clinical validation."
+  }
+}

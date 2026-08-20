@@ -1,0 +1,204 @@
+{
+  "version": "2.0.0-experimental",
+  "feature_count": 22,
+  "features": [
+    {
+      "order": 1,
+      "name": "sleep_hours",
+      "category": "Lifestyle",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "hours",
+      "description": "Self-reported sleep duration"
+    },
+    {
+      "order": 2,
+      "name": "mood_level",
+      "category": "Lifestyle",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "scale (1-5)",
+      "description": "Self-reported mood rating"
+    },
+    {
+      "order": 3,
+      "name": "stress_level",
+      "category": "Lifestyle",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "scale (0-10)",
+      "description": "Self-reported daily stress level"
+    },
+    {
+      "order": 4,
+      "name": "hydration_level",
+      "category": "Lifestyle",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "litres",
+      "description": "Self-reported fluid intake"
+    },
+    {
+      "order": 5,
+      "name": "screen_time",
+      "category": "Lifestyle",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "hours",
+      "description": "Daily screen exposure duration"
+    },
+    {
+      "order": 6,
+      "name": "stress_sleep_ratio",
+      "category": "Lifestyle",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "ratio",
+      "description": "stress_level / (sleep_hours + 1)"
+    },
+    {
+      "order": 7,
+      "name": "screen_stress",
+      "category": "Lifestyle",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "interaction",
+      "description": "screen_time * stress_level"
+    },
+    {
+      "order": 8,
+      "name": "hydration_sleep",
+      "category": "Lifestyle",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "interaction",
+      "description": "hydration_level * sleep_hours"
+    },
+    {
+      "order": 9,
+      "name": "sleep_deficit",
+      "category": "Lifestyle",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "hours",
+      "description": "max(0, 7.0 - sleep_hours)"
+    },
+    {
+      "order": 10,
+      "name": "hydration_deficit",
+      "category": "Lifestyle",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "litres",
+      "description": "max(0, 3.0 - hydration_level)"
+    },
+    {
+      "order": 11,
+      "name": "stress_mood_interaction",
+      "category": "Lifestyle",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "interaction",
+      "description": "stress_level * (6.0 - mood_level)"
+    },
+    {
+      "order": 12,
+      "name": "screen_sleep_ratio",
+      "category": "Lifestyle",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "ratio",
+      "description": "screen_time / (sleep_hours + 1)"
+    },
+    {
+      "order": 13,
+      "name": "temperature",
+      "category": "Weather",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "\u00b0C",
+      "description": "Ambient mean temperature"
+    },
+    {
+      "order": 14,
+      "name": "humidity",
+      "category": "Weather",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "%",
+      "description": "Relative humidity percentage"
+    },
+    {
+      "order": 15,
+      "name": "pressure",
+      "category": "Weather",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "hPa",
+      "description": "Sea-level atmospheric pressure"
+    },
+    {
+      "order": 16,
+      "name": "precipitation",
+      "category": "Weather",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "mm",
+      "description": "Daily rainfall/snowfall"
+    },
+    {
+      "order": 17,
+      "name": "wind_speed",
+      "category": "Weather",
+      "type": "raw",
+      "data_type": "float",
+      "unit": "km/h",
+      "description": "Wind velocity"
+    },
+    {
+      "order": 18,
+      "name": "pressure_change_24h",
+      "category": "Weather",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "hPa",
+      "description": "24h barometric pressure delta (P_t - P_{t-1})"
+    },
+    {
+      "order": 19,
+      "name": "barometric_drop_flag",
+      "category": "Weather",
+      "type": "engineered",
+      "data_type": "int",
+      "unit": "binary (0/1)",
+      "description": "Indicator flag if pressure dropped >= 6 hPa in 24h"
+    },
+    {
+      "order": 20,
+      "name": "temp_change_24h",
+      "category": "Weather",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "\u00b0C",
+      "description": "24h absolute temperature delta (|T_t - T_{t-1}|)"
+    },
+    {
+      "order": 21,
+      "name": "pressure_stress_interaction",
+      "category": "Interaction",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "interaction",
+      "description": "barometric_drop_flag * stress_level"
+    },
+    {
+      "order": 22,
+      "name": "sleep_weather_vulnerability",
+      "category": "Interaction",
+      "type": "engineered",
+      "data_type": "float",
+      "unit": "interaction",
+      "description": "sleep_deficit * barometric_drop_flag"
+    }
+  ]
+}

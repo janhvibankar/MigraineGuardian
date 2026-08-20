@@ -1,0 +1,51 @@
+{
+  "model_name": "MigraineGuardian Experimental Weather-Aware Pipeline",
+  "version": "2.0.0-experimental",
+  "saved_artifact_path": "e:\\Migraine\\ml-service\\data\\models\\migraine_weather_pipeline_experimental.pkl",
+  "created_at": "2026-08-20T21:38:37.947897",
+  "random_seed": 42,
+  "feature_count": 22,
+  "feature_names": [
+    "sleep_hours",
+    "mood_level",
+    "stress_level",
+    "hydration_level",
+    "screen_time",
+    "stress_sleep_ratio",
+    "screen_stress",
+    "hydration_sleep",
+    "sleep_deficit",
+    "hydration_deficit",
+    "stress_mood_interaction",
+    "screen_sleep_ratio",
+    "temperature",
+    "humidity",
+    "pressure",
+    "precipitation",
+    "wind_speed",
+    "pressure_change_24h",
+    "barometric_drop_flag",
+    "temp_change_24h",
+    "pressure_stress_interaction",
+    "sleep_weather_vulnerability"
+  ],
+  "training_dataset": {
+    "source_file": "e:\\Migraine\\ml-service\\data\\raw\\synthetic_migraine_weather_dataset.csv",
+    "total_records": 2000,
+    "total_users": 50,
+    "training_records": 1600,
+    "testing_records": 400,
+    "train_users_count": 40,
+    "test_users_count": 10
+  },
+  "model_architecture": {
+    "feature_engineer": "ExperimentalWeatherFeatureEngineer",
+    "scaler": "StandardScaler",
+    "classifier": "LogisticRegression(penalty='l2', C=1.0, class_weight='balanced')"
+  },
+  "performance_metrics": {
+    "test_roc_auc": 0.7026,
+    "test_brier_score": 0.2257
+  },
+  "disclaimer": "This experimental model is trained on synthetic data for research evaluation. It is NOT clinically validated and MUST NOT be deployed to production."
+}
