@@ -51,6 +51,7 @@ class FeatureAttribution(BaseModel):
     shap_value: float = Field(..., description="Additive SHAP contribution value")
     direction: str = Field(..., description="Risk direction: increases_risk | decreases_risk")
     importance: float = Field(..., description="Absolute SHAP importance magnitude")
+    category: Optional[str] = Field("LIFESTYLE", description="Feature category: LIFESTYLE | WEATHER | INTERACTION")
 
 
 class ElevatedFactor(BaseModel):
@@ -115,6 +116,9 @@ async def predict_migraine_risk(request: PredictRequest):
             latest_log=latest_dict,
             baseline_stats=baseline_dict,
             recent_episodes_count_7d=request.recent_episodes_count_7d,
+            weather_today=weather_today_dict,
+            weather_yesterday=weather_yesterday_dict,
+            model_used=model_used,
         )
 
         focus_areas = recommendation_engine.generate_focus_areas(

@@ -41,7 +41,15 @@ async def explain_migraine_risk(request: PredictRequest):
             "screen_time": request.latest_log.screen_time,
         }
 
-        score, level = model_manager.predict_risk(raw_features)
+        weather_today_dict = request.weather_today.model_dump() if request.weather_today else None
+        weather_yesterday_dict = request.weather_yesterday.model_dump() if request.weather_yesterday else None
+
+        score, level, model_used = model_manager.predict_risk(
+            raw_features=raw_features,
+            weather_today=weather_today_dict,
+            weather_yesterday=weather_yesterday_dict,
+            return_meta=True,
+        )
 
         baseline_dict = request.baseline_stats.model_dump() if request.baseline_stats else None
         latest_dict = request.latest_log.model_dump()
@@ -51,6 +59,9 @@ async def explain_migraine_risk(request: PredictRequest):
             latest_log=latest_dict,
             baseline_stats=baseline_dict,
             recent_episodes_count_7d=request.recent_episodes_count_7d,
+            weather_today=weather_today_dict,
+            weather_yesterday=weather_yesterday_dict,
+            model_used=model_used,
         )
 
         focus_areas = recommendation_engine.generate_focus_areas(
