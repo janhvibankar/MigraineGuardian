@@ -34,8 +34,43 @@ def test_1_existing_lifestyle_only_request_uses_model_a():
         assert data["model_used"] == "MODEL_A_LIFESTYLE_BASELINE"
 
 
+from unittest.mock import patch
+
 def test_2_complete_weather_request_uses_model_b():
-    """TEST 2: Request with complete weather_today and weather_yesterday routes to Model B weather-aware."""
+    """TEST 2: Request with complete weather_today and weather_yesterday routes to Model B weather-aware when WEATHER_MODEL_ENABLED=True."""
+    payload = {
+        "user_id": "test_user_001",
+        "latest_log": {
+            "sleep_hours": 6.5,
+            "sleep_quality": 3,
+            "daily_stress": 6,
+            "mood": 3,
+            "screen_time": 7.0,
+            "hydration": 2.0,
+        },
+        "weather_today": {
+            "temperature": 19.5,
+            "humidity": 62.0,
+            "pressure": 1008.0,
+            "precipitation": 0.0,
+            "wind_speed": 12.0,
+        },
+        "weather_yesterday": {
+            "pressure": 1015.0,
+            "temperature": 21.0,
+        },
+    }
+
+    with patch('app.core.config.settings.WEATHER_MODEL_ENABLED', True):
+        with TestClient(app) as client:
+            response = client.post("/predict", json=payload)
+            assert response.status_code == 200
+            data = response.json()
+            assert "model_used" in data
+            assert data["model_used"] == "MODEL_B_WEATHER_AWARE"
+
+def test_2b_complete_weather_request_uses_model_a_by_default():
+    """TEST 1/6: Request with complete weather_today routes to Model A because WEATHER_MODEL_ENABLED=False by default."""
     payload = {
         "user_id": "test_user_001",
         "latest_log": {
@@ -64,7 +99,7 @@ def test_2_complete_weather_request_uses_model_b():
         assert response.status_code == 200
         data = response.json()
         assert "model_used" in data
-        assert data["model_used"] == "MODEL_B_WEATHER_AWARE"
+        assert data["model_used"] == "MODEL_A_LIFESTYLE_BASELINE"
 
 
 def test_3_incomplete_weather_today_falls_back_to_model_a():
@@ -130,6 +165,7 @@ def test_4_missing_weather_yesterday_falls_back_to_model_a():
 
 def test_5_weather_delta_calculation_backwards_only():
     """TEST 5: Pressure drop calculation uses previous day pressure (1015) minus today pressure (1008) = +7.0 hPa drop."""
+    from unittest.mock import patch
     raw_lifestyle = {
         "sleep_hours": 6.0,
         "mood_level": 3.0,
@@ -140,9 +176,10 @@ def test_5_weather_delta_calculation_backwards_only():
     wt = {"temperature": 19.0, "humidity": 60.0, "pressure": 1008.0, "precipitation": 0.0, "wind_speed": 10.0}
     wy = {"pressure": 1015.0, "temperature": 21.0}
 
-    score, level, model_used = model_manager.predict_risk(raw_lifestyle, wt, wy, return_meta=True)
-    assert model_used == "MODEL_B_WEATHER_AWARE"
-    assert 0.0 <= score <= 100.0
+    with patch('app.core.config.settings.WEATHER_MODEL_ENABLED', True):
+        score, level, model_used = model_manager.predict_risk(raw_lifestyle, wt, wy, return_meta=True)
+        assert model_used == "MODEL_B_WEATHER_AWARE"
+        assert 0.0 <= score <= 100.0
 
 
 def test_6_model_b_score_probability_in_valid_range():
@@ -170,12 +207,14 @@ def test_6_model_b_score_probability_in_valid_range():
         },
     }
 
-    with TestClient(app) as client:
-        response = client.post("/predict", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert 0.0 <= data["score"] <= 100.0
-        assert data["level"] in ["Low", "Moderate", "High"]
+    from unittest.mock import patch
+    with patch('app.core.config.settings.WEATHER_MODEL_ENABLED', True):
+        with TestClient(app) as client:
+            response = client.post("/predict", json=payload)
+            assert response.status_code == 200
+            data = response.json()
+            assert 0.0 <= data["score"] <= 100.0
+            assert data["level"] in ["Low", "Moderate", "High"]
 
 
 def test_7_existing_response_fields_preserved():

@@ -121,7 +121,8 @@ class ModelManager:
             raise RuntimeError(f"Model A is not loaded: {self.load_error or 'Unknown error'}")
 
         # Check if complete weather data is provided and valid for Model B routing
-        use_model_b = self._validate_weather_inputs(weather_today, weather_yesterday)
+        # Only use Model B if the feature flag is explicitly enabled
+        use_model_b = settings.WEATHER_MODEL_ENABLED and self._validate_weather_inputs(weather_today, weather_yesterday)
 
         if use_model_b and self.is_experimental_loaded and self.experimental_model is not None:
             try:

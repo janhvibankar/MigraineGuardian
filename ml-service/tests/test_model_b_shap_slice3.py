@@ -3,6 +3,7 @@ import numpy as np
 from fastapi.testclient import TestClient
 from app.main import app
 from app.services.risk_calculator import model_manager
+from unittest.mock import patch
 from app.services.shap_explainer import shap_explainer_service
 
 
@@ -161,11 +162,12 @@ def test_10_model_b_probability_and_shap_come_from_same_model():
         },
     }
 
-    with TestClient(app) as client:
-        res = client.post("/predict", json=payload)
-        assert res.status_code == 200
-        data = res.json()
-        assert data["model_used"] == "MODEL_B_WEATHER_AWARE"
+    with patch('app.core.config.settings.WEATHER_MODEL_ENABLED', True):
+        with TestClient(app) as client:
+            res = client.post("/predict", json=payload)
+            assert res.status_code == 200
+            data = res.json()
+            assert data["model_used"] == "MODEL_B_WEATHER_AWARE"
         assert len(data["xai"]["features"]) == 22
 
 
@@ -201,15 +203,16 @@ def test_12_existing_xai_response_fields_compatible():
         },
     }
 
-    with TestClient(app) as client:
-        res = client.post("/explain", json=payload)
-        assert res.status_code == 200
-        data = res.json()
-        assert "score" in data
-        assert "level" in data
-        assert "xai" in data
-        assert "features" in data["xai"]
-        assert len(data["xai"]["features"]) == 22
+    with patch('app.core.config.settings.WEATHER_MODEL_ENABLED', True):
+        with TestClient(app) as client:
+            res = client.post("/explain", json=payload)
+            assert res.status_code == 200
+            data = res.json()
+            assert "score" in data
+            assert "level" in data
+            assert "xai" in data
+            assert "features" in data["xai"]
+            assert len(data["xai"]["features"]) == 22
 
 
 def test_13_mathematical_additivity_check_model_b():

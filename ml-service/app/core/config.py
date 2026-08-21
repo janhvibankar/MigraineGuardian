@@ -9,6 +9,13 @@ class Settings(BaseSettings):
     # Absolute path to serialized scikit-learn pipeline model
     MODEL_PATH: Path = Path(__file__).resolve().parent.parent / "models" / "migraine_pipeline.pkl"
     EXPERIMENTAL_MODEL_PATH: Path = Path(__file__).resolve().parent.parent.parent / "data" / "models" / "migraine_weather_pipeline_experimental.pkl"
+    # Feature toggle for the experimental weather model
+    # WEATHER_MODEL_ENABLED=False means:
+    # "Use the established lifestyle-only production model."
+    # WEATHER_MODEL_ENABLED=True means:
+    # "Enable the experimental weather-aware model for research/demo purposes."
+    # WARNING: The weather-aware model was trained on synthetic data and is not clinically validated.
+    WEATHER_MODEL_ENABLED: bool = False
 
     # Project-level configurable risk score probability thresholds (0-100)
     # score < LOW_THRESHOLD -> "Low"
