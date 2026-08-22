@@ -10,6 +10,7 @@ import { trackingService } from '../services/trackingService';
 import { insightsService } from '../services/insightsService';
 import { reportService } from '../services/reportService';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { weatherService } from '../services/weatherService';
 import { cn } from '../utils/cn';
 import {
   ResponsiveContainer,
@@ -41,6 +42,62 @@ export function DashboardPage() {
   const [reportSummary, setReportSummary] = useState(null);
   const [weeklyInsights, setWeeklyInsights] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Morning Prediction States
+  const [morningSleep, setMorningSleep] = useState(7.5);
+  const [morningSleepQuality, setMorningSleepQuality] = useState(4);
+  const [morningStress, setMorningStress] = useState(3);
+  const [morningMood, setMorningMood] = useState(4);
+  const [submittingMorning, setSubmittingMorning] = useState(false);
+  const [morningError, setMorningError] = useState(null);
+
+  const handleMorningPredictionSubmit = async (e) => {
+    e.preventDefault();
+    setSubmittingMorning(true);
+    setMorningError(null);
+
+    let lat = undefined;
+    let lon = undefined;
+
+    try {
+      const locResult = await weatherService.requestBrowserLocation();
+      if (locResult.success && locResult.coords) {
+        lat = locResult.coords.latitude;
+        lon = locResult.coords.longitude;
+      }
+    } catch (locErr) {
+      console.warn('[DashboardPage] Geolocation fetch skipped:', locErr.message);
+    }
+
+    try {
+      const payload = {
+        sleep_hours: Number(morningSleep),
+        sleep_quality: Number(morningSleepQuality),
+        morning_stress: Number(morningStress),
+        morning_mood: Number(morningMood),
+        latitude: lat,
+        longitude: lon,
+      };
+
+      const result = await predictionService.submitMorningPrediction(payload);
+      if (result) {
+        setPrediction(result);
+        setTodayLog(prev => ({
+          ...prev,
+          sleep_hours: Number(morningSleep),
+          sleep_quality: Number(morningSleepQuality),
+          daily_stress: Number(morningStress),
+          mood: Number(morningMood),
+        }));
+      } else {
+        setMorningError('Could not calculate risk forecast. Please try again.');
+      }
+    } catch (err) {
+      setMorningError(err.message || 'An error occurred.');
+    } finally {
+      setSubmittingMorning(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -247,6 +304,107 @@ export function DashboardPage() {
           </div>
         </div>
       </Card>
+
+      {!hasForecast && (
+        <Card className="p-7 border-2 border-brand-sage/60 rounded-[28px] shadow-soft max-w-xl mx-auto space-y-6 text-left">
+          <div className="space-y-1">
+            <h3 className="text-section-md font-bold text-brand-dark flex items-center gap-2">
+              <SunMedium className="w-5 h-5 text-brand-teal" />
+              Morning Health Check & Forecast
+            </h3>
+            <p className="text-meta-md text-[#555B55]">
+              Log your waking metrics to calculate today's personal migraine susceptibility risk.
+            </p>
+          </div>
+
+          {morningError && (
+            <div className="p-3 rounded-lg bg-alert-muted/15 border border-alert-muted/30 text-meta-sm text-[#8F443B] flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              <span>{morningError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleMorningPredictionSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-meta-sm font-bold text-brand-dark">Sleep Rest (Hours)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="24"
+                  value={morningSleep}
+                  onChange={(e) => setMorningSleep(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-brand-sage/50 text-body-md text-brand-dark focus:border-brand-teal focus:ring-1 focus:ring-brand-teal focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-meta-sm font-bold text-brand-dark">Sleep Quality (1-5)</label>
+                <select
+                  value={morningSleepQuality}
+                  onChange={(e) => setMorningSleepQuality(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-brand-sage/50 text-body-md text-brand-dark focus:border-brand-teal focus:ring-1 focus:ring-brand-teal focus:outline-none bg-white"
+                  required
+                >
+                  <option value="1">1 - Very Poor</option>
+                  <option value="2">2 - Poor</option>
+                  <option value="3">3 - Fair</option>
+                  <option value="4">4 - Good</option>
+                  <option value="5">5 - Excellent</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-meta-sm font-bold text-brand-dark">Morning Stress (0-10)</label>
+                <select
+                  value={morningStress}
+                  onChange={(e) => setMorningStress(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-brand-sage/50 text-body-md text-brand-dark focus:border-brand-teal focus:ring-1 focus:ring-brand-teal focus:outline-none bg-white"
+                  required
+                >
+                  {[...Array(11).keys()].map(num => (
+                    <option key={num} value={num}>{num} {num === 0 ? '(None)' : num === 10 ? '(Extreme)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-meta-sm font-bold text-brand-dark">Morning Mood (1-5)</label>
+                <select
+                  value={morningMood}
+                  onChange={(e) => setMorningMood(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-brand-sage/50 text-body-md text-brand-dark focus:border-brand-teal focus:ring-1 focus:ring-brand-teal focus:outline-none bg-white"
+                  required
+                >
+                  <option value="1">1 - Very Low</option>
+                  <option value="2">2 - Low</option>
+                  <option value="3">3 - Fair</option>
+                  <option value="4">4 - Good</option>
+                  <option value="5">5 - Excellent</option>
+                </select>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              className="w-full py-2.5 font-bold rounded-xl shadow-soft"
+              disabled={submittingMorning}
+            >
+              {submittingMorning ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Calculating risk...
+                </span>
+              ) : 'Generate Today\'s Forecast'}
+            </Button>
+          </form>
+        </Card>
+      )}
 
       {/* 3. BASELINES */}
       <div className="space-y-4 text-left">

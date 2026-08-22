@@ -22,6 +22,16 @@ export const predictionService = {
     return cachedForecast;
   },
 
+  submitMorningPrediction: async (predictionData) => {
+    const res = await apiClient.post('/predictions/morning', predictionData);
+    if (res.ok && res.data) {
+      const forecast = res.data.forecast || res.data;
+      storageService.setItem('migraineguardian_today_forecast', forecast);
+      return forecast;
+    }
+    return null;
+  },
+
   getElevatedFactors: async () => {
     const prediction = await predictionService.getTodayPrediction();
     return prediction?.elevatedFactors || [];

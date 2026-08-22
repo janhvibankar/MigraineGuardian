@@ -459,7 +459,7 @@ export const firestoreService = {
   },
 
   /**
-   * Saves weather record document under `users/{userId}/weather_records/{date}`.
+   * Saves weather record document under `users/{userId}/weather_records/{date}` (or `{date}_forecast`).
    */
   saveWeatherRecord: async (userId, targetDate, weatherData) => {
     if (!db) {
@@ -467,13 +467,15 @@ export const firestoreService = {
     }
 
     const date = targetDate || new Date().toISOString().split('T')[0];
-    const firestorePath = `users/${userId}/weather_records/${date}`;
+    const isForecast = weatherData.data_type === 'forecast';
+    const docId = isForecast ? `${date}_forecast` : date;
+    const firestorePath = `users/${userId}/weather_records/${docId}`;
     console.log(`[Weather Debug] FINAL FIRESTORE WRITE PATH:\n${firestorePath}`);
 
-    const weatherRef = db.collection('users').doc(userId).collection('weather_records').doc(date);
+    const weatherRef = db.collection('users').doc(userId).collection('weather_records').doc(docId);
 
     const recordDoc = {
-      weatherRecordId: date,
+      weatherRecordId: docId,
       date,
       timestamp: weatherData.timestamp || new Date().toISOString(),
       latitude: Number(weatherData.latitude),
@@ -487,6 +489,7 @@ export const firestoreService = {
       windSpeed: Number(weatherData.windSpeed || 0),
       precipitation: Number(weatherData.precipitation || 0),
       source: String(weatherData.source || 'weather_api'),
+      data_type: isForecast ? 'forecast' : 'observed',
       updatedAt: new Date().toISOString(),
     };
 
@@ -502,16 +505,67 @@ export const firestoreService = {
   },
 
   /**
-   * Retrieves today's weather record for user.
+   * Retrieves today's weather record for user. Supports dataType: 'observed' (default) or 'forecast'.
    */
-  getTodayWeatherRecord: async (userId, targetDate = null) => {
+  getTodayWeatherRecord: async (userId, targetDate = null, dataType = 'observed') => {
     if (!db) {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
     const date = targetDate || new Date().toISOString().split('T')[0];
-    const weatherRef = db.collection('users').doc(userId).collection('weather_records').doc(date);
+    const docId = dataType === 'forecast' ? `${date}_forecast` : date;
+    const weatherRef = db.collection('users').doc(userId).collection('weather_records').doc(docId);
     const doc = await weatherRef.get();
+
+    if (doc.exists) {
+      return { id: doc.id, ...doc.data() };
+    }
+    return null;
+  },
+
+  /**
+   * Saves morning prediction inputs under `users/{userId}/prediction_inputs/{date}`.
+   */
+  saveMorningPredictionInput: async (userId, date, inputData) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    const inputRef = db.collection('users').doc(userId).collection('prediction_inputs').doc(targetDate);
+
+    const inputDoc = {
+      prediction_date: targetDate,
+      prediction_timestamp: inputData.prediction_timestamp || new Date().toISOString(),
+      sleep_hours: Number(inputData.sleep_hours),
+      sleep_quality: Number(inputData.sleep_quality),
+      morning_stress: Number(inputData.morning_stress),
+      morning_mood: Number(inputData.morning_mood),
+      weather_forecast: inputData.weather_forecast || null,
+      weather_yesterday: inputData.weather_yesterday || null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const existingDoc = await inputRef.get();
+    if (!existingDoc.exists) {
+      inputDoc.createdAt = new Date().toISOString();
+    }
+
+    await inputRef.set(inputDoc, { merge: true });
+    return { success: true, input: inputDoc };
+  },
+
+  /**
+   * Retrieves morning prediction input for user on specific date.
+   */
+  getMorningPredictionInput: async (userId, date) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    const inputRef = db.collection('users').doc(userId).collection('prediction_inputs').doc(targetDate);
+    const doc = await inputRef.get();
 
     if (doc.exists) {
       return { id: doc.id, ...doc.data() };

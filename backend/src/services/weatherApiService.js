@@ -274,4 +274,66 @@ export const weatherApiService = {
       throw new Error(`Failed to fetch historical weather: ${err.message}`);
     }
   },
+
+  /**
+   * Fetches weather forecast for today (T) for coordinates.
+   * Uses Open-Meteo forecast API for targetDate.
+   */
+  fetchForecastWeather: async (latitude, longitude, targetDate = null) => {
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+    const dateStr = targetDate || new Date().toISOString().split('T')[0];
+
+    if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lon) || lon < -180 || lon > 180) {
+      throw new Error('Invalid coordinates for forecast weather fetch.');
+    }
+
+    try {
+      const omUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&daily=weather_code,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,surface_pressure_mean,precipitation_sum,wind_speed_10m_max&timezone=auto`;
+      const res = await fetch(omUrl, { signal: AbortSignal.timeout(6000) });
+
+      if (!res.ok) {
+        throw new Error(`Open-Meteo forecast API returned HTTP status ${res.status}`);
+      }
+
+      const data = await res.json();
+      const daily = data.daily || {};
+      const dates = daily.time || [];
+
+      if (dates.length === 0) {
+        throw new Error('No daily forecast data returned by Open-Meteo.');
+      }
+
+      const code = daily.weather_code[0] ?? 0;
+      const wmoMeta = WMO_WEATHER_CODES[code] || { condition: 'Clear', description: 'Clear sky' };
+      const tempMax = Math.round((daily.temperature_2m_max[0] ?? 22) * 10) / 10;
+      const tempMin = Math.round((daily.temperature_2m_min[0] ?? 18) * 10) / 10;
+      const tempAvg = Math.round(((tempMax + tempMin) / 2) * 10) / 10;
+      const pressure = Math.round(daily.surface_pressure_mean[0] ?? 1013);
+      const humidity = Math.round(daily.relative_humidity_2m_mean[0] ?? 60);
+
+      return {
+        weatherRecordId: `${dateStr}_forecast`,
+        date: dateStr,
+        timestamp: new Date().toISOString(),
+        latitude: Math.round(lat * 10000) / 10000,
+        longitude: Math.round(lon * 10000) / 10000,
+        temperature: tempAvg,
+        tempMax,
+        tempMin,
+        feelsLike: tempAvg,
+        humidity,
+        pressure,
+        weatherCondition: wmoMeta.condition,
+        weatherDescription: wmoMeta.description,
+        windSpeed: Math.round((daily.wind_speed_10m_max[0] ?? 0) * 10) / 10,
+        precipitation: Math.round((daily.precipitation_sum[0] ?? 0) * 10) / 10,
+        source: 'openmeteo_forecast',
+        data_type: 'forecast',
+      };
+    } catch (err) {
+      console.error('[weatherApiService] Forecast fetch failed:', err.message);
+      throw new Error(`Failed to fetch forecast weather: ${err.message}`);
+    }
+  },
 };
