@@ -1,18 +1,36 @@
 {
-  "timestamp": "2026-08-22T12:58:08.659581",
+  "timestamp": "2026-08-22T16:42:23.067671",
   "aggregate_stats": {
-    "total_users": 8,
+    "total_users": 9,
     "users_with_both": 0,
     "total_checkin_records": 1,
-    "total_weather_records": 17,
+    "total_weather_records": 20,
     "total_forecast_records": 1,
-    "total_pss_records": 3,
+    "total_pss_records": 4,
     "total_episode_records": 0,
     "total_aligned_days": 0
   },
   "user_details": [
     {
       "alias": "User_1",
+      "id_masked": "85Tl...mVH3",
+      "num_checkins": 0,
+      "earliest_checkin": "None",
+      "latest_checkin": "None",
+      "num_weather": 3,
+      "earliest_weather": "2026-08-19",
+      "latest_weather": "2026-08-21",
+      "num_pss": 1,
+      "num_forecasts": 0,
+      "overlap_days_count": 0,
+      "complete_t_t1_lifestyle_days_count": 0,
+      "migraine_occurrence_total": 0,
+      "migraine_occurrence_nulls": 0,
+      "migraine_episodes_subcoll_count": 0,
+      "target_values_dist": {}
+    },
+    {
+      "alias": "User_2",
       "id_masked": "8cN5...Pvz2",
       "num_checkins": 0,
       "earliest_checkin": "None",
@@ -30,7 +48,7 @@
       "target_values_dist": {}
     },
     {
-      "alias": "User_2",
+      "alias": "User_3",
       "id_masked": "QPaH...NBE3",
       "num_checkins": 0,
       "earliest_checkin": "None",
@@ -48,7 +66,7 @@
       "target_values_dist": {}
     },
     {
-      "alias": "User_3",
+      "alias": "User_4",
       "id_masked": "aUiy...GO82",
       "num_checkins": 0,
       "earliest_checkin": "None",
@@ -66,7 +84,7 @@
       "target_values_dist": {}
     },
     {
-      "alias": "User_4",
+      "alias": "User_5",
       "id_masked": "fRm3...IgJ2",
       "num_checkins": 0,
       "earliest_checkin": "None",
@@ -84,7 +102,7 @@
       "target_values_dist": {}
     },
     {
-      "alias": "User_5",
+      "alias": "User_6",
       "id_masked": "fcvi...uSx1",
       "num_checkins": 0,
       "earliest_checkin": "None",
@@ -102,7 +120,7 @@
       "target_values_dist": {}
     },
     {
-      "alias": "User_6",
+      "alias": "User_7",
       "id_masked": "g4tq...xBE3",
       "num_checkins": 1,
       "earliest_checkin": "2026-08-12",
@@ -122,7 +140,7 @@
       }
     },
     {
-      "alias": "User_7",
+      "alias": "User_8",
       "id_masked": "mc4R...DsC2",
       "num_checkins": 0,
       "earliest_checkin": "None",
@@ -140,7 +158,7 @@
       "target_values_dist": {}
     },
     {
-      "alias": "User_8",
+      "alias": "User_9",
       "id_masked": "orgp...Po53",
       "num_checkins": 0,
       "earliest_checkin": "None",
