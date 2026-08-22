@@ -53,6 +53,11 @@ def run_monitor():
     total_missing_t_forecast = 0
     total_duplicate_prediction_dates = 0
 
+    total_observed_modern_weather = 0
+    total_observed_legacy_weather = 0
+    total_forecast_weather = 0
+    total_unknown_weather = 0
+
     user_prediction_counts = []
     user_complete_pairs_counts = []
 
@@ -171,14 +176,44 @@ def run_monitor():
             w_data = w.to_dict()
             weather_by_id[w.id] = w_data
 
-            # Quality Check: forecast/observed labels matching
             w_type = w_data.get("data_type")
-            if w.id.endswith("_forecast"):
-                if w_type != "forecast":
-                    quality_violations.append(f"[{user_alias}] Weather record {w.id} is forecast document but data_type is '{w_type}'")
+            w_source = w_data.get("source")
+
+            # Initialize classification
+            classified_type = "UNKNOWN"
+
+            # 1. Check if document has data_type
+            if w_type is not None:
+                if w_type == "forecast":
+                    if w.id.endswith("_forecast"):
+                        classified_type = "FORECAST"
+                        total_forecast_weather += 1
+                    else:
+                        quality_violations.append(f"[{user_alias}] Weather record {w.id} has data_type 'forecast' but document ID does not end with '_forecast'")
+                        total_unknown_weather += 1
+                elif w_type == "observed":
+                    if not w.id.endswith("_forecast") and len(w.id) == 10:
+                        classified_type = "OBSERVED"
+                        total_observed_modern_weather += 1
+                    else:
+                        quality_violations.append(f"[{user_alias}] Weather record {w.id} has data_type 'observed' but document ID is forecast or invalid")
+                        total_unknown_weather += 1
+                else:
+                    quality_violations.append(f"[{user_alias}] Weather record {w.id} has invalid data_type: '{w_type}'")
+                    total_unknown_weather += 1
+
+            # 2. Check if legacy classification applies (no data_type)
             else:
-                if w_type != "observed" and len(w.id) == 10: # YYYY-MM-DD format
-                    quality_violations.append(f"[{user_alias}] Weather record {w.id} is observed document but data_type is '{w_type}'")
+                is_legacy_source = w_source in ("openmeteo_historical", "openmeteo")
+                has_forecast_suffix = w.id.endswith("_forecast")
+
+                if not has_forecast_suffix and is_legacy_source and len(w.id) == 10:
+                    classified_type = "OBSERVED_LEGACY"
+                    total_observed_legacy_weather += 1
+                else:
+                    # Report as quality violation
+                    quality_violations.append(f"[{user_alias}] Weather record {w.id} lacks data_type and cannot be classified. Source: {w_source}")
+                    total_unknown_weather += 1
 
         # Evaluate pairs and weather links
         all_dates = set(preds_by_date.keys()).union(set(checkins_by_date.keys()))
@@ -301,6 +336,11 @@ def run_monitor():
     print(f"  K. Missing T Forecast              : {total_missing_t_forecast}")
     print(f"  L. Duplicate Prediction Dates      : {total_duplicate_prediction_dates}")
     print(f"  M. Total Quality Violations Flagged: {len(quality_violations)}")
+    print(f"  Known legacy records excluded from violation count: {total_observed_legacy_weather}")
+    print(f"  N. Modern Observed Weather Records : {total_observed_modern_weather}")
+    print(f"  O. Legacy Observed Weather Records : {total_observed_legacy_weather}")
+    print(f"  P. Forecast Weather Records        : {total_forecast_weather}")
+    print(f"  Q. Unknown/Invalid Weather Records : {total_unknown_weather}")
 
     print("\n" + "=" * 50)
     print(" 2. DATA COMPLETENESS RATIOS")
