@@ -211,7 +211,7 @@ export function SignupPage() {
                 setFullName(e.target.value);
                 if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: null }));
               }}
-              placeholder="e.g. Sakshi"
+              placeholder="e.g. Janhvi"
               errorText={errors.fullName}
               required
             />

@@ -154,11 +154,11 @@ export function Sidebar({ className }) {
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-full bg-brand-dark text-white font-bold text-meta-md flex items-center justify-center flex-shrink-0 shadow-soft">
-                {currentUser?.initials || 'SA'}
+                {currentUser?.initials || 'JH'}
               </div>
               <div className="flex flex-col text-left overflow-hidden">
                 <span className="text-body-md font-bold text-brand-dark truncate">
-                  {currentUser?.name || 'Sakshi'}
+                  {currentUser?.name || 'Janhvi'}
                 </span>
                 <span className="text-meta-sm text-muted-text truncate">
                   {currentUser?.diagnosis?.split('(')[0] || 'Migraine baseline'}

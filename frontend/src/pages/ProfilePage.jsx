@@ -36,7 +36,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 export function ProfilePage() {
   const currentUser = useCurrentUser();
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(() => currentUser?.name || 'Sakshi');
+  const [name, setName] = useState(() => currentUser?.name || 'Janhvi');
   const [age, setAge] = useState(() => currentUser?.age || '32');
   const [gender, setGender] = useState(() => currentUser?.gender || 'Female');
 

@@ -139,10 +139,10 @@ export function TopBar() {
             aria-label="User Profile"
           >
             <div className="w-8 h-8 rounded-full bg-brand-dark text-white font-bold text-meta-sm flex items-center justify-center shadow-soft">
-              {currentUser?.initials || 'SA'}
+              {currentUser?.initials || 'JH'}
             </div>
             <span className="hidden sm:inline text-body-md font-bold text-brand-dark group-hover:text-brand-teal transition-colors">
-              {currentUser?.name || 'Sakshi'}
+              {currentUser?.name || 'Janhvi'}
             </span>
           </Link>
         </div>

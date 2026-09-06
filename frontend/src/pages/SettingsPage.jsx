@@ -276,7 +276,7 @@ export function SettingsPage() {
             <div className="space-y-0.5">
               <span className="text-meta-sm text-muted-text block">Registered Account Email</span>
               <span className="font-bold text-brand-dark text-body-md">
-                {currentUser?.email || 'sakshi@serene-health.org'}
+                {currentUser?.email || 'janhvi@serene-health.org'}
               </span>
             </div>
             <Button variant="outline" size="sm" icon={Key}>

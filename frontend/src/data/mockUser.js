@@ -1,9 +1,9 @@
 export const MOCK_USER = {
   id: 'usr_84719',
-  name: 'Sakshi',
-  email: 'sakshi@serene-health.org',
+  name: 'Janhvi',
+  email: 'janhvi@serene-health.org',
   avatar: null,
-  initials: 'SA',
+  initials: 'JH',
   joinedDate: 'November 2024',
   diagnosis: 'Migraine with sensory aura (episodic)',
   baselineTriggers: [
