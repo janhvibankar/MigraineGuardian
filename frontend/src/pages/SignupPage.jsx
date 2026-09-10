@@ -279,7 +279,7 @@ export function SignupPage() {
                   className="rounded text-brand-teal focus:ring-brand-teal w-4 h-4 mt-0.5 flex-shrink-0 cursor-pointer"
                 />
                 <span className="leading-snug">
-                  I agree to the <Link to={ROUTES.HOW_IT_WORKS} className="text-brand-dark underline font-semibold hover:text-brand-teal">Terms</Link> and <Link to={ROUTES.SETTINGS} className="text-brand-dark underline font-semibold hover:text-brand-teal">Privacy Policy</Link>.
+                  I agree to the <Link to={ROUTES.TERMS} className="text-brand-dark underline font-semibold hover:text-brand-teal">Terms</Link> and <Link to={ROUTES.PRIVACY} className="text-brand-dark underline font-semibold hover:text-brand-teal">Privacy Policy</Link>.
                 </span>
               </label>
               {errors.consent && (

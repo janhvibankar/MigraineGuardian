@@ -15,6 +15,7 @@ import {
   X,
   Shield,
 } from 'lucide-react';
+import { authService } from '../../services/authService';
 import { cn } from '../../utils/cn';
 
 export function MobileNav() {
@@ -29,8 +30,9 @@ export function MobileNav() {
     { label: 'Preferences & Privacy', path: ROUTES.SETTINGS, icon: Settings },
   ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setMoreMenuOpen(false);
+    await authService.logout();
     navigate(ROUTES.LOGIN);
   };
 

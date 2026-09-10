@@ -20,13 +20,13 @@ export function Footer() {
             <Link to={ROUTES.HOW_IT_WORKS} className="hover:text-brand-dark transition-colors">
               How It Works
             </Link>
-            <Link to={ROUTES.SETTINGS} className="hover:text-brand-dark transition-colors">
+            <Link to={ROUTES.PRIVACY} className="hover:text-brand-dark transition-colors">
               Privacy
             </Link>
-            <Link to={ROUTES.HOW_IT_WORKS} className="hover:text-brand-dark transition-colors">
+            <Link to={ROUTES.TERMS} className="hover:text-brand-dark transition-colors">
               Terms
             </Link>
-            <Link to={ROUTES.CHAT} className="hover:text-brand-dark transition-colors">
+            <Link to={ROUTES.CONTACT} className="hover:text-brand-dark transition-colors">
               Contact
             </Link>
           </nav>

@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
-import { storageService } from '../services/storageService';
+import { authService } from '../services/authService';
 import {
   User,
   Activity,
@@ -25,36 +25,37 @@ import {
   Dumbbell,
   Coffee,
   Info,
-  Clock,
-  HeartHandshake,
+  Lock,
+  LogOut,
+  CheckCircle2,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
-import { authService } from '../services/authService';
-
 export function OnboardingPage() {
   const navigate = useNavigate();
-
-  const currentUser = authService.getCurrentUser();
+  const isAuthenticated = authService.isAuthenticated();
+  const guestDraft = authService.getGuestOnboarding();
+  const currentUser = isAuthenticated ? authService.getCurrentUser() : null;
 
   // Multi-step state (1 to 4)
   const [step, setStep] = useState(1);
+  const [showAuthChoiceModal, setShowAuthChoiceModal] = useState(false);
 
-  // Step 1: About You - Read name from signed-up user
-  const [name, setName] = useState(() => currentUser?.name || '');
-  const [age, setAge] = useState(() => currentUser?.age || '32');
-  const [gender, setGender] = useState(() => currentUser?.gender || 'Female');
+  // Step 1: About You
+  const [name, setName] = useState(() => guestDraft?.name || currentUser?.name || '');
+  const [age, setAge] = useState(() => guestDraft?.age || currentUser?.age || '30');
+  const [gender, setGender] = useState(() => guestDraft?.gender || currentUser?.gender || 'Female');
   const [step1Error, setStep1Error] = useState('');
 
   // Step 2: Migraine History
-  const [hasMigraines, setHasMigraines] = useState('Yes'); // 'Yes', 'No', 'Not sure'
-  const [frequency, setFrequency] = useState('1–3 times a month');
-  const [severity, setSeverity] = useState(6); // 0-10
-  const [duration, setDuration] = useState('4–12 hours');
-  const [usesMedication, setUsesMedication] = useState('Yes');
+  const [hasMigraines, setHasMigraines] = useState(() => guestDraft?.hasMigraines || 'Yes');
+  const [frequency, setFrequency] = useState(() => guestDraft?.frequency || '1–3 times a month');
+  const [severity, setSeverity] = useState(() => guestDraft?.severity ?? 6); // 0-10
+  const [duration, setDuration] = useState(() => guestDraft?.duration || '4–12 hours');
+  const [usesMedication, setUsesMedication] = useState(() => guestDraft?.usesMedication || 'Yes');
 
   // Step 3: Tracking Preferences
-  const [selectedFactors, setSelectedFactors] = useState([
+  const [selectedFactors, setSelectedFactors] = useState(() => guestDraft?.selectedFactors || [
     'Sleep',
     'Stress',
     'Screen time',
@@ -89,9 +90,9 @@ export function OnboardingPage() {
     }
   };
 
-  const saveProfileData = async () => {
-    const updatedName = name.trim() || currentUser?.name || 'User';
-    await authService.updateUserProfile({
+  const saveCurrentProgress = () => {
+    const updatedName = name.trim();
+    const payload = {
       name: updatedName,
       age,
       gender,
@@ -101,20 +102,14 @@ export function OnboardingPage() {
       duration,
       usesMedication,
       selectedFactors,
-    });
-    storageService.setItem('onboarding_draft', {
-      name: updatedName,
-      age,
-      gender,
-      hasMigraines,
-      frequency,
-      severity,
-      duration,
-      usesMedication,
-      selectedFactors,
-    });
-  };
+    };
 
+    authService.saveGuestOnboarding(payload);
+
+    if (isAuthenticated) {
+      authService.updateUserProfile(payload);
+    }
+  };
 
   // Step navigation helpers
   const handleNext = () => {
@@ -126,7 +121,7 @@ export function OnboardingPage() {
       setStep1Error('');
     }
 
-    saveProfileData();
+    saveCurrentProgress();
 
     if (step < 4) {
       setStep(step + 1);
@@ -140,13 +135,19 @@ export function OnboardingPage() {
   };
 
   const handleStartPss = () => {
-    saveProfileData();
-    navigate(ROUTES.PSS_ASSESSMENT);
+    saveCurrentProgress();
+    navigate(ROUTES.PSS_ASSESSMENT, { state: { fromOnboarding: true } });
   };
 
-  const handleSkipToDashboard = () => {
-    saveProfileData();
-    navigate(ROUTES.DASHBOARD);
+  const handleCompleteLater = async () => {
+    saveCurrentProgress();
+
+    if (authService.isAuthenticated()) {
+      await authService.transferGuestOnboardingToUser();
+      navigate(ROUTES.DASHBOARD);
+    } else {
+      setShowAuthChoiceModal(true);
+    }
   };
 
   const stepsMeta = [
@@ -161,81 +162,83 @@ export function OnboardingPage() {
     if (val <= 3) return `Mild (${val}/10)`;
     if (val <= 6) return `Moderate (${val}/10)`;
     if (val <= 8) return `Severe (${val}/10)`;
-    return `Intense (${val}/10)`;
+    return `Extreme (${val}/10)`;
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 py-4 sm:py-6">
-      {/* Top Calm Progress Header */}
-      <div className="bg-gradient-to-b from-[#FAF9F5] to-[#F1EFEA] border-2 border-brand-sage/55 rounded-[22px] p-5 sm:p-6 shadow-soft">
-        <div className="flex items-center justify-between gap-2 mb-3.5">
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-wider text-brand-dark bg-brand-sage/25 border border-brand-sage/50">
-              Step {step} of 4
-            </span>
-            <span className="text-body-md font-bold text-brand-dark">
-              {stepsMeta[step - 1].title}
-            </span>
-          </div>
-          <span className="text-meta-sm text-[#666C66] font-medium hidden sm:inline">
-            Personalizing your wellness profile
-          </span>
+    <div className="max-w-3xl mx-auto space-y-6 py-4 sm:py-6 text-left">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-brand-sage/30">
+        <div>
+          <h1 className="text-section-lg sm:text-app-xl font-bold text-brand-dark tracking-tight">
+            Personal Baseline Calibration
+          </h1>
+          <p className="text-body-md text-[#555B55] mt-0.5">
+            Step {step} of 4 • {stepsMeta[step - 1].title}
+          </p>
         </div>
-
-        {/* 4-Step Progress Indicator */}
-        <div className="grid grid-cols-4 gap-2.5">
-          {stepsMeta.map((s) => {
-            const isCompleted = s.num < step;
-            const isCurrent = s.num === step;
-            return (
-              <div key={s.num} className="space-y-1.5">
-                <div
-                  className={cn(
-                    'h-2 rounded-full transition-all duration-300',
-                    isCompleted
-                      ? 'bg-brand-teal'
-                      : isCurrent
-                      ? 'bg-brand-dark shadow-sm'
-                      : 'bg-brand-sage/25'
-                  )}
-                />
-                <span
-                  className={cn(
-                    'text-[12px] font-semibold hidden md:block truncate',
-                    isCurrent
-                      ? 'text-brand-dark font-bold'
-                      : isCompleted
-                      ? 'text-brand-teal font-medium'
-                      : 'text-muted-text-light'
-                  )}
-                >
-                  {s.title}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <Badge variant="teal" size="md">
+          {isAuthenticated ? 'Authenticated Setup' : 'Guest Journey'}
+        </Badge>
       </div>
 
-      {/* Main Card Container */}
-      <Card variant="warm" className="p-7 sm:p-9 md:p-10 space-y-8 shadow-[0_12px_40px_-10px_rgba(38,53,47,0.08)] border-2 border-brand-sage/60 hover:border-brand-teal rounded-[24px]">
+      {/* Steps Pill Navigator */}
+      <div className="grid grid-cols-4 gap-2">
+        {stepsMeta.map((s) => {
+          const Icon = s.icon;
+          const isDone = s.num < step;
+          const isCurrent = s.num === step;
+          return (
+            <div
+              key={s.num}
+              className={cn(
+                'p-2.5 sm:p-3 rounded-[16px] border-2 transition-all flex items-center gap-2 select-none shadow-sm',
+                isCurrent
+                  ? 'bg-white border-brand-teal text-brand-dark shadow-[0_4px_16px_-2px_rgba(111,153,144,0.25)]'
+                  : isDone
+                  ? 'bg-brand-sage/20 border-brand-sage/50 text-brand-dark'
+                  : 'bg-white/60 border-brand-sage/30 text-muted-text opacity-70'
+              )}
+            >
+              <div
+                className={cn(
+                  'w-7 h-7 rounded-full flex items-center justify-center text-meta-sm font-bold flex-shrink-0',
+                  isCurrent
+                    ? 'bg-brand-teal text-white'
+                    : isDone
+                    ? 'bg-brand-sage text-brand-dark'
+                    : 'bg-card-warm text-muted-text'
+                )}
+              >
+                {isDone ? <Check className="w-3.5 h-3.5" /> : s.num}
+              </div>
+              <span className="text-meta-sm font-bold truncate hidden sm:inline">
+                {s.title}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Main Multi-Step Form Card */}
+      <Card variant="warm" className="p-6 sm:p-9 space-y-6 shadow-[0_12px_40px_-10px_rgba(38,53,47,0.08)] border-2 border-brand-sage/60 rounded-[24px]">
         {/* =========================================================================
             STEP 1: ABOUT YOU
            ========================================================================= */}
         {step === 1 && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="space-y-1.5 pb-2 border-b border-brand-sage/30">
-              <h2 className="text-section-lg md:text-app-lg font-bold text-brand-dark">
-                About You
+          <div className="space-y-5 animate-in fade-in duration-200">
+            <div className="space-y-1 pb-2 border-b border-brand-sage/30">
+              <h2 className="text-section-lg font-bold text-brand-dark">
+                Tell us a little about yourself
               </h2>
-              <p className="text-body-md text-[#555B55] leading-relaxed">
-                This helps personalize your experience. You can skip optional information anytime.
+              <p className="text-body-md text-[#555B55]">
+                We use this information to personalize your baseline and greeting.
               </p>
             </div>
 
             <div className="space-y-4 pt-1">
               <Input
-                label="Preferred Name"
+                label="Your Preferred Name"
                 id="onboarding-name"
                 name="name"
                 type="text"
@@ -245,45 +248,38 @@ export function OnboardingPage() {
                   setName(e.target.value);
                   if (step1Error) setStep1Error('');
                 }}
-                placeholder="What should we call you?"
+                placeholder="e.g. Alex"
                 errorText={step1Error}
                 required
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="onboarding-age"
-                    className="text-meta-md font-semibold text-brand-dark flex items-center justify-between mb-1.5"
-                  >
-                    <span>Age</span>
-                    <span className="text-meta-sm text-muted-text font-normal">Optional</span>
-                  </label>
-                  <input
-                    id="onboarding-age"
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                    placeholder="e.g. 32"
-                    className="w-full min-h-[46px] px-4 py-2.5 text-body-md text-brand-dark bg-white border-2 border-brand-sage/45 rounded-[14px] hover:border-brand-sage/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal/50 focus-visible:border-brand-teal shadow-sm"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="onboarding-gender"
-                    className="text-meta-md font-semibold text-brand-dark flex items-center justify-between mb-1.5"
-                  >
-                    <span>Gender</span>
-                    <span className="text-meta-sm text-muted-text font-normal">Optional</span>
+                <div className="space-y-1.5">
+                  <label className="text-meta-sm font-semibold text-brand-dark">
+                    Age Group
                   </label>
                   <select
-                    id="onboarding-gender"
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-white border border-brand-sage/50 text-body-md text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
+                  >
+                    <option value="18-24">18–24 years</option>
+                    <option value="25-34">25–34 years</option>
+                    <option value="35-44">35–44 years</option>
+                    <option value="45-54">45–54 years</option>
+                    <option value="55-64">55–64 years</option>
+                    <option value="65+">65+ years</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-meta-sm font-semibold text-brand-dark">
+                    Gender Identity
+                  </label>
+                  <select
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
-                    className="w-full min-h-[46px] px-4 py-2.5 text-body-md text-brand-dark bg-white border-2 border-brand-sage/45 rounded-[14px] hover:border-brand-sage/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal/50 focus-visible:border-brand-teal shadow-sm cursor-pointer"
+                    className="w-full px-3.5 py-2.5 rounded-[12px] bg-white border border-brand-sage/50 text-body-md text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
                   >
                     <option value="Female">Female</option>
                     <option value="Male">Male</option>
@@ -293,11 +289,6 @@ export function OnboardingPage() {
                 </div>
               </div>
             </div>
-
-            <div className="p-4 rounded-[16px] bg-gradient-to-r from-[#FAF9F5] to-[#F1EFEA] border-2 border-brand-sage/45 text-meta-sm text-brand-dark flex items-center gap-3 shadow-sm">
-              <ShieldCheck className="w-5 h-5 text-brand-teal flex-shrink-0" />
-              <span>We use these parameters strictly for circadian and hormonal baseline context.</span>
-            </div>
           </div>
         )}
 
@@ -305,165 +296,94 @@ export function OnboardingPage() {
             STEP 2: MIGRAINE HISTORY
            ========================================================================= */}
         {step === 2 && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="space-y-1.5 pb-2 border-b border-brand-sage/30">
-              <h2 className="text-section-lg md:text-app-lg font-bold text-brand-dark">
-                Migraine History
+          <div className="space-y-5 animate-in fade-in duration-200">
+            <div className="space-y-1 pb-2 border-b border-brand-sage/30">
+              <h2 className="text-section-lg font-bold text-brand-dark">
+                Your Migraine Experience & History
               </h2>
-              <p className="text-body-md text-[#555B55] leading-relaxed">
-                Understanding your past experiences helps calibrate sensitivity thresholds. We never make diagnostic conclusions.
+              <p className="text-body-md text-[#555B55]">
+                Helps calibrate pattern thresholds for your personal sensitivity profile.
               </p>
             </div>
 
-            {/* Question 1: Have you experienced migraine attacks? */}
-            <div className="space-y-2.5">
-              <label className="text-body-md font-bold text-brand-dark block">
-                Have you experienced migraine attacks?
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                {['Yes', 'No', 'Not sure'].map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setHasMigraines(opt)}
-                    className={cn(
-                      'p-3.5 rounded-[14px] border-2 text-body-md font-bold transition-all text-center cursor-pointer shadow-sm',
-                      hasMigraines === opt
-                        ? 'bg-brand-sage/25 text-brand-dark border-brand-teal ring-1 ring-brand-teal/40'
-                        : 'bg-white/80 border-brand-sage/40 hover:bg-white hover:border-brand-sage text-brand-dark'
-                    )}
-                  >
-                    {opt}
-                  </button>
-                ))}
+            <div className="space-y-5 pt-1">
+              {/* Do you experience migraines? */}
+              <div className="space-y-2">
+                <label className="text-meta-sm font-semibold text-brand-dark block">
+                  Do you experience migraines or severe recurrent headaches?
+                </label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {['Yes', 'No', 'Not sure'].map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setHasMigraines(opt)}
+                      className={cn(
+                        'py-2.5 px-3 rounded-[12px] border-2 text-meta-md font-bold transition-all cursor-pointer text-center',
+                        hasMigraines === opt
+                          ? 'bg-brand-dark text-white border-brand-dark shadow-sm'
+                          : 'bg-white text-brand-dark border-brand-sage/40 hover:border-brand-teal'
+                      )}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Typical Frequency */}
+              <div className="space-y-2">
+                <label className="text-meta-sm font-semibold text-brand-dark block">
+                  Typical episode frequency:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {[
+                    'Less than once a month',
+                    '1–3 times a month',
+                    '1–2 times a week',
+                    '3+ times a week / Chronic',
+                  ].map((freq) => (
+                    <button
+                      key={freq}
+                      type="button"
+                      onClick={() => setFrequency(freq)}
+                      className={cn(
+                        'p-3 rounded-[14px] border-2 text-meta-md font-semibold text-left transition-all cursor-pointer flex items-center justify-between',
+                        frequency === freq
+                          ? 'bg-white border-brand-teal text-brand-dark ring-2 ring-brand-teal/20 shadow-sm font-bold'
+                          : 'bg-white/80 border-brand-sage/40 hover:bg-white text-[#555B55]'
+                      )}
+                    >
+                      <span>{freq}</span>
+                      {frequency === freq && <Check className="w-4 h-4 text-brand-teal" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Severity Slider */}
+              <div className="p-4 rounded-[18px] bg-white border-2 border-brand-sage/45 space-y-2">
+                <div className="flex items-center justify-between text-meta-md">
+                  <span className="font-bold text-brand-dark">Typical Episode Severity</span>
+                  <span className="font-extrabold text-brand-dark text-section-md">
+                    {getSeverityLabel(severity)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  value={severity}
+                  onChange={(e) => setSeverity(parseInt(e.target.value, 10))}
+                  className="w-full accent-brand-dark h-2 bg-brand-sage/30 rounded-lg cursor-pointer"
+                />
+                <div className="flex justify-between text-[11px] text-[#666C66] font-semibold">
+                  <span>0 (No Pain)</span>
+                  <span>5 (Moderate Pain)</span>
+                  <span>10 (Debilitating)</span>
+                </div>
               </div>
             </div>
-
-            {/* Conditional Questions if Yes */}
-            {hasMigraines === 'Yes' ? (
-              <div className="space-y-6 pt-3 border-t border-brand-sage/30">
-                {/* Question 2: Frequency */}
-                <div className="space-y-2.5">
-                  <label className="text-meta-md font-bold text-brand-dark block">
-                    How often do you usually experience them?
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {[
-                      'Less than once a month',
-                      '1–3 times a month',
-                      '1–2 times a week',
-                      '3 or more times a week',
-                    ].map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setFrequency(opt)}
-                        className={cn(
-                          'p-3.5 rounded-[14px] border-2 text-meta-md text-left transition-all flex items-center justify-between cursor-pointer',
-                          frequency === opt
-                            ? 'bg-white border-brand-teal text-brand-dark font-bold shadow-soft'
-                            : 'bg-white/70 border-brand-sage/40 hover:bg-white hover:border-brand-sage text-[#555B55]'
-                        )}
-                      >
-                        <span>{opt}</span>
-                        {frequency === opt && <Check className="w-4 h-4 text-brand-teal" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Question 3: Severity Slider */}
-                <div className="space-y-3 bg-white/90 p-5 rounded-[18px] border-2 border-brand-sage/45 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <label className="text-meta-md font-bold text-brand-dark">
-                      How severe are your typical attacks?
-                    </label>
-                    <Badge variant={severity >= 7 ? 'alert' : severity >= 4 ? 'teal' : 'sage'} size="sm">
-                      {getSeverityLabel(severity)}
-                    </Badge>
-                  </div>
-
-                  <input
-                    type="range"
-                    min="0"
-                    max="10"
-                    step="1"
-                    value={severity}
-                    onChange={(e) => setSeverity(Number(e.target.value))}
-                    className="w-full accent-brand-dark h-2.5 bg-card-warm rounded-lg cursor-pointer"
-                  />
-
-                  <div className="flex justify-between text-[11px] text-[#666C66] font-semibold px-1">
-                    <span>0 — Mild / None</span>
-                    <span>5 — Moderate</span>
-                    <span>10 — Severe / Incapacitating</span>
-                  </div>
-                </div>
-
-                {/* Question 4: Duration */}
-                <div className="space-y-2.5">
-                  <label className="text-meta-md font-bold text-brand-dark block">
-                    How long does a typical attack last?
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    {[
-                      'Less than 4 hours',
-                      '4–12 hours',
-                      '12–24 hours',
-                      'More than 24 hours',
-                    ].map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setDuration(opt)}
-                        className={cn(
-                          'p-3 rounded-[14px] border-2 text-meta-sm font-medium text-center transition-all cursor-pointer',
-                          duration === opt
-                            ? 'bg-brand-sage/25 text-brand-dark font-bold border-brand-teal shadow-soft'
-                            : 'bg-white/70 border-brand-sage/40 hover:bg-white hover:border-brand-sage text-[#555B55]'
-                        )}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Question 5: Medication */}
-                <div className="space-y-2.5">
-                  <label className="text-meta-md font-bold text-brand-dark block">
-                    Do you currently use medication for migraine?
-                  </label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {['Yes', 'No', 'Prefer not to say'].map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setUsesMedication(opt)}
-                        className={cn(
-                          'p-3.5 rounded-[14px] border-2 text-meta-md text-center transition-all cursor-pointer',
-                          usesMedication === opt
-                            ? 'bg-brand-sage/25 text-brand-dark font-bold border-brand-teal shadow-soft'
-                            : 'bg-white/70 border-brand-sage/40 hover:bg-white hover:border-brand-sage text-[#555B55]'
-                        )}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-5 rounded-[18px] bg-gradient-to-r from-brand-sage/20 to-brand-teal/15 border-2 border-brand-sage/50 text-brand-dark space-y-2">
-                <div className="flex items-center gap-2 font-bold text-meta-md">
-                  <HeartHandshake className="w-5 h-5 text-brand-teal" />
-                  <span>Personalized for general headache & tension wellness</span>
-                </div>
-                <p className="text-meta-sm text-[#484E48] leading-relaxed">
-                  MigraineGuardian will focus on monitoring your everyday weather sensitivities, sleep restfulness, stress patterns, and hydration routines to help you stay balanced.
-                </p>
-              </div>
-            )}
           </div>
         )}
 
@@ -471,78 +391,62 @@ export function OnboardingPage() {
             STEP 3: TRACKING PREFERENCES
            ========================================================================= */}
         {step === 3 && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-brand-sage/30">
-              <div className="space-y-1">
-                <h2 className="text-section-lg md:text-app-lg font-bold text-brand-dark">
-                  Tracking Preferences
+          <div className="space-y-5 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-brand-sage/30">
+              <div>
+                <h2 className="text-section-lg font-bold text-brand-dark">
+                  Choose your active tracking factors
                 </h2>
                 <p className="text-body-md text-[#555B55]">
-                  Select the lifestyle factors you'd like to log during your daily check-in.
+                  Select the lifestyle areas you wish to observe during your daily check-in.
                 </p>
               </div>
-
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={selectAllFactors}
-                className="text-meta-sm font-bold text-brand-dark hover:text-brand-teal hover:underline self-start sm:self-auto cursor-pointer"
+                className="text-brand-teal hover:text-brand-dark font-semibold"
               >
-                {selectedFactors.length === trackingOptions.length ? 'Reset selection' : 'Select all factors'}
-              </button>
+                {selectedFactors.length === trackingOptions.length ? 'Reset' : 'Select All'}
+              </Button>
             </div>
 
-            {/* 8 Factors Grid (All Selectable) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-              {trackingOptions.map((factor) => {
-                const isSelected = selectedFactors.includes(factor.id);
-                const Icon = factor.icon;
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {trackingOptions.map((item) => {
+                const Icon = item.icon;
+                const isSelected = selectedFactors.includes(item.id);
                 return (
                   <button
-                    key={factor.id}
+                    key={item.id}
                     type="button"
-                    onClick={() => toggleFactor(factor.id)}
+                    onClick={() => toggleFactor(item.id)}
                     className={cn(
-                      'p-4 rounded-[16px] border-2 text-left transition-all flex items-start gap-3.5 group cursor-pointer',
+                      'p-3.5 rounded-[16px] border-2 text-left transition-all cursor-pointer flex items-start gap-3 select-none',
                       isSelected
-                        ? 'bg-white border-brand-teal shadow-[0_4px_16px_-2px_rgba(111,153,144,0.2)]'
-                        : 'bg-white/70 border-brand-sage/40 hover:bg-white hover:border-brand-sage text-[#555B55]'
+                        ? 'bg-white border-brand-teal shadow-sm text-brand-dark'
+                        : 'bg-white/70 border-brand-sage/35 text-muted-text hover:bg-white hover:border-brand-sage'
                     )}
                   >
                     <div
                       className={cn(
-                        'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors shadow-sm',
-                        isSelected
-                          ? 'bg-brand-teal/20 text-brand-teal-dark border border-brand-teal/40'
-                          : 'bg-card-warm text-muted-text border border-brand-sage/30'
+                        'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors',
+                        isSelected ? 'bg-brand-teal/20 text-brand-dark' : 'bg-card-warm text-muted-text'
                       )}
                     >
-                      <Icon className="w-5 h-5" />
+                      <Icon className="w-4 h-4" />
                     </div>
-
-                    <div className="flex-1 min-w-0">
+                    <div className="space-y-0.5 flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span
-                          className={cn(
-                            'text-body-md font-bold',
-                            isSelected ? 'text-brand-dark' : 'text-[#555B55]'
-                          )}
-                        >
-                          {factor.label}
+                        <span className="text-meta-md font-bold text-brand-dark truncate">
+                          {item.label}
                         </span>
                         {isSelected && <Check className="w-4 h-4 text-brand-teal flex-shrink-0" />}
                       </div>
-                      <span className="text-meta-sm text-[#666C66] block mt-0.5 leading-snug">
-                        {factor.desc}
-                      </span>
+                      <p className="text-[12px] text-[#666C66] line-clamp-1">{item.desc}</p>
                     </div>
                   </button>
                 );
               })}
-            </div>
-
-            <div className="p-4 rounded-[16px] bg-white/80 border-2 border-brand-sage/45 text-meta-sm text-[#555B55] flex items-center justify-between shadow-sm">
-              <span>Selected Factors for Daily Micro-Checkin:</span>
-              <span className="font-bold text-brand-dark">{selectedFactors.length} Active Factors</span>
             </div>
           </div>
         )}
@@ -608,17 +512,17 @@ export function OnboardingPage() {
                   size="lg"
                   onClick={handleStartPss}
                   iconRight={ArrowRight}
-                  className="flex-1 shadow-md"
+                  className="flex-1 shadow-md font-bold"
                 >
                   Start PSS Assessment
                 </Button>
                 <Button
                   variant="secondary"
                   size="lg"
-                  onClick={handleSkipToDashboard}
+                  onClick={handleCompleteLater}
                   className="flex-1"
                 >
-                  Complete Later & Go to Dashboard
+                  Complete Later
                 </Button>
               </div>
             </div>
@@ -659,6 +563,48 @@ export function OnboardingPage() {
           ) : null}
         </div>
       </Card>
+
+      {/* Guest Authentication Choice Modal (triggered when guest clicks Complete Later) */}
+      {showAuthChoiceModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white border-2 border-brand-sage/60 rounded-[24px] p-6 sm:p-8 max-w-md w-full space-y-5 shadow-soft-lg text-center">
+            <div className="w-12 h-12 rounded-2xl bg-brand-teal/20 border border-brand-teal/40 flex items-center justify-center mx-auto text-brand-teal mb-2">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-section-md font-bold text-brand-dark">
+                Save Your Personalized Journey
+              </h3>
+              <p className="text-body-md text-[#555B55] leading-relaxed">
+                To access your personalized dashboard, record daily check-ins, and receive machine learning risk forecasts, please create a free account or sign in. Your calibration responses have been safely saved.
+              </p>
+            </div>
+
+            <div className="space-y-2.5 pt-2">
+              <Link to={ROUTES.SIGNUP} className="block">
+                <Button variant="primary" size="lg" className="w-full shadow-md font-bold" iconRight={ArrowRight}>
+                  Create Free Account
+                </Button>
+              </Link>
+              <Link to={ROUTES.LOGIN} className="block">
+                <Button variant="secondary" size="md" className="w-full">
+                  Sign In to Existing Account
+                </Button>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowAuthChoiceModal(false)}
+                className="text-meta-sm text-muted-text hover:text-brand-dark pt-1 font-medium transition-colors"
+              >
+                Continue Editing Onboarding
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+export default OnboardingPage;

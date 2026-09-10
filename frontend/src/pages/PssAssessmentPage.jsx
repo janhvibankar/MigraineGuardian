@@ -5,9 +5,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../co
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
-import { storageService } from '../services/storageService';
 import { pssService } from '../services/pssService';
-
+import { authService } from '../services/authService';
 import {
   calculatePssScore,
   PSS_RESPONSE_OPTIONS,
@@ -24,6 +23,8 @@ import {
   HelpCircle,
   Activity,
   Heart,
+  UserPlus,
+  LogIn,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
@@ -31,6 +32,8 @@ export function PssAssessmentPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const fromCheckin = Boolean(location.state?.fromCheckin);
+  const fromOnboarding = Boolean(location.state?.fromOnboarding);
+  const isAuthenticated = authService.isAuthenticated();
 
   // Clinically validated PSS-10 standardized items
   const pssQuestions = [
@@ -94,15 +97,28 @@ export function PssAssessmentPage() {
     setIsSubmitting(true);
     setServerError(null);
 
-    const res = await pssService.submitAssessment(answers);
-    setIsSubmitting(false);
+    const calculatedScore = calculatePssScore(answers);
 
-    if (res && res.error) {
-      const errMsg = Array.isArray(res.error.details)
-        ? res.error.details.join(' ')
-        : res.error.message || 'Error submitting assessment.';
-      setServerError(errMsg);
+    if (authService.isAuthenticated()) {
+      const res = await pssService.submitAssessment(answers);
+      setIsSubmitting(false);
+
+      if (res && res.error) {
+        const errMsg = Array.isArray(res.error.details)
+          ? res.error.details.join(' ')
+          : res.error.message || 'Error submitting assessment.';
+        setServerError(errMsg);
+      } else {
+        setIsCompleted(true);
+      }
     } else {
+      // Guest mode: Save in isolated client guest onboarding draft
+      authService.saveGuestOnboarding({
+        pssAnswers: answers,
+        pssScore: calculatedScore,
+        pssCompletedAt: new Date().toISOString(),
+      });
+      setIsSubmitting(false);
       setIsCompleted(true);
     }
   };
@@ -123,28 +139,51 @@ export function PssAssessmentPage() {
 
   const interpretation = getScoreInterpretation(calculatedScore);
 
+  const renderTopActions = () => {
+    if (fromCheckin) {
+      return (
+        <Link to={ROUTES.DAILY_CHECKIN}>
+          <Button variant="secondary" size="md" icon={ArrowLeft}>
+            Return to Daily Check-in
+          </Button>
+        </Link>
+      );
+    }
+    if (fromOnboarding) {
+      return (
+        <Link to={ROUTES.ONBOARDING}>
+          <Button variant="secondary" size="md" icon={ArrowLeft}>
+            Back to Onboarding
+          </Button>
+        </Link>
+      );
+    }
+    if (isAuthenticated) {
+      return (
+        <Link to={ROUTES.DASHBOARD}>
+          <Button variant="secondary" size="md">
+            Return to Dashboard
+          </Button>
+        </Link>
+      );
+    }
+    return (
+      <Link to={ROUTES.HOME}>
+        <Button variant="secondary" size="md">
+          Back to Overview
+        </Button>
+      </Link>
+    );
+  };
+
   return (
-    <div className="max-w-3xl mx-auto space-y-6 py-4 sm:py-6">
+    <div className="max-w-3xl mx-auto space-y-6 py-4 sm:py-8 text-left">
       {/* Top Header */}
       <PageHeader
         title="Perceived Stress Scale (PSS-10)"
-        subtitle="A validated questionnaire measuring perceived stress over the previous month."
-        badge="Validated Clinical Instrument"
-        actions={
-          fromCheckin ? (
-            <Link to={ROUTES.DAILY_CHECKIN}>
-              <Button variant="secondary" size="md" icon={ArrowLeft}>
-                Return to Daily Check-in
-              </Button>
-            </Link>
-          ) : (
-            <Link to={ROUTES.DASHBOARD}>
-              <Button variant="secondary" size="md">
-                Return to Dashboard
-              </Button>
-            </Link>
-          )
-        }
+        subtitle="A validated questionnaire measuring perceived stress and autonomic strain over the previous month."
+        badge={isAuthenticated ? "Validated Clinical Instrument" : "Public Stress Assessment"}
+        actions={renderTopActions()}
       />
 
       {!isCompleted ? (
@@ -160,37 +199,37 @@ export function PssAssessmentPage() {
                   Question {currentQuestionIndex + 1} of 10
                 </span>
                 {currentQ.isReverse && (
-                  <span className="text-[11px] font-bold text-brand-teal-dark bg-brand-teal/20 border border-brand-teal/40 px-2.5 py-0.5 rounded-full">
-                    Reverse calibrated
-                  </span>
+                  <Badge variant="teal" size="sm">
+                    Reverse Scored
+                  </Badge>
                 )}
               </div>
-              <span className="text-meta-sm text-brand-dark font-bold">
-                {Math.round(progressPercent)}% completed
+              <span className="text-meta-md font-bold text-brand-teal">
+                {Math.round(progressPercent)}% Complete
               </span>
             </div>
 
-            {/* Smooth Progress Bar */}
-            <div className="w-full h-2.5 rounded-full bg-brand-sage/25 overflow-hidden">
+            {/* Progress Bar */}
+            <div className="w-full h-2 rounded-full bg-card-warm overflow-hidden border border-brand-sage/30">
               <div
-                className="h-full bg-brand-dark rounded-full transition-all duration-300 ease-out shadow-sm"
+                className="h-full bg-brand-teal rounded-full transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>
 
-          {/* Question Text Prompt */}
-          <div className="space-y-3 py-2 min-h-[90px] flex flex-col justify-center">
-            <span className="text-meta-sm font-bold uppercase tracking-wider text-brand-teal">
-              Item #{currentQNum}
+          {/* Question Text */}
+          <div className="space-y-2 text-left">
+            <span className="text-meta-sm font-bold uppercase tracking-wider text-brand-teal block">
+              Question {currentQuestionIndex + 1}
             </span>
-            <h2 className="text-section-lg sm:text-[22px] font-bold text-brand-dark leading-relaxed">
-              "{currentQ.text}"
+            <h2 className="text-section-lg sm:text-app-lg font-bold text-brand-dark leading-snug">
+              {currentQ.text}
             </h2>
           </div>
 
-          {/* Large Touch-Friendly Response Buttons */}
-          <div className="space-y-3 pt-1" role="radiogroup" aria-label={`Response options for question ${currentQNum}`}>
+          {/* Options (Radio List) */}
+          <div className="space-y-3" role="radiogroup" aria-label={`Question ${currentQNum} options`}>
             {PSS_RESPONSE_OPTIONS.map((option) => {
               const isSelected = currentSelection === option.value;
               return (
@@ -272,7 +311,7 @@ export function PssAssessmentPage() {
                 onClick={handleNext}
                 disabled={currentSelection === undefined}
                 iconRight={ArrowRight}
-                className="shadow-md"
+                className="shadow-md font-bold"
               >
                 Next
               </Button>
@@ -281,11 +320,11 @@ export function PssAssessmentPage() {
                 variant="primary"
                 size="md"
                 onClick={handleFinish}
-                disabled={currentSelection === undefined}
+                disabled={currentSelection === undefined || isSubmitting}
                 iconRight={Check}
-                className="shadow-md"
+                className="shadow-md font-bold"
               >
-                Finish Assessment
+                {isSubmitting ? 'Recording...' : 'Finish Assessment'}
               </Button>
             )}
           </div>
@@ -309,7 +348,7 @@ export function PssAssessmentPage() {
               </h2>
             </div>
 
-            {/* Score Display Card with Green Border */}
+            {/* Score Display Card */}
             <div className="p-7 sm:p-8 rounded-[20px] bg-white border-2 border-brand-sage/50 shadow-soft space-y-4">
               <div className="flex items-baseline justify-center gap-2">
                 <span className="text-[56px] sm:text-[68px] font-bold text-brand-dark leading-none tracking-tight">
@@ -325,7 +364,7 @@ export function PssAssessmentPage() {
                 <span>{interpretation.label}</span>
               </div>
 
-              {/* Calm Score Visual Continuum Bar */}
+              {/* Score Visual Continuum Bar */}
               <div className="space-y-2 pt-2">
                 <div className="w-full h-3.5 rounded-full bg-card-warm overflow-hidden relative border border-brand-sage/30">
                   <div
@@ -341,46 +380,73 @@ export function PssAssessmentPage() {
               </div>
             </div>
 
-            {/* Required Supporting Narrative */}
+            {/* Narrative Explanation */}
             <div className="space-y-2 text-body-md text-[#555B55] leading-relaxed pt-1">
               <p className="font-bold text-brand-dark">
                 {interpretation.desc}
               </p>
               <p className="text-meta-md text-[#777E77]">
-                Higher scores indicate greater perceived load over the past 30 days. This score serves as an empirical lifestyle indicator, not a psychiatric diagnosis.
+                Higher scores indicate greater perceived autonomic load over the past 30 days. This score serves as an empirical lifestyle indicator, not a psychiatric diagnosis.
               </p>
             </div>
           </div>
 
           {/* Action CTAs */}
           <div className="pt-5 border-t border-brand-sage/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3.5 flex-wrap">
-            {fromCheckin && (
-              <Link to={ROUTES.DAILY_CHECKIN} className="flex-1">
-                <Button variant="primary" size="lg" className="w-full shadow-md" icon={ArrowLeft}>
-                  Return to Daily Check-in
-                </Button>
-              </Link>
+            {isAuthenticated ? (
+              <>
+                {fromCheckin && (
+                  <Link to={ROUTES.DAILY_CHECKIN} className="flex-1">
+                    <Button variant="primary" size="lg" className="w-full shadow-md font-bold" icon={ArrowLeft}>
+                      Return to Daily Check-in
+                    </Button>
+                  </Link>
+                )}
+
+                <Link to={ROUTES.DASHBOARD} className={fromCheckin ? "flex-1 sm:flex-initial" : "flex-1"}>
+                  <Button variant={fromCheckin ? "secondary" : "primary"} size="lg" className="w-full shadow-md font-bold" iconRight={ArrowRight}>
+                    Continue to Dashboard
+                  </Button>
+                </Link>
+
+                {!fromCheckin && (
+                  <Link to={ROUTES.DAILY_CHECKIN} className="flex-1 sm:flex-initial">
+                    <Button variant="secondary" size="lg" className="w-full" icon={ArrowLeft}>
+                      Go to Daily Check-in
+                    </Button>
+                  </Link>
+                )}
+
+                <Link to={ROUTES.RISK_ANALYSIS} className="flex-1 sm:flex-initial">
+                  <Button variant="secondary" size="lg" className="w-full">
+                    View Risk Forecast
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              /* Guest Actions */
+              <>
+                <Link to={ROUTES.SIGNUP} className="flex-1">
+                  <Button variant="primary" size="lg" className="w-full shadow-md font-bold" iconRight={ArrowRight}>
+                    Create Account & Save Score
+                  </Button>
+                </Link>
+
+                <Link to={ROUTES.LOGIN} className="flex-1 sm:flex-initial">
+                  <Button variant="secondary" size="lg" className="w-full">
+                    Sign In to Save
+                  </Button>
+                </Link>
+
+                {fromOnboarding && (
+                  <Link to={ROUTES.ONBOARDING} className="flex-1 sm:flex-initial">
+                    <Button variant="outline" size="lg" className="w-full">
+                      Back to Onboarding
+                    </Button>
+                  </Link>
+                )}
+              </>
             )}
-
-            <Link to={ROUTES.DASHBOARD} className={fromCheckin ? "flex-1 sm:flex-initial" : "flex-1"}>
-              <Button variant={fromCheckin ? "secondary" : "primary"} size="lg" className="w-full shadow-md" iconRight={ArrowRight}>
-                Continue to Dashboard
-              </Button>
-            </Link>
-
-            {!fromCheckin && (
-              <Link to={ROUTES.DAILY_CHECKIN} className="flex-1 sm:flex-initial">
-                <Button variant="secondary" size="lg" className="w-full" icon={ArrowLeft}>
-                  Go to Daily Check-in
-                </Button>
-              </Link>
-            )}
-
-            <Link to={ROUTES.RISK_ANALYSIS} className="flex-1 sm:flex-initial">
-              <Button variant="secondary" size="lg" className="w-full">
-                View Risk Forecast
-              </Button>
-            </Link>
 
             <Button
               variant="outline"
@@ -399,9 +465,11 @@ export function PssAssessmentPage() {
       <div className="p-4 rounded-[18px] bg-gradient-to-r from-[#FAF9F5] to-[#F1EFEA] border-2 border-brand-sage/45 flex items-start gap-3.5 text-meta-sm text-[#555B55] shadow-sm">
         <ShieldCheck className="w-5 h-5 text-brand-teal flex-shrink-0 mt-0.5" />
         <p className="leading-relaxed">
-          The Perceived Stress Scale (PSS-10) is utilized for lifestyle pattern recognition and baseline sensitivity modeling. All responses are securely retained within your local browser state.
+          The Perceived Stress Scale (PSS-10) is utilized for lifestyle pattern recognition and baseline sensitivity modeling. Your responses remain confidential.
         </p>
       </div>
     </div>
   );
 }
+
+export default PssAssessmentPage;

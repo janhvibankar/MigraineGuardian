@@ -5,6 +5,7 @@ import { Badge } from '../ui/Badge';
 import { PRIMARY_NAV_ITEMS, SECONDARY_NAV_ITEMS } from '../../data/navigation';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { predictionService } from '../../services/predictionService';
+import { authService } from '../../services/authService';
 import { storageService } from '../../services/storageService';
 import { ROUTES } from '../../utils/constants';
 import { cn } from '../../utils/cn';
@@ -42,8 +43,9 @@ export function Sidebar({ className }) {
     };
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutModal(false);
+    await authService.logout();
     navigate(ROUTES.LOGIN);
   };
 
