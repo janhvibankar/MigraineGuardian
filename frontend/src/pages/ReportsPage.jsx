@@ -51,6 +51,7 @@ export function ReportsPage() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -78,9 +79,16 @@ export function ReportsPage() {
   const hasData = Boolean(reportSummary && reportSummary.hasData);
 
   const handleDownload = async () => {
-    await reportService.generatePdfReport(reportType);
-    setDownloadSuccess(true);
-    setTimeout(() => setDownloadSuccess(false), 4000);
+    setIsDownloading(true);
+    try {
+      await reportService.generatePdfReport(reportType, reportSummary, currentUser);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 4000);
+    } catch (e) {
+      console.warn('[ReportsPage] Download error:', e);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handlePrint = () => {
@@ -164,9 +172,10 @@ export function ReportsPage() {
             variant="primary"
             size="md"
             onClick={handleDownload}
-            icon={Download}
+            disabled={isDownloading}
+            icon={isDownloading ? Loader2 : Download}
           >
-            Download PDF
+            {isDownloading ? 'Generating...' : 'Download Report'}
           </Button>
         </div>
       </div>
@@ -224,24 +233,44 @@ export function ReportsPage() {
           </div>
 
           {!hasData ? (
-            /* EMPTY STATE CARD FOR NEW USERS WITH NO RECORDS */
+            /* EMPTY / PENDING STATE CARD */
             <div className="p-8 border-2 border-dashed border-brand-sage/50 rounded-[22px] bg-[#FAF9F5] text-center space-y-4 my-6">
               <div className="w-12 h-12 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
                 <AlertCircle className="w-6 h-6 text-brand-teal" />
               </div>
-              <div className="space-y-1">
-                <h3 className="text-section-md font-bold text-brand-dark">
-                  No report data available yet.
-                </h3>
-                <p className="text-meta-md text-[#555B55] max-w-md mx-auto leading-relaxed">
-                  Complete your daily check-in to generate your personal clinical pattern summary and risk history.
-                </p>
-              </div>
-              <Link to={ROUTES.DAILY_CHECKIN} className="inline-block pt-2">
-                <Button variant="primary" size="md" icon={CalendarCheck} iconRight={ArrowRight}>
-                  Complete Today's Check-in
-                </Button>
-              </Link>
+              {reportSummary?.hasTodayCheckin ? (
+                <div className="space-y-1">
+                  <h3 className="text-section-md font-bold text-brand-dark">
+                    Your risk forecast & clinical report is being prepared.
+                  </h3>
+                  <p className="text-meta-md text-[#555B55] max-w-md mx-auto leading-relaxed">
+                    Today's check-in has been recorded. View your risk forecast to generate full pattern analysis and clinical metrics.
+                  </p>
+                  <div className="pt-2">
+                    <Link to={ROUTES.RISK_ANALYSIS}>
+                      <Button variant="primary" size="md" iconRight={ArrowRight}>
+                        View Risk Forecast
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <h3 className="text-section-md font-bold text-brand-dark">
+                    No report data available yet.
+                  </h3>
+                  <p className="text-meta-md text-[#555B55] max-w-md mx-auto leading-relaxed">
+                    Complete your daily check-in to generate your personal clinical pattern summary and risk history.
+                  </p>
+                  <div className="pt-2">
+                    <Link to={ROUTES.DAILY_CHECKIN}>
+                      <Button variant="primary" size="md" icon={Calendar} iconRight={ArrowRight}>
+                        Complete Today's Check-in
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <>

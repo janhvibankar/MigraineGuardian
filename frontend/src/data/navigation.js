@@ -63,13 +63,6 @@ export const PRIMARY_NAV_ITEMS = [
     label: 'Risk Forecast',
     path: ROUTES.RISK_ANALYSIS,
     icon: Activity,
-    badge: '18%',
-    badgeColor: 'teal',
-  },
-  {
-    label: 'PSS Stress Scale',
-    path: ROUTES.PSS_ASSESSMENT,
-    icon: ClipboardList,
     badge: null,
   },
 ];

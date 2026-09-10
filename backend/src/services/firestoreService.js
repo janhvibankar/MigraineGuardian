@@ -427,22 +427,26 @@ export const firestoreService = {
   },
 
   /**
-   * Retrieves latest risk forecast document for user.
+   * Retrieves risk forecast document for user.
+   * If targetDate is specified, returns the exact forecast for that date (or null if none exists).
+   * If targetDate is omitted, returns the latest available forecast.
    */
   getLatestRiskForecast: async (userId, targetDate = null) => {
     if (!db) {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
-    const date = targetDate || new Date().toISOString().split('T')[0];
-    const forecastRef = db.collection('users').doc(userId).collection('risk_forecasts').doc(date);
-    const doc = await forecastRef.get();
+    if (targetDate) {
+      const forecastRef = db.collection('users').doc(userId).collection('risk_forecasts').doc(targetDate);
+      const doc = await forecastRef.get();
 
-    if (doc.exists) {
-      return { id: doc.id, ...doc.data() };
+      if (doc.exists) {
+        return { id: doc.id, ...doc.data() };
+      }
+      return null;
     }
 
-    // Fallback query for most recent forecast
+    // Fallback query for most recent forecast when targetDate is omitted
     const snap = await db
       .collection('users')
       .doc(userId)

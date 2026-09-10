@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
 import { Badge } from '../ui/Badge';
 import { PRIMARY_NAV_ITEMS, SECONDARY_NAV_ITEMS } from '../../data/navigation';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { predictionService } from '../../services/predictionService';
+import { storageService } from '../../services/storageService';
 import { ROUTES } from '../../utils/constants';
 import { cn } from '../../utils/cn';
 import { LogOut, Shield } from 'lucide-react';
@@ -12,11 +14,42 @@ export function Sidebar({ className }) {
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const currentUser = useCurrentUser();
+  const [todayForecast, setTodayForecast] = useState(() =>
+    storageService.getItem('migraineguardian_today_forecast', null)
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // Fetch latest today forecast on mount
+    predictionService.getTodayPrediction().then((forecast) => {
+      if (isMounted && forecast) {
+        setTodayForecast(forecast);
+      }
+    });
+
+    const handleForecastUpdate = (e) => {
+      if (isMounted) {
+        setTodayForecast(e.detail || null);
+      }
+    };
+
+    window.addEventListener('migraineguardian_forecast_updated', handleForecastUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('migraineguardian_forecast_updated', handleForecastUpdate);
+    };
+  }, []);
 
   const handleLogout = () => {
     setShowLogoutModal(false);
     navigate(ROUTES.LOGIN);
   };
+
+  // Active risk score from today's forecast or current user profile
+  const activeRiskScore = todayForecast?.score ?? currentUser?.currentRiskScore;
+  const hasActiveRisk = activeRiskScore !== null && activeRiskScore !== undefined;
 
   return (
     <>
@@ -38,9 +71,7 @@ export function Sidebar({ className }) {
               <span className="text-meta-sm font-medium text-brand-dark">Active Monitoring</span>
             </div>
             <span className="text-[11px] text-brand-teal-dark uppercase font-semibold">
-              {currentUser?.currentRiskScore !== null && currentUser?.currentRiskScore !== undefined
-                ? `${currentUser.currentRiskScore}% Risk`
-                : 'NO DATA'}
+              {hasActiveRisk ? `${activeRiskScore}% Risk` : 'NO DATA'}
             </span>
           </div>
         </div>
@@ -55,6 +86,20 @@ export function Sidebar({ className }) {
             <nav className="space-y-1" aria-label="Main menu">
               {PRIMARY_NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
+                const isRiskNav = item.path === ROUTES.RISK_ANALYSIS;
+                const dynamicBadge = isRiskNav
+                  ? hasActiveRisk
+                    ? `${Math.round(activeRiskScore)}%`
+                    : null
+                  : item.badge;
+                const dynamicBadgeColor = isRiskNav
+                  ? activeRiskScore > 60
+                    ? 'alert'
+                    : activeRiskScore > 30
+                    ? 'warning'
+                    : 'teal'
+                  : item.badgeColor;
+
                 return (
                   <NavLink
                     key={item.path}
@@ -80,12 +125,12 @@ export function Sidebar({ className }) {
                           <span className="truncate">{item.label}</span>
                         </div>
 
-                        {item.badge && (
+                        {dynamicBadge && (
                           <Badge
-                            variant={item.badgeColor || (isActive ? 'sage' : 'neutral')}
+                            variant={dynamicBadgeColor || (isActive ? 'sage' : 'neutral')}
                             size="sm"
                           >
-                            {item.badge}
+                            {dynamicBadge}
                           </Badge>
                         )}
                       </>
@@ -208,3 +253,5 @@ export function Sidebar({ className }) {
     </>
   );
 }
+
+export default Sidebar;

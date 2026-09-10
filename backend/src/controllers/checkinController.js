@@ -95,6 +95,7 @@ export async function submitDailyCheckinController(req, res, next) {
     // 1. Save check-in document to Firestore
     const result = await firestoreService.saveDailyCheckin(userId, req.body);
     const date = result.entry.date || new Date().toISOString().split('T')[0];
+    console.log(`[CheckIn] saved for user ${userId} on date ${date}`);
 
     // 2. Fetch baseline stats & recent 7-day episode count from Firestore
     const baselineStats = await firestoreService.getUserBaselineStats(userId);
@@ -158,16 +159,21 @@ export async function submitDailyCheckinController(req, res, next) {
     }
 
     // 4. Send request to FastAPI ML service (/predict)
+    console.log(`[Prediction] request started for user ${userId}`);
     const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
 
     let forecastDoc = null;
     let forecastSaved = false;
 
     if (mlResult.success && mlResult.data) {
+      console.log(`[Prediction] response received: score=${mlResult.data.score}, level=${mlResult.data.level}`);
       // 5. Save prediction, elevatedFactors, xai, and focusAreas to Firestore users/{userId}/risk_forecasts/{date}
       const forecastSaveResult = await firestoreService.saveRiskForecast(userId, date, mlResult.data);
       forecastDoc = forecastSaveResult.forecast;
       forecastSaved = true;
+      console.log(`[RiskAnalysis] saved forecast to Firestore for user ${userId} on date ${date}`);
+    } else {
+      console.warn(`[Prediction] ML prediction could not be completed:`, mlResult.error?.message || 'ML service unavailable');
     }
 
     return res.status(200).json({

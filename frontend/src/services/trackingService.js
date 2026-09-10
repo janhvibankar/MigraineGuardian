@@ -1,5 +1,6 @@
 import { apiClient } from './apiClient.js';
 import { storageService } from './storageService.js';
+import { syncRiskForecastState } from './predictionService.js';
 
 export const trackingService = {
   /**
@@ -64,15 +65,16 @@ export const trackingService = {
       };
     }
 
-    if (res.raw?.forecast) {
-      storageService.setItem('migraineguardian_today_forecast', res.raw.forecast);
+    const forecast = res.raw?.forecast || res.data?.forecast || null;
+    if (forecast) {
+      syncRiskForecastState(forecast);
     }
 
     return {
       success: true,
-      entry: res.raw?.entry || newEntry,
-      forecast: res.raw?.forecast || null,
-      message: res.raw?.message,
+      entry: res.raw?.entry || res.data?.entry || newEntry,
+      forecast,
+      message: res.raw?.message || res.data?.message,
     };
   },
 

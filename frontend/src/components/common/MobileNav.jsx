@@ -25,7 +25,6 @@ export function MobileNav() {
     { label: 'Analytics & Trends', path: ROUTES.ANALYTICS, icon: BarChart3 },
     { label: 'Clinical Reports', path: ROUTES.REPORTS, icon: FileText },
     { label: 'Risk Forecast', path: ROUTES.RISK_ANALYSIS, icon: Activity },
-    { label: 'PSS Stress Scale', path: ROUTES.PSS_ASSESSMENT, icon: ClipboardList },
     { label: 'Health Profile', path: ROUTES.PROFILE, icon: User },
     { label: 'Preferences & Privacy', path: ROUTES.SETTINGS, icon: Settings },
   ];

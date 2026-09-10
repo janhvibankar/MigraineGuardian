@@ -4,6 +4,9 @@ import {
   signInWithPopup,
   signOut,
   updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase.js';
 import { apiClient } from './apiClient.js';
@@ -62,8 +65,10 @@ function formatFirebaseError(err) {
       return 'Google sign-in request was cancelled.';
     case 'auth/account-exists-with-different-credential':
       return 'An account already exists with the same email address using a different sign-in method.';
-    case 'auth/network-request-failed':
-      return 'Network connection error. Please check your internet connection.';
+    case 'auth/requires-recent-login':
+      return 'For security, please log out and log back in before changing your password.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please try again in a few minutes.';
     default:
       return err?.message || 'Authentication failed. Please try again.';
   }
@@ -207,6 +212,61 @@ export const authService = {
     storageService.setItem('migraineguardian_user', updated);
     notifyUserChanged(updated);
     return updated;
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        return {
+          success: false,
+          error: 'You must be signed in to change your password.',
+        };
+      }
+
+      if (!currentPassword || !newPassword) {
+        return {
+          success: false,
+          error: 'Current password and new password are required.',
+        };
+      }
+
+      if (newPassword.length < 8) {
+        return {
+          success: false,
+          error: 'New password must be at least 8 characters long.',
+        };
+      }
+
+      if (!user.email) {
+        return {
+          success: false,
+          error: 'User email not found. Please log in again.',
+        };
+      }
+
+      // Reauthenticate user with current password
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // Update password in Firebase Authentication
+      await updatePassword(user, newPassword);
+
+      // Refresh ID token in storage
+      const token = await user.getIdToken(true);
+      storageService.setItem('migraineguardian_token', token);
+
+      return {
+        success: true,
+        message: 'Password changed successfully.',
+      };
+    } catch (err) {
+      console.warn('[authService] changePassword error:', err.code || err.message);
+      return {
+        success: false,
+        error: formatFirebaseError(err),
+      };
+    }
   },
 };
 

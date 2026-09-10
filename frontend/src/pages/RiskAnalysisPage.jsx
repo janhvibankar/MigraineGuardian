@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { predictionService } from '../services/predictionService';
+import { trackingService } from '../services/trackingService';
 import { reportService } from '../services/reportService';
 import { formatUserXaiExplanation } from '../utils/xaiHelper';
 import {
@@ -33,27 +34,66 @@ import {
   Cloud,
   Thermometer,
   Wind,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 export function RiskAnalysisPage() {
   const [prediction, setPrediction] = useState(null);
+  const [todayCheckin, setTodayCheckin] = useState(null);
   const [reportSummary, setReportSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [calculationError, setCalculationError] = useState(null);
   const [showTechnicalShap, setShowTechnicalShap] = useState(false);
   const [showFullMatrix, setShowFullMatrix] = useState(false);
 
+  const loadData = async (isRetry = false) => {
+    if (isRetry) {
+      setIsRetrying(true);
+      setCalculationError(null);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      const [forecastData, checkinData, summaryData] = await Promise.all([
+        predictionService.getTodayPrediction(),
+        trackingService.fetchTodayLog(),
+        reportService.getReportSummary('weekly'),
+      ]);
+
+      setPrediction(forecastData);
+      setTodayCheckin(checkinData);
+      setReportSummary(summaryData);
+
+      if (isRetry && (!forecastData || forecastData.score === undefined)) {
+        setCalculationError('Unable to calculate the risk forecast. Please try again.');
+      }
+    } catch (err) {
+      console.warn('[RiskAnalysisPage] Error loading data:', err.message);
+      if (isRetry) {
+        setCalculationError('Unable to calculate the risk forecast. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+      setIsRetrying(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-    async function loadData() {
+    async function init() {
       try {
-        const [forecastData, summaryData] = await Promise.all([
+        const [forecastData, checkinData, summaryData] = await Promise.all([
           predictionService.getTodayPrediction(),
+          trackingService.fetchTodayLog(),
           reportService.getReportSummary('weekly'),
         ]);
 
         if (isMounted) {
           setPrediction(forecastData);
+          setTodayCheckin(checkinData);
           setReportSummary(summaryData);
           setLoading(false);
         }
@@ -62,9 +102,19 @@ export function RiskAnalysisPage() {
         if (isMounted) setLoading(false);
       }
     }
-    loadData();
+    init();
+
+    const handleForecastUpdated = (e) => {
+      if (isMounted) {
+        setPrediction(e.detail || null);
+      }
+    };
+
+    window.addEventListener('migraineguardian_forecast_updated', handleForecastUpdated);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('migraineguardian_forecast_updated', handleForecastUpdated);
     };
   }, []);
 
@@ -152,25 +202,65 @@ export function RiskAnalysisPage() {
           </span>
         </div>
       ) : !hasForecast ? (
-        /* EMPTY STATE FOR NEW USERS */
-        <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
-            <AlertCircle className="w-7 h-7 text-brand-teal" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-section-lg font-bold text-brand-dark">
-              No risk analysis available yet
-            </h2>
-            <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
-              Complete today's check-in to run the machine learning model and generate Explainable AI (SHAP) risk factor attributions.
-            </p>
-          </div>
-          <Link to={ROUTES.DAILY_CHECKIN} className="inline-block pt-2">
-            <Button variant="primary" size="lg" icon={CalendarCheck} iconRight={ArrowRight}>
-              Complete Today's Check-in
-            </Button>
-          </Link>
-        </Card>
+        todayCheckin ? (
+          /* CHECK-IN COMPLETED BUT PREDICTION PENDING/FAILED */
+          <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-5">
+            <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
+              <Sparkles className="w-7 h-7 text-brand-teal" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-section-lg font-bold text-brand-dark">
+                Today's check-in is recorded
+              </h2>
+              <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
+                Your check-in data has been safely recorded. The machine learning pipeline is ready to generate your Explainable AI (SHAP) risk forecast.
+              </p>
+            </div>
+            {calculationError && (
+              <div className="p-4 rounded-xl bg-[#8F443B]/10 border border-[#8F443B]/30 text-[#8F443B] flex items-center justify-center gap-2 max-w-md mx-auto text-body-sm font-medium">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-[#8F443B]" />
+                <span>{calculationError}</span>
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => loadData(true)}
+                disabled={isRetrying}
+                icon={isRetrying ? Loader2 : RotateCcw}
+                className={cn(isRetrying && "opacity-80")}
+              >
+                {isRetrying ? "Calculating your risk forecast..." : "Calculate Risk Forecast"}
+              </Button>
+              <Link to={ROUTES.DASHBOARD}>
+                <Button variant="outline" size="lg">
+                  Go to Dashboard
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        ) : (
+          /* EMPTY STATE FOR USERS WITHOUT CHECK-IN */
+          <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
+              <AlertCircle className="w-7 h-7 text-brand-teal" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-section-lg font-bold text-brand-dark">
+                No risk analysis available yet
+              </h2>
+              <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
+                Complete today's check-in to run the machine learning model and generate Explainable AI (SHAP) risk factor attributions.
+              </p>
+            </div>
+            <Link to={ROUTES.DAILY_CHECKIN} className="inline-block pt-2">
+              <Button variant="primary" size="lg" icon={CalendarCheck} iconRight={ArrowRight}>
+                Complete Today's Check-in
+              </Button>
+            </Link>
+          </Card>
+        )
       ) : (
         <>
           {/* HERO FORECAST SCORE */}

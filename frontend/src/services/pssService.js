@@ -75,4 +75,15 @@ export const pssService = {
 
     return storageService.getItem('pss_score_latest', null);
   },
+
+  /**
+   * Retrieves user's PSS assessment history list from backend.
+   */
+  getPssHistory: async (limit = 10) => {
+    const res = await apiClient.get(`/pss/history?limit=${limit}`);
+    if (res.ok && Array.isArray(res.data)) {
+      return res.data;
+    }
+    return [];
+  },
 };

@@ -7,15 +7,110 @@ export async function getTodayPredictionController(req, res, next) {
     const userId = req.user.uid;
     const targetDate = req.query.date || new Date().toISOString().split('T')[0];
 
-    const forecast = await firestoreService.getLatestRiskForecast(userId, targetDate);
+    let forecast = await firestoreService.getLatestRiskForecast(userId, targetDate);
+
+    // If no forecast exists yet for targetDate, check if a daily check-in exists for today
+    if (!forecast) {
+      console.log(`[RiskAnalysis] No forecast found in Firestore for date ${targetDate}, checking if check-in exists...`);
+      const todayCheckin = await firestoreService.getTodayCheckin(userId, targetDate);
+
+      if (todayCheckin) {
+        console.log(`[RiskAnalysis] Found today's check-in for ${targetDate}. Running ML prediction pipeline...`);
+        try {
+          // 1. Fetch baseline stats & recent 7-day episode count
+          const baselineStats = await firestoreService.getUserBaselineStats(userId);
+          const recentEpisodesCount = await firestoreService.getRecentEpisodesCount(userId, 7);
+
+          // 2. Attempt weather records retrieval for target date and previous date
+          let weatherTodayBlock = null;
+          let weatherYesterdayBlock = null;
+
+          try {
+            const checkinDateObj = new Date(`${targetDate}T12:00:00Z`);
+            checkinDateObj.setDate(checkinDateObj.getDate() - 1);
+            const previousDate = checkinDateObj.toISOString().split('T')[0];
+
+            const todayRec = await firestoreService.getTodayWeatherRecord(userId, targetDate);
+            const yesterdayRec = await firestoreService.getTodayWeatherRecord(userId, previousDate);
+
+            const isValidNum = (v) => v !== undefined && v !== null && typeof Number(v) === 'number' && !isNaN(Number(v));
+
+            if (todayRec && yesterdayRec &&
+                isValidNum(todayRec.temperature) && isValidNum(todayRec.humidity) && isValidNum(todayRec.pressure) &&
+                isValidNum(yesterdayRec.pressure) && isValidNum(yesterdayRec.temperature)) {
+              weatherTodayBlock = {
+                temperature: Number(todayRec.temperature),
+                humidity: Number(todayRec.humidity),
+                pressure: Number(todayRec.pressure),
+                precipitation: Number(todayRec.precipitation || 0),
+                wind_speed: Number(todayRec.windSpeed || 0),
+              };
+              weatherYesterdayBlock = {
+                pressure: Number(yesterdayRec.pressure),
+                temperature: Number(yesterdayRec.temperature),
+              };
+            }
+          } catch (wErr) {
+            console.warn('[predictionController] Weather retrieval for on-demand ML payload skipped:', wErr.message);
+          }
+
+          // 3. Construct FastAPI ML payload from check-in
+          const mlPayload = {
+            user_id: userId,
+            latest_log: {
+              sleep_hours: Number(todayCheckin.sleep_hours),
+              sleep_quality: Number(todayCheckin.sleep_quality),
+              daily_stress: Number(todayCheckin.daily_stress),
+              mood: Number(todayCheckin.mood ?? 3),
+              screen_time: Number(todayCheckin.screen_time ?? 0),
+              hydration: Number(todayCheckin.hydration ?? 0),
+            },
+            baseline_stats: {
+              avg_sleep: Number(baselineStats.avg_sleep),
+              avg_stress: Number(baselineStats.avg_stress),
+              pss_score: Number(baselineStats.pss_score),
+            },
+            recent_episodes_count_7d: Number(recentEpisodesCount),
+          };
+
+          if (weatherTodayBlock && weatherYesterdayBlock) {
+            mlPayload.weather_today = weatherTodayBlock;
+            mlPayload.weather_yesterday = weatherYesterdayBlock;
+          }
+
+          // 4. Send request to FastAPI ML service (/predict)
+          console.log(`[Prediction] request started for user ${userId} on date ${targetDate}`);
+          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+
+          if (mlResult.success && mlResult.data) {
+            console.log(`[Prediction] response received: score=${mlResult.data.score}, level=${mlResult.data.level}`);
+            const forecastSaveResult = await firestoreService.saveRiskForecast(userId, targetDate, mlResult.data);
+            forecast = forecastSaveResult.forecast;
+            console.log(`[RiskAnalysis] saved on-demand forecast to Firestore for ${targetDate}`);
+          } else {
+            console.warn(`[Prediction] On-demand ML prediction failed:`, mlResult.error);
+            return res.status(200).json({
+              success: true,
+              data: null,
+              checkinExists: true,
+              mlError: mlResult.error?.message || 'ML prediction service unavailable',
+            });
+          }
+        } catch (genErr) {
+          console.warn('[predictionController] Error executing on-demand prediction:', genErr.message);
+        }
+      }
+    }
 
     if (!forecast) {
       return res.status(200).json({
         success: true,
         data: null,
+        checkinExists: false,
       });
     }
 
+    console.log(`[RiskAnalysis] found today's analysis for ${targetDate}`);
     return res.status(200).json({
       success: true,
       data: forecast,

@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../co
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
+import { storageService } from '../services/storageService';
 import { trackingService } from '../services/trackingService';
 import { weatherService } from '../services/weatherService';
 import {
@@ -41,8 +42,8 @@ import { cn } from '../utils/cn';
 export function DailyCheckinPage() {
   const navigate = useNavigate();
 
-  // Load existing or default values via trackingService
-  const savedDraft = trackingService.getTodayLog();
+  // Load existing draft or default values via storageService / trackingService
+  const savedDraft = storageService.getItem('daily_checkin_draft', null) || trackingService.getTodayLog();
 
   // Section 1: Sleep
   const [sleepHours, setSleepHours] = useState(savedDraft?.sleep_hours ?? savedDraft?.sleepHours ?? 7.5);
@@ -111,7 +112,8 @@ export function DailyCheckinPage() {
 
       if (!user) return;
 
-      const todayData = await trackingService.fetchTodayLog();
+      const localDraft = storageService.getItem('daily_checkin_draft', null);
+      const todayData = localDraft || (await trackingService.fetchTodayLog());
       if (isMounted && todayData) {
         if (todayData.sleep_hours !== undefined) setSleepHours(todayData.sleep_hours);
         if (todayData.sleep_quality !== undefined) setSleepQuality(todayData.sleep_quality);
@@ -122,7 +124,7 @@ export function DailyCheckinPage() {
         if (todayData.meal_skipped !== undefined) setSkippedMeal(todayData.meal_skipped);
         if (todayData.caffeine !== undefined) setCaffeineIntake(todayData.caffeine);
         if (todayData.exercise !== undefined) setExerciseLevel(todayData.exercise);
-        if (todayData.migraine_occurrence !== undefined) setHadMigraine(todayData.migraine_occurrence ? 'Yes' : 'No');
+        if (todayData.migraine_occurrence !== undefined) setHadMigraine(todayData.migraine_occurrence ? 'Yes' : (todayData.hadMigraine || 'No'));
         if (todayData.migraine_severity !== undefined && todayData.migraine_severity !== null) setMigraineSeverity(todayData.migraine_severity);
         if (todayData.migraine_duration !== undefined && todayData.migraine_duration !== null) setMigraineDuration(todayData.migraine_duration);
         if (todayData.symptoms !== undefined && Array.isArray(todayData.symptoms)) setMigraineSymptoms(todayData.symptoms);
@@ -399,9 +401,32 @@ export function DailyCheckinPage() {
         : res.error.message || 'Error saving check-in.';
       setServerError(errMsg);
     } else {
+      storageService.removeItem('daily_checkin_draft');
       setIsSaved(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  const handleNavigateToPss = () => {
+    // Collect all unsubmitted form entries to prevent draft loss
+    const draft = {
+      sleep_hours: sleepHours,
+      sleep_quality: sleepQuality,
+      daily_stress: dailyStress,
+      mood,
+      screen_time: screenHours,
+      hydration: hydrationLiters,
+      meal_skipped: skippedMeal,
+      caffeine: caffeineIntake,
+      exercise: exerciseLevel,
+      migraine_occurrence: hadMigraine === 'Yes',
+      hadMigraine,
+      migraine_severity: hadMigraine === 'Yes' ? migraineSeverity : null,
+      migraine_duration: hadMigraine === 'Yes' ? migraineDuration : null,
+      symptoms: hadMigraine === 'Yes' ? migraineSymptoms : [],
+    };
+    storageService.setItem('daily_checkin_draft', draft);
+    navigate(ROUTES.PSS_ASSESSMENT, { state: { fromCheckin: true } });
   };
 
 
@@ -633,11 +658,15 @@ export function DailyCheckinPage() {
                 </div>
               </div>
 
-              <Link to={ROUTES.PSS_ASSESSMENT} className="flex-shrink-0 self-end sm:self-auto">
-                <Button variant="outline" size="sm" iconRight={ArrowRight} className="font-semibold text-meta-sm whitespace-nowrap">
-                  Take PSS-10 (2 min)
-                </Button>
-              </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNavigateToPss}
+                iconRight={ArrowRight}
+                className="font-semibold text-meta-sm whitespace-nowrap flex-shrink-0 self-end sm:self-auto cursor-pointer"
+              >
+                Take PSS-10 (2 min)
+              </Button>
             </div>
           </Card>
 

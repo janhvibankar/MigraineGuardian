@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -29,6 +29,8 @@ import { cn } from '../utils/cn';
 
 export function PssAssessmentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromCheckin = Boolean(location.state?.fromCheckin);
 
   // Clinically validated PSS-10 standardized items
   const pssQuestions = [
@@ -129,11 +131,19 @@ export function PssAssessmentPage() {
         subtitle="A validated questionnaire measuring perceived stress over the previous month."
         badge="Validated Clinical Instrument"
         actions={
-          <Link to={ROUTES.DASHBOARD}>
-            <Button variant="secondary" size="md">
-              Return to Dashboard
-            </Button>
-          </Link>
+          fromCheckin ? (
+            <Link to={ROUTES.DAILY_CHECKIN}>
+              <Button variant="secondary" size="md" icon={ArrowLeft}>
+                Return to Daily Check-in
+              </Button>
+            </Link>
+          ) : (
+            <Link to={ROUTES.DASHBOARD}>
+              <Button variant="secondary" size="md">
+                Return to Dashboard
+              </Button>
+            </Link>
+          )
         }
       />
 
@@ -343,12 +353,28 @@ export function PssAssessmentPage() {
           </div>
 
           {/* Action CTAs */}
-          <div className="pt-5 border-t border-brand-sage/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3.5">
-            <Link to={ROUTES.DASHBOARD} className="flex-1">
-              <Button variant="primary" size="lg" className="w-full shadow-md" iconRight={ArrowRight}>
+          <div className="pt-5 border-t border-brand-sage/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3.5 flex-wrap">
+            {fromCheckin && (
+              <Link to={ROUTES.DAILY_CHECKIN} className="flex-1">
+                <Button variant="primary" size="lg" className="w-full shadow-md" icon={ArrowLeft}>
+                  Return to Daily Check-in
+                </Button>
+              </Link>
+            )}
+
+            <Link to={ROUTES.DASHBOARD} className={fromCheckin ? "flex-1 sm:flex-initial" : "flex-1"}>
+              <Button variant={fromCheckin ? "secondary" : "primary"} size="lg" className="w-full shadow-md" iconRight={ArrowRight}>
                 Continue to Dashboard
               </Button>
             </Link>
+
+            {!fromCheckin && (
+              <Link to={ROUTES.DAILY_CHECKIN} className="flex-1 sm:flex-initial">
+                <Button variant="secondary" size="lg" className="w-full" icon={ArrowLeft}>
+                  Go to Daily Check-in
+                </Button>
+              </Link>
+            )}
 
             <Link to={ROUTES.RISK_ANALYSIS} className="flex-1 sm:flex-initial">
               <Button variant="secondary" size="lg" className="w-full">
@@ -361,6 +387,7 @@ export function PssAssessmentPage() {
               size="lg"
               onClick={handleRetake}
               icon={RotateCcw}
+              className="flex-1 sm:flex-initial"
             >
               Retake Assessment
             </Button>
