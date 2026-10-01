@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -20,6 +20,7 @@ import { authService } from '../services/authService';
 
 export function SignupPage() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -29,7 +30,6 @@ export function SignupPage() {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [serverError, setServerError] = useState(null);
-
 
   const validateForm = () => {
     const newErrors = {};
@@ -64,6 +64,10 @@ export function SignupPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const getTargetDestination = () => {
+    return location.state?.redirectTo || ROUTES.ONBOARDING;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError(null);
@@ -78,7 +82,11 @@ export function SignupPage() {
       });
 
       if (res && res.success) {
-        navigate(ROUTES.ONBOARDING);
+        const dest = getTargetDestination();
+        navigate(dest, {
+          replace: true,
+          state: { fromOnboarding: Boolean(location.state?.fromOnboarding) },
+        });
       } else {
         const errMsg = res?.error || 'Registration failed. Please try again.';
         setServerError(errMsg);
@@ -101,7 +109,11 @@ export function SignupPage() {
     try {
       const res = await authService.loginWithGoogle();
       if (res && res.success) {
-        navigate(ROUTES.ONBOARDING);
+        const dest = getTargetDestination();
+        navigate(dest, {
+          replace: true,
+          state: { fromOnboarding: Boolean(location.state?.fromOnboarding) },
+        });
       } else if (res && res.error) {
         setServerError(res.error);
       }
@@ -343,7 +355,11 @@ export function SignupPage() {
           {/* Switch to Login */}
           <div className="pt-3 text-center text-body-md text-muted-text border-t border-brand-sage/30">
             <span>Already have an account? </span>
-            <Link to={ROUTES.LOGIN} className="font-bold text-brand-dark hover:text-brand-teal hover:underline ml-1">
+            <Link
+              to={ROUTES.LOGIN}
+              state={location.state}
+              className="font-bold text-brand-dark hover:text-brand-teal hover:underline ml-1"
+            >
               Sign In
             </Link>
           </div>

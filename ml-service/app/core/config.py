@@ -7,7 +7,11 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
 
     # Absolute path to serialized scikit-learn pipeline model
-    MODEL_PATH: Path = Path(__file__).resolve().parent.parent / "models" / "migraine_pipeline.pkl"
+    MODEL_PATH: Path = (
+        Path(__file__).resolve().parent.parent / "models" / "model_a_final_pipeline.pkl"
+        if (Path(__file__).resolve().parent.parent / "models" / "model_a_final_pipeline.pkl").exists()
+        else Path(__file__).resolve().parent.parent / "models" / "migraine_pipeline.pkl"
+    )
     EXPERIMENTAL_MODEL_PATH: Path = Path(__file__).resolve().parent.parent.parent / "data" / "models" / "migraine_weather_pipeline_experimental.pkl"
     # Feature toggle for the experimental weather model
     # WEATHER_MODEL_ENABLED=False means:

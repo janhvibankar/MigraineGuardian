@@ -202,7 +202,7 @@ export function LandingPage() {
           </div>
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-brand-teal" />
-            <span>Encrypted On-Device</span>
+            <span>Secure & Protected</span>
           </div>
         </div>
 
@@ -234,7 +234,7 @@ export function LandingPage() {
               <span className="text-section-lg sm:text-[34px] font-extrabold text-brand-dark block leading-tight">
                 Zero Ads
               </span>
-              <span className="text-meta-md text-[#555B55] font-semibold block">Private & Local</span>
+              <span className="text-meta-md text-[#555B55] font-semibold block">Private & Isolated</span>
               <span className="text-[11px] text-muted-text block">No 3rd-party data selling</span>
             </div>
           </div>
@@ -899,7 +899,7 @@ export function LandingPage() {
               <Check className="w-4 h-4 text-brand-teal" /> No credit card required
             </span>
             <span className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-brand-teal" /> 100% confidential & local
+              <Check className="w-4 h-4 text-brand-teal" /> 100% confidential & protected
             </span>
             <span className="flex items-center gap-1.5">
               <Check className="w-4 h-4 text-brand-teal" /> Zero 3rd-party ads

@@ -107,22 +107,28 @@ export const firestoreService = {
 
     const isMigraine = Boolean(logData.migraine_occurrence);
 
+    const safeNum = (val, fallback) => {
+      if (val === undefined || val === null) return fallback;
+      const n = Number(val);
+      return isNaN(n) ? fallback : n;
+    };
+
     const checkinDoc = {
       checkinId: date,
       date,
-      sleep_hours: Number(logData.sleep_hours),
-      sleep_quality: Number(logData.sleep_quality),
-      daily_stress: Number(logData.daily_stress),
-      mood: Number(logData.mood),
-      screen_time: Number(logData.screen_time),
-      hydration: Number(logData.hydration),
-      meal_skipped: String(logData.meal_skipped || 'No'),
-      caffeine: String(logData.caffeine || 'None'),
-      exercise: String(logData.exercise || 'None'),
+      sleep_hours: safeNum(logData.sleep_hours ?? logData.sleepHours, 7.5),
+      sleep_quality: safeNum(logData.sleep_quality ?? logData.sleepQuality, 3),
+      daily_stress: safeNum(logData.daily_stress ?? logData.dailyStress, 4),
+      mood: safeNum(logData.mood, 3),
+      screen_time: safeNum(logData.screen_time ?? logData.screenHours, 6.0),
+      hydration: safeNum(logData.hydration ?? logData.hydrationLiters, 2.0),
+      meal_skipped: String(logData.meal_skipped ?? logData.skippedMeal ?? 'No'),
+      caffeine: String(logData.caffeine ?? logData.caffeineIntake ?? 'None'),
+      exercise: String(logData.exercise ?? logData.exerciseLevel ?? 'None'),
       migraine_occurrence: isMigraine,
-      migraine_severity: isMigraine ? Number(logData.migraine_severity || 0) : null,
-      migraine_duration: isMigraine ? String(logData.migraine_duration || '') : null,
-      symptoms: isMigraine && Array.isArray(logData.symptoms) ? logData.symptoms : [],
+      migraine_severity: isMigraine ? safeNum(logData.migraine_severity ?? logData.migraineSeverity, 0) : null,
+      migraine_duration: isMigraine ? String(logData.migraine_duration ?? logData.migraineDuration ?? '') : null,
+      symptoms: isMigraine && Array.isArray(logData.symptoms ?? logData.migraineSymptoms) ? (logData.symptoms ?? logData.migraineSymptoms) : [],
       updatedAt: new Date().toISOString(),
     };
 
@@ -299,8 +305,15 @@ export const firestoreService = {
     try {
       // 1. Fetch user profile for latest pssScore
       const userDoc = await db.collection('users').doc(userId).get();
-      if (userDoc.exists && userDoc.data()?.pssScore?.score !== undefined) {
-        pss_score = Number(userDoc.data().pssScore.score);
+      if (userDoc.exists) {
+        const uData = userDoc.data() || {};
+        if (uData.pssScore !== undefined && uData.pssScore !== null) {
+          if (typeof uData.pssScore === 'number' && !isNaN(uData.pssScore)) {
+            pss_score = Number(uData.pssScore);
+          } else if (uData.pssScore.score !== undefined && uData.pssScore.score !== null && !isNaN(Number(uData.pssScore.score))) {
+            pss_score = Number(uData.pssScore.score);
+          }
+        }
       }
 
       // 2. Fetch past 14 daily check-ins to compute averages
@@ -318,10 +331,14 @@ export const firestoreService = {
         let count = 0;
 
         checkinsSnap.forEach((doc) => {
-          const data = doc.data();
-          if (data.sleep_hours !== undefined && data.daily_stress !== undefined) {
-            totalSleep += Number(data.sleep_hours);
-            totalStress += Number(data.daily_stress);
+          const data = doc.data() || {};
+          const sHours = data.sleep_hours !== undefined ? data.sleep_hours : data.sleepHours;
+          const dStress = data.daily_stress !== undefined ? data.daily_stress : data.dailyStress;
+
+          if (sHours !== undefined && sHours !== null && !isNaN(Number(sHours)) &&
+              dStress !== undefined && dStress !== null && !isNaN(Number(dStress))) {
+            totalSleep += Number(sHours);
+            totalStress += Number(dStress);
             count++;
           }
         });

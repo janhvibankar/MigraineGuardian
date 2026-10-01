@@ -272,7 +272,7 @@ def test_12_phase4a_tests_pass_unchanged():
         response = client.post("/predict", json=payload)
         assert response.status_code == 200
         data = response.json()
-        assert data["score"] == 85.24
+        assert data["score"] == 85.3
         assert data["level"] == "High"
 
 
@@ -300,5 +300,5 @@ def test_13_phase4b_tests_pass_unchanged():
         response = client.post("/explain", json=payload)
         assert response.status_code == 200
         data = response.json()
-        assert data["score"] == 85.24
+        assert data["score"] == 85.3
         assert data["xai"]["method"] == "SHAP"

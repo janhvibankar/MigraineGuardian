@@ -63,12 +63,13 @@ export function RiskAnalysisPage() {
         reportService.getReportSummary('weekly'),
       ]);
 
-      setPrediction(forecastData);
+      const validForecast = forecastData && forecastData.score !== undefined && forecastData.score !== null ? forecastData : null;
+      setPrediction(validForecast);
       setTodayCheckin(checkinData);
       setReportSummary(summaryData);
 
-      if (isRetry && (!forecastData || forecastData.score === undefined)) {
-        setCalculationError('Unable to calculate the risk forecast. Please try again.');
+      if (isRetry && !validForecast) {
+        setCalculationError(forecastData?.mlError || 'Unable to calculate the risk forecast. Please try again.');
       }
     } catch (err) {
       console.warn('[RiskAnalysisPage] Error loading data:', err.message);
@@ -92,9 +93,13 @@ export function RiskAnalysisPage() {
         ]);
 
         if (isMounted) {
-          setPrediction(forecastData);
+          const validForecast = forecastData && forecastData.score !== undefined && forecastData.score !== null ? forecastData : null;
+          setPrediction(validForecast);
           setTodayCheckin(checkinData);
           setReportSummary(summaryData);
+          if (!validForecast && forecastData?.mlError) {
+            setCalculationError(forecastData.mlError);
+          }
           setLoading(false);
         }
       } catch (err) {
@@ -106,7 +111,9 @@ export function RiskAnalysisPage() {
 
     const handleForecastUpdated = (e) => {
       if (isMounted) {
-        setPrediction(e.detail || null);
+        const updated = e.detail;
+        const valid = updated && updated.score !== undefined && updated.score !== null ? updated : null;
+        setPrediction(valid);
       }
     };
 

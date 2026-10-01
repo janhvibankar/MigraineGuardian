@@ -18,17 +18,16 @@ export function ProtectedRoute() {
     if (!auth) {
       setAuthState({
         isLoading: false,
-        isAuthenticated: authService.isAuthenticated(),
+        isAuthenticated: false,
       });
       return;
     }
 
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (!isMounted) return;
-      const isAuthed = Boolean(user || authService.isAuthenticated());
       setAuthState({
         isLoading: false,
-        isAuthenticated: isAuthed,
+        isAuthenticated: Boolean(user),
       });
     });
 

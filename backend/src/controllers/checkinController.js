@@ -95,7 +95,7 @@ export async function submitDailyCheckinController(req, res, next) {
     // 1. Save check-in document to Firestore
     const result = await firestoreService.saveDailyCheckin(userId, req.body);
     const date = result.entry.date || new Date().toISOString().split('T')[0];
-    console.log(`[CheckIn] saved for user ${userId} on date ${date}`);
+    console.log(`[PREDICTION] CheckIn saved for user ${userId} on date ${date}`);
 
     // 2. Fetch baseline stats & recent 7-day episode count from Firestore
     const baselineStats = await firestoreService.getUserBaselineStats(userId);
@@ -110,10 +110,16 @@ export async function submitDailyCheckinController(req, res, next) {
       checkinDateObj.setDate(checkinDateObj.getDate() - 1);
       const previousDate = checkinDateObj.toISOString().split('T')[0];
 
-      const todayRec = await firestoreService.getTodayWeatherRecord(userId, date);
-      const yesterdayRec = await firestoreService.getTodayWeatherRecord(userId, previousDate);
+      let todayRec = await firestoreService.getTodayWeatherRecord(userId, date, 'observed');
+      if (!todayRec) {
+        todayRec = await firestoreService.getTodayWeatherRecord(userId, date, 'forecast');
+      }
+      let yesterdayRec = await firestoreService.getTodayWeatherRecord(userId, previousDate, 'observed');
+      if (!yesterdayRec) {
+        yesterdayRec = await firestoreService.getTodayWeatherRecord(userId, previousDate, 'forecast');
+      }
 
-      const isValidNum = (v) => v !== undefined && v !== null && typeof Number(v) === 'number' && !isNaN(Number(v));
+      const isValidNum = (v) => v !== undefined && v !== null && !isNaN(Number(v)) && isFinite(Number(v));
 
       if (todayRec && yesterdayRec &&
           isValidNum(todayRec.temperature) && isValidNum(todayRec.humidity) && isValidNum(todayRec.pressure) &&
@@ -123,7 +129,7 @@ export async function submitDailyCheckinController(req, res, next) {
           humidity: Number(todayRec.humidity),
           pressure: Number(todayRec.pressure),
           precipitation: Number(todayRec.precipitation || 0),
-          wind_speed: Number(todayRec.windSpeed || 0),
+          wind_speed: Number(todayRec.windSpeed || todayRec.wind_speed || 0),
         };
         weatherYesterdayBlock = {
           pressure: Number(yesterdayRec.pressure),
@@ -131,26 +137,32 @@ export async function submitDailyCheckinController(req, res, next) {
         };
       }
     } catch (wErr) {
-      console.warn('[checkinController] Weather retrieval for ML payload skipped:', wErr.message);
+      console.warn('[PREDICTION] Weather retrieval for ML payload skipped:', wErr.message);
     }
 
-    // 4. Construct FastAPI ML payload
+    const safeNum = (val, fallback) => {
+      if (val === undefined || val === null) return fallback;
+      const n = Number(val);
+      return isNaN(n) || !isFinite(n) ? fallback : n;
+    };
+
+    // 4. Construct FastAPI ML payload with safe numeric coercion
     const mlPayload = {
       user_id: userId,
       latest_log: {
-        sleep_hours: Number(req.body.sleep_hours),
-        sleep_quality: Number(req.body.sleep_quality),
-        daily_stress: Number(req.body.daily_stress),
-        mood: Number(req.body.mood ?? 3),
-        screen_time: Number(req.body.screen_time),
-        hydration: Number(req.body.hydration),
+        sleep_hours: safeNum(req.body.sleep_hours ?? req.body.sleepHours, 7.5),
+        sleep_quality: safeNum(req.body.sleep_quality ?? req.body.sleepQuality, 3),
+        daily_stress: safeNum(req.body.daily_stress ?? req.body.dailyStress, 4),
+        mood: safeNum(req.body.mood, 3),
+        screen_time: safeNum(req.body.screen_time ?? req.body.screenHours, 6.0),
+        hydration: safeNum(req.body.hydration ?? req.body.hydrationLiters, 2.0),
       },
       baseline_stats: {
-        avg_sleep: Number(baselineStats.avg_sleep),
-        avg_stress: Number(baselineStats.avg_stress),
-        pss_score: Number(baselineStats.pss_score),
+        avg_sleep: safeNum(baselineStats.avg_sleep, 7.5),
+        avg_stress: safeNum(baselineStats.avg_stress, 4.0),
+        pss_score: safeNum(baselineStats.pss_score, 14),
       },
-      recent_episodes_count_7d: Number(recentEpisodesCount),
+      recent_episodes_count_7d: safeNum(recentEpisodesCount, 0),
     };
 
     if (weatherTodayBlock && weatherYesterdayBlock) {
@@ -158,22 +170,28 @@ export async function submitDailyCheckinController(req, res, next) {
       mlPayload.weather_yesterday = weatherYesterdayBlock;
     }
 
-    // 4. Send request to FastAPI ML service (/predict)
-    console.log(`[Prediction] request started for user ${userId}`);
+    // 5. Send request to FastAPI ML service (/predict)
+    console.log(`[PREDICTION] Starting forecast for user check-in`);
+    console.log(`[PREDICTION] Current UID: ${userId}`);
+    console.log(`[PREDICTION] Request payload:`, JSON.stringify(mlPayload));
     const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
 
     let forecastDoc = null;
     let forecastSaved = false;
 
     if (mlResult.success && mlResult.data) {
-      console.log(`[Prediction] response received: score=${mlResult.data.score}, level=${mlResult.data.level}`);
-      // 5. Save prediction, elevatedFactors, xai, and focusAreas to Firestore users/{userId}/risk_forecasts/{date}
-      const forecastSaveResult = await firestoreService.saveRiskForecast(userId, date, mlResult.data);
-      forecastDoc = forecastSaveResult.forecast;
-      forecastSaved = true;
-      console.log(`[RiskAnalysis] saved forecast to Firestore for user ${userId} on date ${date}`);
+      try {
+        // 6. Save prediction, elevatedFactors, xai, and focusAreas to Firestore users/{userId}/risk_forecasts/{date}
+        const forecastSaveResult = await firestoreService.saveRiskForecast(userId, date, mlResult.data);
+        forecastDoc = forecastSaveResult.forecast;
+        forecastSaved = true;
+        console.log(`[PREDICTION] Final prediction result: score=${forecastDoc.score}%, level=${forecastDoc.level}`);
+        console.log(`[PREDICTION] Firestore persistence succeeded for date ${date}`);
+      } catch (persistErr) {
+        console.error(`[PREDICTION] Firestore persistence failure:`, persistErr.message);
+      }
     } else {
-      console.warn(`[Prediction] ML prediction could not be completed:`, mlResult.error?.message || 'ML service unavailable');
+      console.warn(`[PREDICTION] ML request failed:`, mlResult.error?.message || 'ML service unavailable');
     }
 
     return res.status(200).json({

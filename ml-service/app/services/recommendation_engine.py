@@ -84,9 +84,19 @@ class RecommendationEngine:
         latest_log: Dict[str, Any],
         baseline_stats: Optional[Dict[str, Any]],
     ) -> Optional[Dict[str, str]]:
+        def safe_float(val, fallback):
+            if val is None:
+                return fallback
+            try:
+                f = float(val)
+                return fallback if (f != f or f == float('inf') or f == float('-inf')) else f
+            except (ValueError, TypeError):
+                return fallback
+
         if category == "Sleep":
-            sleep = float(latest_log.get("sleep_hours", 7.0))
-            avg_sleep = float(baseline_stats.get("avg_sleep")) if baseline_stats and baseline_stats.get("avg_sleep") is not None else None
+            sleep = safe_float(latest_log.get("sleep_hours"), 7.0)
+            avg_sleep_val = baseline_stats.get("avg_sleep") if baseline_stats else None
+            avg_sleep = safe_float(avg_sleep_val, None) if avg_sleep_val is not None else None
 
             if avg_sleep is not None and sleep < avg_sleep:
                 deficit = round(avg_sleep - sleep, 1)
@@ -100,8 +110,9 @@ class RecommendationEngine:
             }
 
         elif category == "Stress":
-            stress = float(latest_log.get("daily_stress", 5.0))
-            avg_stress = float(baseline_stats.get("avg_stress")) if baseline_stats and baseline_stats.get("avg_stress") is not None else None
+            stress = safe_float(latest_log.get("daily_stress"), 5.0)
+            avg_stress_val = baseline_stats.get("avg_stress") if baseline_stats else None
+            avg_stress = safe_float(avg_stress_val, None) if avg_stress_val is not None else None
 
             if avg_stress is not None and stress > avg_stress:
                 diff = round(stress - avg_stress, 1)
@@ -115,7 +126,7 @@ class RecommendationEngine:
             }
 
         elif category == "Screen":
-            screen = float(latest_log.get("screen_time", 6.0))
+            screen = safe_float(latest_log.get("screen_time"), 6.0)
             desc = f"Continuous screen duration ({screen} h) is elevated. Consider taking regular screen breaks and reducing prolonged continuous use."
             return {
                 "title": "Screen-time breaks",
@@ -123,7 +134,7 @@ class RecommendationEngine:
             }
 
         elif category == "Hydration":
-            hydration = float(latest_log.get("hydration", 2.0))
+            hydration = safe_float(latest_log.get("hydration"), 2.0)
             desc = f"Your recorded fluid intake is {hydration} L. Consider maintaining steady hydration throughout the day."
             return {
                 "title": "Hydration",
@@ -131,7 +142,7 @@ class RecommendationEngine:
             }
 
         elif category == "Mood":
-            mood = float(latest_log.get("mood", 3.0))
+            mood = safe_float(latest_log.get("mood"), 3.0)
             desc = f"Your logged mood rating is {mood}/5. Taking time for light relaxation or restorative activities can support overall emotional balance."
             return {
                 "title": "Restorative downtime",
@@ -145,14 +156,23 @@ class RecommendationEngine:
         latest_log: Dict[str, Any],
         baseline_stats: Optional[Dict[str, Any]],
     ) -> List[Dict[str, str]]:
+        def safe_float(val, fallback):
+            if val is None:
+                return fallback
+            try:
+                f = float(val)
+                return fallback if (f != f or f == float('inf') or f == float('-inf')) else f
+            except (ValueError, TypeError):
+                return fallback
+
         fallbacks = []
-        sleep = float(latest_log.get("sleep_hours", 7.0))
+        sleep = safe_float(latest_log.get("sleep_hours"), 7.0)
         if sleep < 7.0:
             fallbacks.append({
                 "title": "Sleep consistency",
                 "description": f"Sleep duration of {sleep} h recorded. Maintaining steady rest supports daily balance.",
             })
-        stress = float(latest_log.get("daily_stress", 4.0))
+        stress = safe_float(latest_log.get("daily_stress"), 4.0)
         if stress >= 5.0:
             fallbacks.append({
                 "title": "Stress reset",

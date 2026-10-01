@@ -25,6 +25,9 @@ export const mlInferenceService = {
 
 
     try {
+      console.log(`[PREDICTION] ML service URL: ${url}`);
+      console.log(`[PREDICTION] Calling ML service...`);
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -36,6 +39,7 @@ export const mlInferenceService = {
       });
 
       clearTimeout(timer);
+      console.log(`[PREDICTION] ML response status: ${response.status}`);
 
       if (!response.ok) {
         let errorData = {};
@@ -45,22 +49,24 @@ export const mlInferenceService = {
           errorData = { message: `HTTP status ${response.status}` };
         }
 
-        console.warn(`[mlInferenceService] FastAPI returned HTTP ${response.status}:`, errorData);
+        console.warn(`[PREDICTION] ML request failed: HTTP ${response.status}`, errorData);
         return {
           success: false,
           error: {
             code: 'FASTAPI_HTTP_ERROR',
             status: response.status,
             details: errorData,
+            message: errorData.detail || errorData.message || `ML microservice returned HTTP ${response.status}`,
           },
         };
       }
 
       const json = await response.json();
+      console.log(`[PREDICTION] ML response body: score=${json.score}, level=${json.level}, model=${json.model_used}, features_count=${json.xai?.features?.length || 0}`);
 
       // Validate required response fields from FastAPI
       if (typeof json.score !== 'number' || typeof json.level !== 'string') {
-        console.warn('[mlInferenceService] Invalid response payload from FastAPI:', json);
+        console.warn('[PREDICTION] ML request failed: invalid response payload structure', json);
         return {
           success: false,
           error: {
@@ -78,7 +84,7 @@ export const mlInferenceService = {
       clearTimeout(timer);
 
       if (err.name === 'AbortError') {
-        console.warn(`[mlInferenceService] Request to FastAPI timed out after ${DEFAULT_TIMEOUT_MS}ms`);
+        console.warn(`[PREDICTION] ML request failed: timeout after ${DEFAULT_TIMEOUT_MS}ms`);
         return {
           success: false,
           timeout: true,
@@ -89,7 +95,7 @@ export const mlInferenceService = {
         };
       }
 
-      console.warn('[mlInferenceService] Connection error calling FastAPI ML service:', err.message);
+      console.warn(`[PREDICTION] ML request failed: connection error (${err.message})`);
       return {
         success: false,
         unavailable: true,

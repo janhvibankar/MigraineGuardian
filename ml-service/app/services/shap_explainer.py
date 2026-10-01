@@ -13,13 +13,19 @@ FEATURE_HUMAN_NAMES = {
     "stress_level": "Daily Stress",
     "hydration_level": "Hydration",
     "screen_time": "Screen Time",
-    # Lifestyle Engineered
+    # Lifestyle Engineered (Model A 11-feature spec)
+    "sleep_deviation": "Sleep Deviation from 8h",
+    "low_sleep": "Low Sleep Rest (<6.5h)",
+    "high_screen_time": "High Screen Exposure (>=8h)",
+    "low_hydration": "Low Fluid Intake (<=2L)",
+    "stress_mood_interaction": "Stress & Mood Strain",
+    "sleep_screen_interaction": "Sleep & Screen Interaction",
+    # Legacy / Other Lifestyle Engineered (for compatibility)
     "stress_sleep_ratio": "Stress / Sleep Pattern",
     "screen_stress": "Screen Exposure + Stress",
     "hydration_sleep": "Hydration + Sleep Pattern",
     "sleep_deficit": "Sleep Rest Deficit",
     "hydration_deficit": "Fluid Intake Deficit",
-    "stress_mood_interaction": "Stress & Mood Strain",
     "screen_sleep_ratio": "Screen Exposure vs Sleep",
     # Weather Raw
     "temperature": "Ambient Temperature",
@@ -43,12 +49,17 @@ FEATURE_CATEGORIES = {
     "stress_level": "LIFESTYLE",
     "hydration_level": "LIFESTYLE",
     "screen_time": "LIFESTYLE",
+    "sleep_deviation": "LIFESTYLE",
+    "low_sleep": "LIFESTYLE",
+    "high_screen_time": "LIFESTYLE",
+    "low_hydration": "LIFESTYLE",
+    "stress_mood_interaction": "LIFESTYLE",
+    "sleep_screen_interaction": "LIFESTYLE",
     "stress_sleep_ratio": "LIFESTYLE",
     "screen_stress": "LIFESTYLE",
     "hydration_sleep": "LIFESTYLE",
     "sleep_deficit": "LIFESTYLE",
     "hydration_deficit": "LIFESTYLE",
-    "stress_mood_interaction": "LIFESTYLE",
     "screen_sleep_ratio": "LIFESTYLE",
     "temperature": "WEATHER",
     "humidity": "WEATHER",
@@ -68,7 +79,7 @@ class ShapExplainerService:
     Explainable AI (XAI) service using SHAP for LogisticRegression pipelines (Model A & Model B).
 
     SHAP Method Justification:
-    Both Model A (12 features) and Model B (22 features) classifiers are LogisticRegression estimators
+    Both Model A (11 features) and Model B (22 features) classifiers are LogisticRegression estimators
     operating on StandardScaled features z = (x - mu) / sigma.
     shap.LinearExplainer computes exact, analytical additive log-odds feature attributions phi_j = beta_j * z_j
     relative to the zero background mean E[z_j] = 0.
@@ -81,13 +92,15 @@ class ShapExplainerService:
 
     def _get_explainer_model_a(self, lr_model):
         if self._explainer_model_a is None:
-            zero_background = np.zeros((1, 12))
+            n_feats = getattr(lr_model, "n_features_in_", 11)
+            zero_background = np.zeros((1, n_feats))
             self._explainer_model_a = shap.LinearExplainer(lr_model, zero_background)
         return self._explainer_model_a
 
     def _get_explainer_model_b(self, lr_model):
         if self._explainer_model_b is None:
-            zero_background = np.zeros((1, 22))
+            n_feats = getattr(lr_model, "n_features_in_", 22)
+            zero_background = np.zeros((1, n_feats))
             self._explainer_model_b = shap.LinearExplainer(lr_model, zero_background)
         return self._explainer_model_b
 
@@ -213,9 +226,19 @@ class ShapExplainerService:
         if not latest_log:
             return elevated
 
+        def safe_float(val, fallback):
+            if val is None:
+                return fallback
+            try:
+                f = float(val)
+                return fallback if (np.isnan(f) or np.isinf(f)) else f
+            except (ValueError, TypeError):
+                return fallback
+
         # Sleep evaluation
-        sleep = float(latest_log.get("sleep_hours", 7.0))
-        avg_sleep = float(baseline_stats.get("avg_sleep")) if baseline_stats and baseline_stats.get("avg_sleep") is not None else None
+        sleep = safe_float(latest_log.get("sleep_hours"), 7.0)
+        avg_sleep_val = baseline_stats.get("avg_sleep") if baseline_stats else None
+        avg_sleep = safe_float(avg_sleep_val, None) if avg_sleep_val is not None else None
 
         if avg_sleep is not None:
             diff_sleep = sleep - avg_sleep
@@ -248,8 +271,9 @@ class ShapExplainerService:
         })
 
         # Stress evaluation
-        stress = float(latest_log.get("daily_stress", 4.0))
-        avg_stress = float(baseline_stats.get("avg_stress")) if baseline_stats and baseline_stats.get("avg_stress") is not None else None
+        stress = safe_float(latest_log.get("daily_stress"), 4.0)
+        avg_stress_val = baseline_stats.get("avg_stress") if baseline_stats else None
+        avg_stress = safe_float(avg_stress_val, None) if avg_stress_val is not None else None
 
         if avg_stress is not None:
             diff_stress = stress - avg_stress
@@ -282,7 +306,7 @@ class ShapExplainerService:
         })
 
         # Screen time evaluation
-        screen = float(latest_log.get("screen_time", 6.0))
+        screen = safe_float(latest_log.get("screen_time"), 6.0)
         if screen >= settings.PRESENTATION_SCREEN_TIME_ALERT:
             screen_status = "alert"
             screen_desc = f"Heavy screen exposure of {screen} h recorded."
@@ -302,7 +326,7 @@ class ShapExplainerService:
         })
 
         # Hydration evaluation
-        hydration = float(latest_log.get("hydration", 2.0))
+        hydration = safe_float(latest_log.get("hydration"), 2.0)
         if hydration <= settings.PRESENTATION_HYDRATION_ALERT:
             hydration_status = "alert"
             hydration_desc = f"Low fluid intake of {hydration} L recorded."

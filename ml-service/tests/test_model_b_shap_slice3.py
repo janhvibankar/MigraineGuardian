@@ -23,8 +23,8 @@ EXPECTED_MODEL_B_FEATURES = [
 ]
 
 
-def test_1_model_a_prediction_returns_12_shap_features():
-    """TEST 1: Model A prediction returns exactly 12 SHAP features."""
+def test_1_model_a_prediction_returns_11_shap_features():
+    """TEST 1: Model A prediction returns exactly 11 SHAP features."""
     raw_lifestyle = {
         "sleep_hours": 6.5,
         "mood_level": 3.0,
@@ -33,7 +33,7 @@ def test_1_model_a_prediction_returns_12_shap_features():
         "screen_time": 7.0,
     }
     exp = shap_explainer_service.explain(raw_lifestyle, model_used="MODEL_A_LIFESTYLE_BASELINE")
-    assert len(exp["features"]) == 12
+    assert len(exp["features"]) == 11
     assert exp["model_used"] == "MODEL_A_LIFESTYLE_BASELINE"
 
 
@@ -106,7 +106,7 @@ def test_7_model_a_shap_remains_unchanged():
     exp = shap_explainer_service.explain(raw_lifestyle, model_used="MODEL_A_LIFESTYLE_BASELINE")
     assert exp["method"] == "SHAP"
     assert exp["model_used"] == "MODEL_A_LIFESTYLE_BASELINE"
-    assert len(exp["features"]) == 12
+    assert len(exp["features"]) == 11
 
 
 def test_8_positive_and_negative_shap_direction_validity():

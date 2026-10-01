@@ -30,7 +30,7 @@ export function AuthLayout() {
       <div className="max-w-md mx-auto text-center space-y-2 pt-6">
         <div className="flex items-center justify-center gap-1.5 text-meta-sm text-muted-text">
           <ShieldCheck className="w-4 h-4 text-brand-teal" />
-          <span>Encrypted client-side storage • No intrusive tracking</span>
+          <span>Your information is securely associated with your authenticated account • No intrusive tracking</span>
         </div>
         <p className="text-[12px] text-muted-text-light">
           MigraineGuardian is designed for peaceful, privacy-preserving wellness.

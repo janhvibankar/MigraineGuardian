@@ -102,15 +102,15 @@ export function HowItWorksPage() {
         <p className="text-body-md text-muted-text leading-relaxed max-w-3xl">
           We never design for alarmist notifications or high-stress alert rings. Migraine management is about calming the autonomic nervous system. Every color, font, and interaction in MigraineGuardian is chosen to avoid sensory stimulation and cognitive strain.
         </p>
-        <div className="pt-2 flex items-center gap-4">
-          <Link to={ROUTES.PSS_ASSESSMENT}>
-            <Button variant="secondary" size="md">
-              Take the PSS Stress Assessment
+        <div className="pt-2 flex flex-wrap items-center gap-4">
+          <Link to={ROUTES.ONBOARDING}>
+            <Button variant="primary" size="md" iconRight={ArrowRight}>
+              Begin Journey
             </Button>
           </Link>
-          <Link to={ROUTES.DASHBOARD}>
-            <Button variant="ghost" size="md">
-              Preview Dashboard →
+          <Link to={ROUTES.LOGIN}>
+            <Button variant="secondary" size="md">
+              Sign In to Account
             </Button>
           </Link>
         </div>

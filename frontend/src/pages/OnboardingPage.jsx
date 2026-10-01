@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { authService } from '../services/authService';
+import { auth } from '../config/firebase';
 import {
   User,
   Activity,
@@ -28,23 +29,26 @@ import {
   Lock,
   LogOut,
   CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const isAuthenticated = authService.isAuthenticated();
   const guestDraft = authService.getGuestOnboarding();
-  const currentUser = isAuthenticated ? authService.getCurrentUser() : null;
 
   // Multi-step state (1 to 4)
   const [step, setStep] = useState(1);
   const [showAuthChoiceModal, setShowAuthChoiceModal] = useState(false);
+  const [authModalType, setAuthModalType] = useState('pss'); // 'pss' | 'completeLater'
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+  const [authError, setAuthError] = useState(null);
 
-  // Step 1: About You
-  const [name, setName] = useState(() => guestDraft?.name || currentUser?.name || '');
-  const [age, setAge] = useState(() => guestDraft?.age || currentUser?.age || '30');
-  const [gender, setGender] = useState(() => guestDraft?.gender || currentUser?.gender || 'Female');
+  // Step 1: About You - Always start clean from guestDraft (never silent reuse of currentUser)
+  const [name, setName] = useState(() => guestDraft?.name || '');
+  const [age, setAge] = useState(() => guestDraft?.age || '25-34');
+  const [gender, setGender] = useState(() => guestDraft?.gender || 'Female');
   const [step1Error, setStep1Error] = useState('');
 
   // Step 2: Migraine History
@@ -105,10 +109,6 @@ export function OnboardingPage() {
     };
 
     authService.saveGuestOnboarding(payload);
-
-    if (isAuthenticated) {
-      authService.updateUserProfile(payload);
-    }
   };
 
   // Step navigation helpers
@@ -136,17 +136,78 @@ export function OnboardingPage() {
 
   const handleStartPss = () => {
     saveCurrentProgress();
-    navigate(ROUTES.PSS_ASSESSMENT, { state: { fromOnboarding: true } });
+    setAuthError(null);
+    setAuthModalType('pss');
+    setShowAuthChoiceModal(true);
   };
 
-  const handleCompleteLater = async () => {
+  const handleCompleteLater = () => {
     saveCurrentProgress();
+    setAuthError(null);
+    setAuthModalType('completeLater');
+    setShowAuthChoiceModal(true);
+  };
 
-    if (authService.isAuthenticated()) {
+  // Authenticated user confirmation handlers
+  const handleContinueAsCurrent = async () => {
+    setIsSubmittingAuth(true);
+    setAuthError(null);
+    try {
       await authService.transferGuestOnboardingToUser();
-      navigate(ROUTES.DASHBOARD);
-    } else {
-      setShowAuthChoiceModal(true);
+      setIsSubmittingAuth(false);
+      setShowAuthChoiceModal(false);
+      if (authModalType === 'pss') {
+        navigate(ROUTES.PSS_ASSESSMENT, { state: { fromOnboarding: true } });
+      } else {
+        navigate(ROUTES.DASHBOARD);
+      }
+    } catch (err) {
+      setIsSubmittingAuth(false);
+      setAuthError(err.message || 'Failed to link setup to your account. Please try again.');
+    }
+  };
+
+  const handleSignInDifferent = async () => {
+    await authService.logout();
+    setShowAuthChoiceModal(false);
+    navigate(ROUTES.LOGIN, {
+      state: {
+        redirectTo: authModalType === 'pss' ? ROUTES.PSS_ASSESSMENT : ROUTES.DASHBOARD,
+        fromOnboarding: true,
+      },
+    });
+  };
+
+  const handleCreateNewAccount = async () => {
+    await authService.logout();
+    setShowAuthChoiceModal(false);
+    navigate(ROUTES.SIGNUP, {
+      state: {
+        redirectTo: authModalType === 'pss' ? ROUTES.PSS_ASSESSMENT : ROUTES.DASHBOARD,
+        fromOnboarding: true,
+      },
+    });
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsSubmittingAuth(true);
+    setAuthError(null);
+    try {
+      const res = await authService.loginWithGoogle();
+      setIsSubmittingAuth(false);
+      if (res.success) {
+        setShowAuthChoiceModal(false);
+        if (authModalType === 'pss') {
+          navigate(ROUTES.PSS_ASSESSMENT, { state: { fromOnboarding: true } });
+        } else {
+          navigate(ROUTES.DASHBOARD);
+        }
+      } else {
+        setAuthError(res.error || 'Google sign-in failed. Please try again.');
+      }
+    } catch (err) {
+      setIsSubmittingAuth(false);
+      setAuthError(err.message || 'Google sign-in encountered an error.');
     }
   };
 
@@ -165,6 +226,8 @@ export function OnboardingPage() {
     return `Extreme (${val}/10)`;
   };
 
+  const currentEmail = auth?.currentUser?.email || (authService.isAuthenticated() ? authService.getCurrentUser()?.email : null);
+
   return (
     <div className="max-w-3xl mx-auto space-y-6 py-4 sm:py-6 text-left">
       {/* Top Header */}
@@ -178,7 +241,7 @@ export function OnboardingPage() {
           </p>
         </div>
         <Badge variant="teal" size="md">
-          {isAuthenticated ? 'Authenticated Setup' : 'Guest Journey'}
+          Personalized Setup
         </Badge>
       </div>
 
@@ -564,7 +627,7 @@ export function OnboardingPage() {
         </div>
       </Card>
 
-      {/* Guest Authentication Choice Modal (triggered when guest clicks Complete Later) */}
+      {/* Explicit Authentication Boundary Modal */}
       {showAuthChoiceModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white border-2 border-brand-sage/60 rounded-[24px] p-6 sm:p-8 max-w-md w-full space-y-5 shadow-soft-lg text-center">
@@ -572,34 +635,148 @@ export function OnboardingPage() {
               <ShieldCheck className="w-6 h-6" />
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-section-md font-bold text-brand-dark">
-                Save Your Personalized Journey
-              </h3>
-              <p className="text-body-md text-[#555B55] leading-relaxed">
-                To access your personalized dashboard, record daily check-ins, and receive machine learning risk forecasts, please create a free account or sign in. Your calibration responses have been safely saved.
-              </p>
-            </div>
+            {currentEmail ? (
+              /* Active Firebase Session Detected in Browser */
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-section-md font-bold text-brand-dark">
+                    Confirm Account Connection
+                  </h3>
+                  <div className="p-3 bg-brand-sage/20 rounded-[14px] border border-brand-sage/40 text-meta-sm text-brand-dark font-medium">
+                    Signed in as: <span className="font-bold">{currentEmail}</span>
+                  </div>
+                  <p className="text-body-md text-[#555B55] leading-relaxed">
+                    Would you like to save this new setup to your current account, or continue with a different profile?
+                  </p>
+                </div>
 
-            <div className="space-y-2.5 pt-2">
-              <Link to={ROUTES.SIGNUP} className="block">
-                <Button variant="primary" size="lg" className="w-full shadow-md font-bold" iconRight={ArrowRight}>
-                  Create Free Account
-                </Button>
-              </Link>
-              <Link to={ROUTES.LOGIN} className="block">
-                <Button variant="secondary" size="md" className="w-full">
-                  Sign In to Existing Account
-                </Button>
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowAuthChoiceModal(false)}
-                className="text-meta-sm text-muted-text hover:text-brand-dark pt-1 font-medium transition-colors"
-              >
-                Continue Editing Onboarding
-              </button>
-            </div>
+                {authError && (
+                  <div className="p-3 rounded-[12px] bg-alert-muted/15 border border-alert-muted/30 text-[#8F443B] text-meta-sm font-medium flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-2.5 pt-1">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={handleContinueAsCurrent}
+                    disabled={isSubmittingAuth}
+                    className="w-full shadow-md font-bold"
+                    iconRight={isSubmittingAuth ? Loader2 : ArrowRight}
+                  >
+                    {isSubmittingAuth ? 'Saving to Account...' : `Continue as ${currentEmail}`}
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={handleSignInDifferent}
+                    disabled={isSubmittingAuth}
+                    className="w-full"
+                  >
+                    Sign In with Different Account
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="md"
+                    onClick={handleCreateNewAccount}
+                    disabled={isSubmittingAuth}
+                    className="w-full border-brand-sage/50"
+                  >
+                    Create New Account
+                  </Button>
+
+                  <div className="pt-2 flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAuthChoiceModal(false)}
+                      className="text-meta-sm text-muted-text hover:text-brand-dark font-medium transition-colors cursor-pointer"
+                    >
+                      Keep Editing Setup
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Unauthenticated Guest Flow */
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-section-md font-bold text-brand-dark">
+                    {authModalType === 'pss'
+                      ? 'Sign In to Begin PSS Calibration'
+                      : 'Sign In to Access Your Dashboard'}
+                  </h3>
+                  <p className="text-body-md text-[#555B55] leading-relaxed">
+                    {authModalType === 'pss'
+                      ? 'To take your clinical baseline stress evaluation and link your calibration to your health records, please create a free account or sign in. Your onboarding answers are safely preserved.'
+                      : 'To access your personalized dashboard, record daily check-ins, and receive predictive risk forecasts, please create a free account or sign in. Your calibration responses have been safely saved.'}
+                  </p>
+                </div>
+
+                {authError && (
+                  <div className="p-3 rounded-[12px] bg-alert-muted/15 border border-alert-muted/30 text-[#8F443B] text-meta-sm font-medium flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-2.5 pt-1">
+                  <Link
+                    to={ROUTES.SIGNUP}
+                    state={{
+                      redirectTo: authModalType === 'pss' ? ROUTES.PSS_ASSESSMENT : ROUTES.DASHBOARD,
+                      fromOnboarding: true,
+                    }}
+                    className="block"
+                  >
+                    <Button variant="primary" size="lg" className="w-full shadow-md font-bold" iconRight={ArrowRight}>
+                      Create Free Account
+                    </Button>
+                  </Link>
+                  <Link
+                    to={ROUTES.LOGIN}
+                    state={{
+                      redirectTo: authModalType === 'pss' ? ROUTES.PSS_ASSESSMENT : ROUTES.DASHBOARD,
+                      fromOnboarding: true,
+                    }}
+                    className="block"
+                  >
+                    <Button variant="secondary" size="md" className="w-full">
+                      Sign In to Existing Account
+                    </Button>
+                  </Link>
+
+                  <Button
+                    variant="outline"
+                    size="md"
+                    onClick={handleGoogleSignIn}
+                    disabled={isSubmittingAuth}
+                    className="w-full border-brand-sage/50"
+                  >
+                    {isSubmittingAuth ? 'Connecting Google...' : 'Continue with Google'}
+                  </Button>
+
+                  <div className="pt-2 flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAuthChoiceModal(false)}
+                      className="text-meta-sm text-muted-text hover:text-brand-dark font-medium transition-colors cursor-pointer"
+                    >
+                      Continue Editing Onboarding
+                    </button>
+                    <Link
+                      to={ROUTES.HOME}
+                      className="text-meta-sm text-muted-text hover:text-brand-dark transition-colors"
+                    >
+                      Return to Overview
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

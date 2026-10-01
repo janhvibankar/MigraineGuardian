@@ -48,6 +48,12 @@ export const predictionService = {
       }
       // Explicitly clear stale cached forecast if backend returned null for user
       syncRiskForecastState(null);
+      if (res.raw && (res.raw.mlError || res.raw.message)) {
+        return {
+          score: null,
+          mlError: res.raw.mlError || res.raw.message,
+        };
+      }
       return null;
     }
 

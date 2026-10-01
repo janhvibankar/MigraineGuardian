@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -20,6 +20,7 @@ import { authService } from '../services/authService';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,6 +50,10 @@ export function LoginPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const getTargetDestination = () => {
+    return location.state?.redirectTo || location.state?.from?.pathname || ROUTES.DASHBOARD;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError(null);
@@ -58,7 +63,11 @@ export function LoginPage() {
     try {
       const res = await authService.login(email.trim(), password);
       if (res && res.success) {
-        navigate(ROUTES.DASHBOARD);
+        const dest = getTargetDestination();
+        navigate(dest, {
+          replace: true,
+          state: { fromOnboarding: Boolean(location.state?.fromOnboarding) },
+        });
       } else {
         const errMsg = res?.error || 'Invalid email or password. Please try again.';
         setServerError(errMsg);
@@ -78,7 +87,11 @@ export function LoginPage() {
     try {
       const res = await authService.loginWithGoogle();
       if (res && res.success) {
-        navigate(ROUTES.DASHBOARD);
+        const dest = getTargetDestination();
+        navigate(dest, {
+          replace: true,
+          state: { fromOnboarding: Boolean(location.state?.fromOnboarding) },
+        });
       } else if (res && res.error) {
         setServerError(res.error);
       }
@@ -297,7 +310,11 @@ export function LoginPage() {
           {/* Switch to Signup */}
           <div className="pt-3 text-center text-body-md text-muted-text border-t border-brand-sage/30">
             <span>Don't have an account yet? </span>
-            <Link to={ROUTES.SIGNUP} className="font-bold text-brand-dark hover:text-brand-teal hover:underline ml-1">
+            <Link
+              to={ROUTES.SIGNUP}
+              state={location.state}
+              className="font-bold text-brand-dark hover:text-brand-teal hover:underline ml-1"
+            >
               Create an account
             </Link>
           </div>

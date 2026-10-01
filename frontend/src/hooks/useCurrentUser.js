@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { auth } from '../config/firebase.js';
 import { authService } from '../services/authService';
 
 /**
@@ -9,7 +10,7 @@ export function useCurrentUser() {
 
   useEffect(() => {
     const handleUserUpdate = (e) => {
-      if (e.detail) {
+      if (e?.detail !== undefined) {
         setUser(e.detail);
       } else {
         setUser(authService.getCurrentUser());
@@ -19,11 +20,24 @@ export function useCurrentUser() {
     window.addEventListener('migraineguardian_user_updated', handleUserUpdate);
     window.addEventListener('storage', handleUserUpdate);
 
+    let unsubscribeAuth = null;
+    if (auth && typeof auth.onAuthStateChanged === 'function') {
+      unsubscribeAuth = auth.onAuthStateChanged((firebaseUser) => {
+        if (!firebaseUser) {
+          setUser(null);
+        } else {
+          setUser(authService.getCurrentUser());
+        }
+      });
+    }
+
     return () => {
       window.removeEventListener('migraineguardian_user_updated', handleUserUpdate);
       window.removeEventListener('storage', handleUserUpdate);
+      if (unsubscribeAuth) unsubscribeAuth();
     };
   }, []);
 
   return user;
 }
+

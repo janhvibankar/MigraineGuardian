@@ -101,9 +101,9 @@ export function Navbar() {
                 Begin Journey
               </Button>
             </Link>
-            <Link to={ROUTES.DASHBOARD} onClick={() => setMobileMenuOpen(false)}>
+            <Link to={ROUTES.LOGIN} onClick={() => setMobileMenuOpen(false)}>
               <Button variant="secondary" size="md" className="w-full">
-                Go to Dashboard
+                Sign In
               </Button>
             </Link>
           </div>

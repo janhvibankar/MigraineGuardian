@@ -18,7 +18,6 @@ import { ROUTES } from '../utils/constants';
 export const PUBLIC_NAV_ITEMS = [
   { label: 'Overview', href: ROUTES.HOME },
   { label: 'How It Works', href: ROUTES.HOW_IT_WORKS },
-  { label: 'PSS Assessment', href: ROUTES.PSS_ASSESSMENT },
 ];
 
 export const PRIMARY_NAV_ITEMS = [

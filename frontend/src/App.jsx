@@ -44,7 +44,6 @@ export function App() {
           <Route element={<PublicLayout />}>
             <Route path={ROUTES.HOME} element={<LandingPage />} />
             <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
-            <Route path={ROUTES.PSS_ASSESSMENT} element={<PssAssessmentPage />} />
             <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
             <Route path={ROUTES.TERMS} element={<TermsPage />} />
             <Route path={ROUTES.CONTACT} element={<ContactPage />} />
@@ -70,6 +69,7 @@ export function App() {
               <Route path={ROUTES.CHAT} element={<ChatPage />} />
               <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
               <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+              <Route path={ROUTES.PSS_ASSESSMENT} element={<PssAssessmentPage />} />
             </Route>
           </Route>
         </Routes>

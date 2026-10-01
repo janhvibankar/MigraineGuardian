@@ -91,11 +91,11 @@ async def predict_migraine_risk(request: PredictRequest):
 
     try:
         raw_features = {
-            "sleep_hours": request.latest_log.sleep_hours,
-            "mood_level": request.latest_log.mood,
-            "stress_level": request.latest_log.daily_stress,
-            "hydration_level": request.latest_log.hydration,
-            "screen_time": request.latest_log.screen_time,
+            "sleep_hours": float(request.latest_log.sleep_hours),
+            "mood_level": float(request.latest_log.mood),
+            "stress_level": float(request.latest_log.daily_stress),
+            "hydration_level": float(request.latest_log.hydration),
+            "screen_time": float(request.latest_log.screen_time),
         }
 
         weather_today_dict = request.weather_today.model_dump() if request.weather_today else None
@@ -111,29 +111,52 @@ async def predict_migraine_risk(request: PredictRequest):
         baseline_dict = request.baseline_stats.model_dump() if request.baseline_stats else None
         latest_dict = request.latest_log.model_dump()
 
-        explanation = shap_explainer_service.explain(
-            raw_features=raw_features,
-            latest_log=latest_dict,
-            baseline_stats=baseline_dict,
-            recent_episodes_count_7d=request.recent_episodes_count_7d,
-            weather_today=weather_today_dict,
-            weather_yesterday=weather_yesterday_dict,
-            model_used=model_used,
-        )
+        # Isolate SHAP calculation so that an explanation edge-case does not fail the core prediction
+        explanation = {}
+        try:
+            explanation = shap_explainer_service.explain(
+                raw_features=raw_features,
+                latest_log=latest_dict,
+                baseline_stats=baseline_dict,
+                recent_episodes_count_7d=request.recent_episodes_count_7d,
+                weather_today=weather_today_dict,
+                weather_yesterday=weather_yesterday_dict,
+                model_used=model_used,
+            )
+        except Exception as shap_err:
+            print(f"[ML Service Warning] SHAP explanation failed: {shap_err}")
+            elevated_fallback = []
+            if hasattr(shap_explainer_service, '_build_elevated_factors'):
+                try:
+                    elevated_fallback = shap_explainer_service._build_elevated_factors(
+                        latest_dict, baseline_dict, request.recent_episodes_count_7d
+                    )
+                except Exception:
+                    elevated_fallback = []
+            explanation = {
+                "method": "SHAP",
+                "model_used": model_used,
+                "features": [],
+                "elevatedFactors": elevated_fallback,
+            }
 
-        focus_areas = recommendation_engine.generate_focus_areas(
-            risk_score=score,
-            risk_level=level,
-            shap_features=explanation.get("features", []),
-            latest_log=latest_dict,
-            baseline_stats=baseline_dict,
-        )
+        focus_areas = []
+        try:
+            focus_areas = recommendation_engine.generate_focus_areas(
+                risk_score=score,
+                risk_level=level,
+                shap_features=explanation.get("features", []),
+                latest_log=latest_dict,
+                baseline_stats=baseline_dict,
+            )
+        except Exception as rec_err:
+            print(f"[ML Service Warning] Recommendation generation failed: {rec_err}")
 
         return PredictResponse(
             score=score,
             level=level,
             model_used=model_used,
-            elevatedFactors=explanation.get("elevatedFactors"),
+            elevatedFactors=explanation.get("elevatedFactors", []),
             xai=XAiOutput(
                 method="SHAP",
                 features=explanation.get("features", [])
@@ -141,6 +164,7 @@ async def predict_migraine_risk(request: PredictRequest):
             focusAreas=focus_areas,
         )
     except Exception as e:
+        print(f"[ML Service Error] Prediction execution error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Prediction error: {str(e)}"

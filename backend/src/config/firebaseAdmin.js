@@ -3,9 +3,15 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load dotenv from cwd and backend directory
 dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 function initFirebaseAdmin() {
   if (getApps().length > 0) {
@@ -24,17 +30,20 @@ function initFirebaseAdmin() {
   let credential;
 
   // 1. Check if Service Account JSON key file path is provided and exists
-  if (keyPath) {
-    const resolvedPath = path.isAbsolute(keyPath)
-      ? keyPath
-      : path.resolve(process.cwd(), keyPath);
+  const candidatePaths = [
+    keyPath && (path.isAbsolute(keyPath) ? keyPath : path.resolve(process.cwd(), keyPath)),
+    keyPath && path.resolve(__dirname, '../../', keyPath),
+    path.resolve(__dirname, 'migraineguardian-firebase-adminsdk-fbsvc-b7c03e4c99.json'),
+  ].filter(Boolean);
 
+  for (const resolvedPath of candidatePaths) {
     if (fs.existsSync(resolvedPath)) {
       try {
         const fileContent = fs.readFileSync(resolvedPath, 'utf8');
         const serviceAccount = JSON.parse(fileContent);
         credential = cert(serviceAccount);
         console.log(`[Firebase Admin] Successfully loaded credentials from file: ${resolvedPath}`);
+        break;
       } catch (err) {
         console.warn(`[Firebase Admin] Failed to parse service account JSON file at ${resolvedPath}:`, err.message);
       }

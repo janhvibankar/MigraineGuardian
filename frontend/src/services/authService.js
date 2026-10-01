@@ -74,11 +74,35 @@ function formatFirebaseError(err) {
   }
 }
 
+export function clearUserScopedData() {
+  storageService.removeItem('migraineguardian_token');
+  storageService.removeItem('migraineguardian_user');
+  storageService.removeItem('migraineguardian_authenticated');
+  storageService.removeItem('daily_checkin_today');
+  storageService.removeItem('daily_checkin_draft');
+  storageService.removeItem('migraineguardian_daily_logs');
+  storageService.removeItem('migraineguardian_today_forecast');
+  storageService.removeItem('pss_score_latest');
+  storageService.removeItem('migraineguardian_read_notifications');
+
+  localStorage.removeItem('migraineguardian_token');
+  localStorage.removeItem('migraineguardian_user');
+  localStorage.removeItem('migraineguardian_authenticated');
+  localStorage.removeItem('daily_checkin_draft');
+  localStorage.removeItem('daily_checkin_today');
+  localStorage.removeItem('migraineguardian_today_forecast');
+  localStorage.removeItem('pss_score_latest');
+}
+
 export const authService = {
   /**
    * Retrieves the currently cached authenticated user profile, or null if unauthenticated.
    */
   getCurrentUser: () => {
+    // If Firebase Auth is loaded and there is no authenticated user, return null
+    if (auth && !auth.currentUser) {
+      return null;
+    }
     const cachedUser = storageService.getItem('migraineguardian_user', null);
     if (cachedUser) {
       const name = cachedUser.name || formatNameFromEmail(cachedUser.email) || 'User';
@@ -92,13 +116,10 @@ export const authService = {
   },
 
   /**
-   * Checks whether there is an actively authenticated user session.
+   * Checks whether there is an actively authenticated user session in Firebase.
    */
   isAuthenticated: () => {
-    if (auth && auth.currentUser) return true;
-    const token = storageService.getItem('migraineguardian_token', null) || localStorage.getItem('migraineguardian_token');
-    const isAuth = storageService.getItem('migraineguardian_authenticated', false);
-    return Boolean(token && isAuth);
+    return Boolean(auth && auth.currentUser);
   },
 
   /**
@@ -127,6 +148,7 @@ export const authService = {
    */
   clearGuestOnboarding: () => {
     storageService.removeItem('migraineguardian_guest_onboarding');
+    localStorage.removeItem('migraineguardian_guest_onboarding');
   },
 
   /**
@@ -156,7 +178,11 @@ export const authService = {
         await pssService.submitAssessment(guestData.pssAnswers);
       }
 
-      storageService.removeItem('migraineguardian_guest_onboarding');
+      // Re-fetch profile to sync state
+      await authService.fetchUserProfile();
+
+      // Clean up guest draft once transferred
+      authService.clearGuestOnboarding();
     } catch (err) {
       console.warn('[authService] Error transferring guest onboarding data to user profile:', err.message);
     }
@@ -166,6 +192,9 @@ export const authService = {
    * Fetches the user profile from Express API gateway for the current authenticated user.
    */
   fetchUserProfile: async () => {
+    if (!auth || !auth.currentUser) {
+      return null;
+    }
     const res = await apiClient.get('/user/profile');
     if (res.ok && res.data) {
       const user = {
@@ -183,6 +212,9 @@ export const authService = {
   login: async (emailInput, password) => {
     const email = emailInput?.trim() || '';
     try {
+      // Clear previous account's cached data before signing in
+      clearUserScopedData();
+
       // 1. Authenticate using Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const token = await userCredential.user.getIdToken();
@@ -210,6 +242,9 @@ export const authService = {
     const displayName = name?.trim() || formatNameFromEmail(cleanEmail) || 'User';
 
     try {
+      // Clear previous account's cached data before signing up
+      clearUserScopedData();
+
       // 1. Create account via Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
       await updateProfile(userCredential.user, { displayName });
@@ -240,6 +275,9 @@ export const authService = {
 
   loginWithGoogle: async () => {
     try {
+      // Clear previous account's cached data before Google sign-in
+      clearUserScopedData();
+
       // 1. Authenticate via Google OAuth Popup
       const result = await signInWithPopup(auth, googleProvider);
       const firebaseUser = result.user;
@@ -273,16 +311,9 @@ export const authService = {
     } catch (e) {
       console.warn('[authService] Sign out error:', e.message);
     }
-    storageService.clearAll();
-    localStorage.removeItem('migraineguardian_token');
-    localStorage.removeItem('migraineguardian_user');
-    localStorage.removeItem('migraineguardian_authenticated');
-    localStorage.removeItem('migraineguardian_guest_onboarding');
-    localStorage.removeItem('onboarding_draft');
-    localStorage.removeItem('daily_checkin_draft');
-    localStorage.removeItem('daily_checkin_today');
-    localStorage.removeItem('migraineguardian_today_forecast');
-    localStorage.removeItem('pss_score_latest');
+    // Clean all authenticated user storage
+    clearUserScopedData();
+
     notifyUserChanged(null);
     return { success: true };
   },
@@ -311,7 +342,7 @@ export const authService = {
 
   changePassword: async (currentPassword, newPassword) => {
     try {
-      const user = auth.currentUser;
+      const user = auth?.currentUser;
       if (!user) {
         return {
           success: false,
@@ -364,5 +395,32 @@ export const authService = {
     }
   },
 };
+
+// Global Firebase auth state listener to keep storage in sync
+let lastTrackedUid = null;
+if (auth && typeof auth.onAuthStateChanged === 'function') {
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      if (lastTrackedUid && lastTrackedUid !== user.uid) {
+        // UID changed without explicit logout; invalidate previous user cache
+        clearUserScopedData();
+      }
+      lastTrackedUid = user.uid;
+
+      try {
+        const token = await user.getIdToken();
+        storageService.setItem('migraineguardian_token', token);
+        storageService.setItem('migraineguardian_authenticated', true);
+      } catch (e) {
+        console.warn('[authService] Token refresh error:', e);
+      }
+    } else {
+      lastTrackedUid = null;
+      // If Firebase says no user is authenticated, wipe all authenticated session data
+      clearUserScopedData();
+      notifyUserChanged(null);
+    }
+  });
+}
 
 export default authService;
