@@ -38,17 +38,17 @@ export function LandingPage() {
   const chatScenarios = {
     weather: {
       user: t('landing.topicWeather'),
-      bot: t('landing.pillarWeatherDesc'),
+      bot: t('landing.botWeatherResponse'),
       time: '9:02 AM',
     },
     sleep: {
       user: t('landing.topicSleep'),
-      bot: t('landing.pillarSleepDesc'),
+      bot: t('landing.botSleepResponse'),
       time: '11:15 AM',
     },
     neck: {
       user: t('landing.topicNeck'),
-      bot: t('landing.step1Desc'),
+      bot: t('landing.botNeckResponse'),
       time: '3:45 PM',
     },
   };
@@ -155,6 +155,17 @@ export function LandingPage() {
               <span className="text-meta-md text-[#555B55] font-semibold block">{t('landing.stat4Title')}</span>
               <span className="text-[11px] text-muted-text block">{t('landing.stat4Desc')}</span>
             </div>
+          </div>
+        </div>
+
+        {/* Visible Medical Disclaimer Card */}
+        <div className="pt-2 max-w-4xl mx-auto">
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF9F5] border-2 border-brand-sage/50 flex items-start sm:items-center gap-3.5 text-left text-meta-sm text-[#4E544E] shadow-soft">
+            <ShieldCheck className="w-5 h-5 text-brand-teal flex-shrink-0 mt-0.5 sm:mt-0" />
+            <p className="leading-relaxed">
+              <strong className="font-bold text-brand-dark">{t('landing.medicalDisclaimerPrefix', 'Medical Disclaimer:')}</strong>{' '}
+              {t('landing.medicalDisclaimer')}
+            </p>
           </div>
         </div>
       </section>
