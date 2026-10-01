@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { pssService } from '../services/pssService';
 import { authService } from '../services/authService';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   calculatePssScore,
   PSS_RESPONSE_OPTIONS,
@@ -29,6 +30,7 @@ import {
 import { cn } from '../utils/cn';
 
 export function PssAssessmentPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const fromCheckin = Boolean(location.state?.fromCheckin);
@@ -37,16 +39,24 @@ export function PssAssessmentPage() {
 
   // Clinically validated PSS-10 standardized items
   const pssQuestions = [
-    { id: 1, text: 'In the last month, how often have you been upset because of something that happened unexpectedly?' },
-    { id: 2, text: 'In the last month, how often have you felt that you were unable to control the important things in your life?' },
-    { id: 3, text: 'In the last month, how often have you felt nervous and stressed?' },
-    { id: 4, text: 'In the last month, how often have you felt confident about your ability to handle your personal problems?', isReverse: true },
-    { id: 5, text: 'In the last month, how often have you felt that things were going your way?', isReverse: true },
-    { id: 6, text: 'In the last month, how often have you found that you could not cope with all the things that you had to do?' },
-    { id: 7, text: 'In the last month, how often have you been able to control irritations in your life?', isReverse: true },
-    { id: 8, text: 'In the last month, how often have you felt that you were on top of things?', isReverse: true },
-    { id: 9, text: 'In the last month, how often have you been angered because of things that were outside of your control?' },
-    { id: 10, text: 'In the last month, how often have you felt difficulties were piling up so high that you could not overcome them?' },
+    { id: 1, text: t('pss.q1') },
+    { id: 2, text: t('pss.q2') },
+    { id: 3, text: t('pss.q3') },
+    { id: 4, text: t('pss.q4'), isReverse: true },
+    { id: 5, text: t('pss.q5'), isReverse: true },
+    { id: 6, text: t('pss.q6') },
+    { id: 7, text: t('pss.q7'), isReverse: true },
+    { id: 8, text: t('pss.q8'), isReverse: true },
+    { id: 9, text: t('pss.q9') },
+    { id: 10, text: t('pss.q10') },
+  ];
+
+  const localizedResponseOptions = [
+    { value: 0, label: t('pss.scale0') },
+    { value: 1, label: t('pss.scale1') },
+    { value: 2, label: t('pss.scale2') },
+    { value: 3, label: t('pss.scale3') },
+    { value: 4, label: t('pss.scale4') },
   ];
 
   // Store responses in frontend state
@@ -132,9 +142,9 @@ export function PssAssessmentPage() {
   const progressPercent = ((currentQuestionIndex + 1) / pssQuestions.length) * 100;
 
   const getScoreInterpretation = (score) => {
-    if (score <= 13) return { label: 'Low Perceived Stress', color: 'teal', desc: 'Your autonomic stress load is in a calm, balanced range.' };
-    if (score <= 26) return { label: 'Moderate Stress Load', color: 'sage', desc: 'Mild-to-moderate autonomic strain detected. Consider scheduling regular sensory pauses.' };
-    return { label: 'Elevated Perceived Stress', color: 'alert', desc: 'Significant physiological strain. Stress management protocols are highly recommended.' };
+    if (score <= 13) return { label: t('pss.lowStress'), color: 'teal', desc: t('pss.lowStressDesc') };
+    if (score <= 26) return { label: t('pss.moderateStress'), color: 'sage', desc: t('pss.moderateStressDesc') };
+    return { label: t('pss.highStress'), color: 'alert', desc: t('pss.highStressDesc') };
   };
 
   const interpretation = getScoreInterpretation(calculatedScore);
@@ -144,7 +154,7 @@ export function PssAssessmentPage() {
       return (
         <Link to={ROUTES.DAILY_CHECKIN}>
           <Button variant="secondary" size="md" icon={ArrowLeft}>
-            Return to Daily Check-in
+            {t('pss.returnToDailyCheckin')}
           </Button>
         </Link>
       );
@@ -153,7 +163,7 @@ export function PssAssessmentPage() {
       return (
         <Link to={ROUTES.ONBOARDING}>
           <Button variant="secondary" size="md" icon={ArrowLeft}>
-            Back to Onboarding
+            {t('pss.backToOnboarding')}
           </Button>
         </Link>
       );
@@ -162,7 +172,7 @@ export function PssAssessmentPage() {
       return (
         <Link to={ROUTES.DASHBOARD}>
           <Button variant="secondary" size="md">
-            Return to Dashboard
+            {t('pss.returnToDashboard')}
           </Button>
         </Link>
       );
@@ -170,7 +180,7 @@ export function PssAssessmentPage() {
     return (
       <Link to={ROUTES.HOME}>
         <Button variant="secondary" size="md">
-          Back to Overview
+          {t('pss.backToOverview')}
         </Button>
       </Link>
     );
@@ -180,9 +190,9 @@ export function PssAssessmentPage() {
     <div className="max-w-3xl mx-auto space-y-6 py-4 sm:py-8 text-left">
       {/* Top Header */}
       <PageHeader
-        title="Perceived Stress Scale (PSS-10)"
-        subtitle="A validated questionnaire measuring perceived stress and autonomic strain over the previous month."
-        badge={isAuthenticated ? "Validated Clinical Instrument" : "Public Stress Assessment"}
+        title={t('pss.title')}
+        subtitle={t('pss.subtitle')}
+        badge={isAuthenticated ? t('pss.badgeValidated') : t('pss.badgePublic')}
         actions={renderTopActions()}
       />
 
@@ -196,16 +206,16 @@ export function PssAssessmentPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-bold uppercase tracking-wider text-brand-dark bg-brand-sage/25 border border-brand-sage/50">
-                  Question {currentQuestionIndex + 1} of 10
+                  {t('pss.questionOf', { current: currentQuestionIndex + 1, total: 10 })}
                 </span>
                 {currentQ.isReverse && (
                   <Badge variant="teal" size="sm">
-                    Reverse Scored
+                    {t('pss.reverseScored')}
                   </Badge>
                 )}
               </div>
               <span className="text-meta-md font-bold text-brand-teal">
-                {Math.round(progressPercent)}% Complete
+                {t('pss.percentComplete', { percent: Math.round(progressPercent) })}
               </span>
             </div>
 
@@ -221,7 +231,7 @@ export function PssAssessmentPage() {
           {/* Question Text */}
           <div className="space-y-2 text-left">
             <span className="text-meta-sm font-bold uppercase tracking-wider text-brand-teal block">
-              Question {currentQuestionIndex + 1}
+              {t('pss.questionOf', { current: currentQuestionIndex + 1, total: 10 })}
             </span>
             <h2 className="text-section-lg sm:text-app-lg font-bold text-brand-dark leading-snug">
               {currentQ.text}
@@ -230,7 +240,7 @@ export function PssAssessmentPage() {
 
           {/* Options (Radio List) */}
           <div className="space-y-3" role="radiogroup" aria-label={`Question ${currentQNum} options`}>
-            {PSS_RESPONSE_OPTIONS.map((option) => {
+            {localizedResponseOptions.map((option) => {
               const isSelected = currentSelection === option.value;
               return (
                 <button
@@ -281,7 +291,7 @@ export function PssAssessmentPage() {
               disabled={currentQuestionIndex === 0}
               icon={ArrowLeft}
             >
-              Back
+              {t('common.back')}
             </Button>
 
             {/* Quick jump dot navigator */}
@@ -313,7 +323,7 @@ export function PssAssessmentPage() {
                 iconRight={ArrowRight}
                 className="shadow-md font-bold"
               >
-                Next
+                {t('common.continue')}
               </Button>
             ) : (
               <Button
@@ -324,7 +334,7 @@ export function PssAssessmentPage() {
                 iconRight={Check}
                 className="shadow-md font-bold"
               >
-                {isSubmitting ? 'Recording...' : 'Finish Assessment'}
+                {isSubmitting ? t('common.submitting') : t('pss.submitAssessment')}
               </Button>
             )}
           </div>
@@ -341,10 +351,10 @@ export function PssAssessmentPage() {
 
             <div className="space-y-1.5">
               <span className="text-meta-sm font-bold uppercase tracking-wider text-brand-teal">
-                Evaluation Completed
+                {t('pss.evaluationCompleted')}
               </span>
               <h2 className="text-app-xl font-bold text-brand-dark">
-                Your Perceived Stress Score
+                {t('pss.yourStressScore')}
               </h2>
             </div>
 
@@ -373,9 +383,9 @@ export function PssAssessmentPage() {
                   />
                 </div>
                 <div className="flex justify-between text-[11px] text-[#666C66] font-semibold px-1">
-                  <span>0 (Low Stress)</span>
-                  <span>20 (Moderate)</span>
-                  <span>40 (High Stress)</span>
+                  <span>{t('pss.scaleLowLabel')}</span>
+                  <span>{t('pss.scaleModLabel')}</span>
+                  <span>{t('pss.scaleHighLabel')}</span>
                 </div>
               </div>
             </div>
@@ -386,7 +396,7 @@ export function PssAssessmentPage() {
                 {interpretation.desc}
               </p>
               <p className="text-meta-md text-[#777E77]">
-                Higher scores indicate greater perceived autonomic load over the past 30 days. This score serves as an empirical lifestyle indicator, not a psychiatric diagnosis.
+                {t('pss.scoreDescDisclaimer')}
               </p>
             </div>
           </div>
@@ -398,28 +408,28 @@ export function PssAssessmentPage() {
                 {fromCheckin && (
                   <Link to={ROUTES.DAILY_CHECKIN} className="flex-1">
                     <Button variant="primary" size="lg" className="w-full shadow-md font-bold" icon={ArrowLeft}>
-                      Return to Daily Check-in
+                      {t('pss.returnToDailyCheckin')}
                     </Button>
                   </Link>
                 )}
 
                 <Link to={ROUTES.DASHBOARD} className={fromCheckin ? "flex-1 sm:flex-initial" : "flex-1"}>
                   <Button variant={fromCheckin ? "secondary" : "primary"} size="lg" className="w-full shadow-md font-bold" iconRight={ArrowRight}>
-                    Continue to Dashboard
+                    {t('pss.continueToDashboard')}
                   </Button>
                 </Link>
 
                 {!fromCheckin && (
                   <Link to={ROUTES.DAILY_CHECKIN} className="flex-1 sm:flex-initial">
                     <Button variant="secondary" size="lg" className="w-full" icon={ArrowLeft}>
-                      Go to Daily Check-in
+                      {t('pss.goToDailyCheckin')}
                     </Button>
                   </Link>
                 )}
 
                 <Link to={ROUTES.RISK_ANALYSIS} className="flex-1 sm:flex-initial">
                   <Button variant="secondary" size="lg" className="w-full">
-                    View Risk Forecast
+                    {t('pss.viewRiskForecast')}
                   </Button>
                 </Link>
               </>
@@ -428,20 +438,20 @@ export function PssAssessmentPage() {
               <>
                 <Link to={ROUTES.SIGNUP} className="flex-1">
                   <Button variant="primary" size="lg" className="w-full shadow-md font-bold" iconRight={ArrowRight}>
-                    Create Account & Save Score
+                    {t('pss.createAccountSaveScore')}
                   </Button>
                 </Link>
 
                 <Link to={ROUTES.LOGIN} className="flex-1 sm:flex-initial">
                   <Button variant="secondary" size="lg" className="w-full">
-                    Sign In to Save
+                    {t('pss.signInSaveScore')}
                   </Button>
                 </Link>
 
                 {fromOnboarding && (
                   <Link to={ROUTES.ONBOARDING} className="flex-1 sm:flex-initial">
                     <Button variant="outline" size="lg" className="w-full">
-                      Back to Onboarding
+                      {t('pss.backToOnboarding')}
                     </Button>
                   </Link>
                 )}
@@ -455,7 +465,7 @@ export function PssAssessmentPage() {
               icon={RotateCcw}
               className="flex-1 sm:flex-initial"
             >
-              Retake Assessment
+              {t('pss.retakeBtn')}
             </Button>
           </div>
         </Card>
@@ -465,7 +475,7 @@ export function PssAssessmentPage() {
       <div className="p-4 rounded-[18px] bg-gradient-to-r from-[#FAF9F5] to-[#F1EFEA] border-2 border-brand-sage/45 flex items-start gap-3.5 text-meta-sm text-[#555B55] shadow-sm">
         <ShieldCheck className="w-5 h-5 text-brand-teal flex-shrink-0 mt-0.5" />
         <p className="leading-relaxed">
-          The Perceived Stress Scale (PSS-10) is utilized for lifestyle pattern recognition and baseline sensitivity modeling. Your responses remain confidential.
+          {t('pss.confidentialityReassurance')}
         </p>
       </div>
     </div>

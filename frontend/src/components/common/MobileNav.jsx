@@ -1,33 +1,42 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { MOBILE_PRIMARY_NAV } from '../../data/navigation';
 import { ROUTES } from '../../utils/constants';
-import { Badge } from '../ui/Badge';
+import { useTranslation } from '../../hooks/useTranslation';
 import {
   MoreHorizontal,
   BarChart3,
   FileText,
   Activity,
-  ClipboardList,
+  LayoutDashboard,
+  CalendarCheck,
+  Sparkles,
+  Bot,
   User,
   Settings,
   LogOut,
   X,
-  Shield,
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { cn } from '../../utils/cn';
 
 export function MobileNav() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
+  const primaryItems = [
+    { label: t('nav.dashboard'), path: ROUTES.DASHBOARD, icon: LayoutDashboard },
+    { label: t('nav.dailyCheckin'), path: ROUTES.DAILY_CHECKIN, icon: CalendarCheck },
+    { label: t('nav.insights'), path: ROUTES.INSIGHTS, icon: Sparkles },
+    { label: t('nav.chat'), path: ROUTES.CHAT, icon: Bot },
+  ];
+
   const moreItems = [
-    { label: 'Analytics & Trends', path: ROUTES.ANALYTICS, icon: BarChart3 },
-    { label: 'Clinical Reports', path: ROUTES.REPORTS, icon: FileText },
-    { label: 'Risk Forecast', path: ROUTES.RISK_ANALYSIS, icon: Activity },
-    { label: 'Health Profile', path: ROUTES.PROFILE, icon: User },
-    { label: 'Preferences & Privacy', path: ROUTES.SETTINGS, icon: Settings },
+    { label: t('nav.analytics'), path: ROUTES.ANALYTICS, icon: BarChart3 },
+    { label: t('nav.reports'), path: ROUTES.REPORTS, icon: FileText },
+    { label: t('nav.riskForecast'), path: ROUTES.RISK_ANALYSIS, icon: Activity },
+    { label: t('nav.profile'), path: ROUTES.PROFILE, icon: User },
+    { label: t('nav.settings'), path: ROUTES.SETTINGS, icon: Settings },
   ];
 
   const handleLogout = async () => {
@@ -44,7 +53,7 @@ export function MobileNav() {
         aria-label="Mobile primary navigation"
       >
         {/* 4 Prioritized Items */}
-        {MOBILE_PRIMARY_NAV.map((item) => {
+        {primaryItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
@@ -67,7 +76,9 @@ export function MobileNav() {
                       isActive ? 'text-brand-dark scale-105' : 'text-muted-text'
                     )}
                   />
-                  <span className="text-[11px] mt-1 tracking-tight">{item.label}</span>
+                  <span className="text-[11px] mt-1 tracking-tight truncate max-w-[64px]">
+                    {item.label}
+                  </span>
                 </>
               )}
             </NavLink>
@@ -79,16 +90,16 @@ export function MobileNav() {
           type="button"
           onClick={() => setMoreMenuOpen(true)}
           className={cn(
-            'flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-150 min-w-[54px] min-h-[48px]',
+            'flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-150 min-w-[54px] min-h-[48px] cursor-pointer',
             moreMenuOpen
               ? 'text-brand-dark font-semibold bg-card-warm border border-card-warm-border'
               : 'text-muted-text hover:text-brand-dark'
           )}
           aria-expanded={moreMenuOpen}
-          aria-label="More navigation options"
+          aria-label={t('nav.more')}
         >
           <MoreHorizontal className="w-5 h-5 text-muted-text" />
-          <span className="text-[11px] mt-1 tracking-tight">More</span>
+          <span className="text-[11px] mt-1 tracking-tight">{t('nav.more')}</span>
         </button>
       </nav>
 
@@ -101,14 +112,14 @@ export function MobileNav() {
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-brand-teal" />
                 <span className="text-section-md font-semibold text-brand-dark">
-                  Navigation Menu
+                  {t('nav.navigationMenu')}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setMoreMenuOpen(false)}
-                className="p-1.5 rounded-full hover:bg-card-warm text-muted-text hover:text-brand-dark transition-colors"
-                aria-label="Close menu"
+                className="p-1.5 rounded-full hover:bg-card-warm text-muted-text hover:text-brand-dark transition-colors cursor-pointer"
+                aria-label={t('common.close')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -144,10 +155,10 @@ export function MobileNav() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 p-3.5 rounded-card-sm text-body-md font-medium text-alert-muted bg-alert-muted/10 hover:bg-alert-muted/20 border border-alert-muted/30 transition-colors mt-2"
+                className="w-full flex items-center gap-3 p-3.5 rounded-card-sm text-body-md font-medium text-alert-muted bg-alert-muted/10 hover:bg-alert-muted/20 border border-alert-muted/30 transition-colors mt-2 cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Sign Out</span>
+                <span>{t('nav.signOut')}</span>
               </button>
             </div>
           </div>
@@ -156,3 +167,5 @@ export function MobileNav() {
     </>
   );
 }
+
+export default MobileNav;

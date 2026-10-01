@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { chatService } from '../services/chatService';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Send,
   Sparkles,
@@ -13,23 +13,30 @@ import {
   BookOpen,
   Info,
   ChevronRight,
-  MessageSquare,
   Bot,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 export function ChatPage() {
   const messagesEndRef = useRef(null);
+  const { t, language } = useTranslation();
 
   // Service initial context
   const chatContext = chatService.getInitialChatContext();
   const conversationHistory = chatService.getConversationHistory();
-  const suggestedQuestions = chatService.getSuggestedQuestions();
 
   // Message Thread State
   const [messages, setMessages] = useState(chatContext.initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  // Suggested Questions localized
+  const suggestedQuestions = [
+    t('chat.quickQuestions.0') || 'Why is my risk elevated today?',
+    t('chat.quickQuestions.1') || 'What patterns are in my recent logs?',
+    t('chat.quickQuestions.2') || 'Soothing sleep routine tips',
+    t('chat.quickQuestions.3') || 'How does atmospheric pressure affect migraines?',
+  ];
 
   // Auto-scroll to bottom of conversation
   useEffect(() => {
@@ -51,9 +58,15 @@ export function ChatPage() {
     setInputValue('');
     setIsTyping(true);
 
-    const assistantReply = await chatService.sendMessage(query);
-    setMessages((prev) => [...prev, assistantReply]);
-    setIsTyping(false);
+    try {
+      // Pass selected language forward to chatService (future RAG backend integration readiness)
+      const assistantReply = await chatService.sendMessage(query, { language });
+      setMessages((prev) => [...prev, assistantReply]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleFormSubmit = (e) => {
@@ -74,10 +87,10 @@ export function ChatPage() {
             </div>
             <div>
               <h1 className="text-section-lg sm:text-app-lg font-semibold text-brand-dark leading-tight">
-                {chatContext.header.title}
+                {t('chat.title')}
               </h1>
               <p className="text-meta-md text-muted-text">
-                {chatContext.header.subtext}
+                {t('chat.subtitle')}
               </p>
             </div>
           </div>
@@ -86,7 +99,7 @@ export function ChatPage() {
         {/* Small Trust Indicator */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-card-warm border border-card-warm-border text-meta-sm text-brand-dark font-medium shadow-soft">
           <ShieldCheck className="w-4 h-4 text-brand-teal flex-shrink-0" />
-          <span>{chatContext.header.trustIndicator}</span>
+          <span>{t('chat.trustIndicator')}</span>
         </div>
       </div>
 
@@ -98,7 +111,7 @@ export function ChatPage() {
         <aside className="hidden lg:flex lg:col-span-4 flex-col justify-between p-4 rounded-card bg-card-warm/70 border border-card-warm-border space-y-4 shadow-soft">
           <div className="space-y-3">
             <div className="flex items-center justify-between px-2 text-meta-sm font-semibold uppercase tracking-wider text-muted-text">
-              <span>Conversations</span>
+              <span>{t('chat.quickQuestionsTitle')}</span>
               <Badge variant="neutral" size="sm">
                 {conversationHistory.length} Topics
               </Badge>
@@ -110,7 +123,7 @@ export function ChatPage() {
                   key={item.id}
                   type="button"
                   className={cn(
-                    'w-full text-left p-3 rounded-card-sm border transition-all flex flex-col space-y-1',
+                    'w-full text-left p-3 rounded-card-sm border transition-all flex flex-col space-y-1 cursor-pointer',
                     item.active
                       ? 'bg-white border-brand-sage/60 font-semibold text-brand-dark shadow-soft'
                       : 'bg-white/40 border-muted-border/60 hover:bg-white text-muted-text hover:text-brand-dark'
@@ -132,10 +145,10 @@ export function ChatPage() {
           <div className="p-3.5 rounded-card-sm bg-white border border-muted-border space-y-2 text-meta-sm">
             <div className="flex items-center gap-2 font-semibold text-brand-dark">
               <Info className="w-4 h-4 text-brand-teal" />
-              <span>Current Session Context</span>
+              <span>{t('chat.evidenceGuidance')}</span>
             </div>
             <p className="text-muted-text text-[11px] leading-relaxed">
-              Companion has access to your 7-day sleep average (6.4h), daily stress log (6.2/10), and 2 logged episodes.
+              {t('chat.contextSummaryDesc')}
             </p>
           </div>
         </aside>
@@ -145,7 +158,7 @@ export function ChatPage() {
           {/* Top Quick Suggestions Carousel */}
           <div className="space-y-2 pb-4 border-b border-muted-border/60">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-text-light block">
-              Suggested Questions:
+              {t('chat.quickQuestionsTitle')}:
             </span>
             <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
               {suggestedQuestions.map((q, idx) => (
@@ -153,7 +166,7 @@ export function ChatPage() {
                   key={idx}
                   type="button"
                   onClick={() => handleSendMessage(q)}
-                  className="text-meta-sm font-medium px-3 py-1.5 rounded-full bg-card-warm hover:bg-card-warm-hover border border-muted-border/80 text-brand-dark whitespace-nowrap transition-colors flex-shrink-0"
+                  className="text-meta-sm font-medium px-3 py-1.5 rounded-full bg-card-warm hover:bg-card-warm-hover border border-muted-border/80 text-brand-dark whitespace-nowrap transition-colors flex-shrink-0 cursor-pointer"
                 >
                   "{q}"
                 </button>
@@ -162,7 +175,7 @@ export function ChatPage() {
           </div>
 
           {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto py-4 space-y-5 max-h-[480px] pr-1">
+          <div className="flex-1 overflow-y-auto py-4 space-y-5 max-h-[480px] pr-1 text-left">
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -173,12 +186,12 @@ export function ChatPage() {
               >
                 {/* Message Bubble / Card */}
                 {msg.sender === 'user' ? (
-                  <div className="bg-brand-dark text-[#F7F6F2] px-4 py-3 rounded-2xl rounded-br-none max-w-[85%] sm:max-w-[75%] shadow-soft text-body-md leading-relaxed">
+                  <div className="bg-brand-dark text-[#F7F6F2] px-4 py-3 rounded-2xl rounded-br-none max-w-[85%] sm:max-w-[75%] shadow-soft text-body-md leading-relaxed text-left">
                     {msg.text}
                   </div>
                 ) : (
                   /* Assistant Calm Card Message */
-                  <div className="bg-card-warm/50 border border-card-warm-border rounded-2xl rounded-bl-none p-5 sm:p-6 max-w-[95%] sm:max-w-[88%] space-y-4 shadow-soft">
+                  <div className="bg-card-warm/50 border border-card-warm-border rounded-2xl rounded-bl-none p-5 sm:p-6 max-w-[95%] sm:max-w-[88%] space-y-4 shadow-soft text-left">
                     {/* Companion Avatar & Header */}
                     <div className="flex items-center justify-between pb-2 border-b border-muted-border/50">
                       <div className="flex items-center gap-2">
@@ -186,14 +199,14 @@ export function ChatPage() {
                           <Bot className="w-3.5 h-3.5 text-brand-teal" />
                         </div>
                         <span className="text-meta-sm font-semibold text-brand-dark">
-                          MigraineGuardian Companion
+                          {t('chat.title')}
                         </span>
                       </div>
                       <span className="text-[11px] text-muted-text">{msg.time}</span>
                     </div>
 
                     {/* Main Narrative */}
-                    <p className="text-body-md text-brand-dark leading-relaxed">
+                    <p className="text-body-md text-brand-dark leading-relaxed whitespace-pre-wrap">
                       {msg.text}
                     </p>
 
@@ -201,7 +214,7 @@ export function ChatPage() {
                     {msg.dataPoints && (
                       <div className="space-y-2 pt-1">
                         <span className="text-meta-sm font-semibold text-brand-dark block">
-                          Based on your recent logs:
+                          {t('chat.basedOnRecentLogs', 'Based on recent logs:')}
                         </span>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                           {msg.dataPoints.map((dp, i) => (
@@ -257,11 +270,11 @@ export function ChatPage() {
 
             {/* Typing Indicator */}
             {isTyping && (
-              <div className="flex items-center gap-2 p-3 bg-card-warm/50 rounded-xl border border-muted-border/60 max-w-[140px] animate-in fade-in">
+              <div className="flex items-center gap-2 p-3 bg-card-warm/50 rounded-xl border border-muted-border/60 max-w-[160px] animate-in fade-in">
                 <span className="w-2 h-2 rounded-full bg-brand-teal animate-pulse" />
                 <span className="w-2 h-2 rounded-full bg-brand-sage animate-pulse delay-75" />
                 <span className="w-2 h-2 rounded-full bg-brand-dark animate-pulse delay-150" />
-                <span className="text-meta-sm text-muted-text ml-1">Reflecting...</span>
+                <span className="text-meta-sm text-muted-text ml-1">{t('chat.reflecting')}</span>
               </div>
             )}
 
@@ -277,7 +290,7 @@ export function ChatPage() {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Ask MigraineGuardian about sleep buffers, stress patterns, or soothing protocols..."
+              placeholder={t('chat.placeholder')}
               className="flex-1 min-h-[48px] px-4 py-3 rounded-input bg-card-warm/60 border border-muted-border text-body-md text-brand-dark placeholder:text-muted-text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
             />
             <Button
@@ -285,10 +298,10 @@ export function ChatPage() {
               variant="primary"
               size="lg"
               icon={Send}
-              className="flex-shrink-0 shadow-soft"
+              className="flex-shrink-0 shadow-soft cursor-pointer"
               disabled={!inputValue.trim() || isTyping}
             >
-              Send
+              {t('chat.sendBtn')}
             </Button>
           </form>
         </main>
@@ -296,3 +309,5 @@ export function ChatPage() {
     </div>
   );
 }
+
+export default ChatPage;

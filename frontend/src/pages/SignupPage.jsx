@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   User,
   Mail,
@@ -19,6 +20,7 @@ import {
 import { authService } from '../services/authService';
 
 export function SignupPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -35,29 +37,31 @@ export function SignupPage() {
     const newErrors = {};
 
     if (!fullName.trim()) {
-      newErrors.fullName = 'Please enter your full name.';
+      newErrors.fullName = t('auth.fullNameRequired', 'Please enter your full name.');
+    } else if (fullName.trim().length < 2) {
+      newErrors.fullName = t('auth.fullNameTooShort', 'Name must be at least 2 characters.');
     }
 
     if (!email.trim()) {
-      newErrors.email = 'Please enter your email address.';
+      newErrors.email = t('auth.emailRequired', 'Please enter your email address.');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = 'Please enter a valid email address format.';
+      newErrors.email = t('auth.emailInvalid', 'Please enter a valid email address.');
     }
 
     if (!password) {
-      newErrors.password = 'Please create a password.';
+      newErrors.password = t('auth.passwordRequired', 'Please enter your password.');
     } else if (password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters long.';
+      newErrors.password = t('auth.passwordMin8', 'Password must be at least 8 characters.');
     }
 
     if (!confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password.';
+      newErrors.confirmPassword = t('auth.passwordRequired', 'Please enter your password.');
     } else if (password !== confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match.';
+      newErrors.confirmPassword = t('auth.passwordsDoNotMatch', 'Passwords do not match.');
     }
 
     if (!consentAgreed) {
-      newErrors.consent = 'You must agree to the Terms and Privacy Policy to continue.';
+      newErrors.consent = t('auth.consentRequired', 'Please agree to the Terms of Service & Privacy Policy.');
     }
 
     setErrors(newErrors);
@@ -88,7 +92,7 @@ export function SignupPage() {
           state: { fromOnboarding: Boolean(location.state?.fromOnboarding) },
         });
       } else {
-        const errMsg = res?.error || 'Registration failed. Please try again.';
+        const errMsg = res?.error || t('auth.invalidCredentials', 'Registration failed. Please try again.');
         setServerError(errMsg);
         if (errMsg.toLowerCase().includes('email')) {
           setErrors((prev) => ({ ...prev, email: errMsg }));
@@ -96,7 +100,7 @@ export function SignupPage() {
       }
     } catch (err) {
       console.error(err);
-      setServerError('An error occurred during account creation.');
+      setServerError(t('auth.unexpectedError', 'An error occurred during account creation.'));
     } finally {
       setIsLoading(false);
     }
@@ -119,7 +123,7 @@ export function SignupPage() {
       }
     } catch (err) {
       console.error(err);
-      setServerError('Google sign-in failed. Please try again.');
+      setServerError(t('auth.googleSignInFailed', 'Google sign-in failed. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -131,15 +135,15 @@ export function SignupPage() {
       <div className="lg:col-span-5 space-y-7 text-left">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-brand-sage/20 to-brand-teal/15 border border-brand-sage/50 text-meta-sm text-brand-dark shadow-sm">
           <span className="w-2 h-2 rounded-full bg-brand-teal animate-pulse" />
-          <span className="font-semibold uppercase tracking-wider text-[11px]">Begin Your Journey</span>
+          <span className="font-semibold uppercase tracking-wider text-[11px]">{t('auth.beginJourneyBadge', 'Begin Your Journey')}</span>
         </div>
 
         <div className="space-y-3.5">
           <h1 className="text-app-xl sm:text-[34px] font-bold text-brand-dark tracking-tight leading-[1.2]">
-            Take the first step toward proactive foresight.
+            {t('auth.signUpTitle', 'Take the first step toward proactive foresight.')}
           </h1>
           <p className="text-body-lg text-[#555B55] leading-relaxed">
-            Create your confidential account in seconds. We do not collect clinical records or sensitive data during registration.
+            {t('auth.signUpSubtitle', 'Create your confidential account in seconds. We do not collect clinical records or sensitive data during registration.')}
           </p>
         </div>
 
@@ -150,8 +154,8 @@ export function SignupPage() {
               <CheckCircle2 className="w-4 h-4 text-brand-teal" />
             </div>
             <div>
-              <h4 className="text-meta-md font-bold text-brand-dark">Fast, Frictionless Account Setup</h4>
-              <p className="text-meta-sm text-[#666C66] mt-0.5">Start in under 30 seconds with just your name and email.</p>
+              <h4 className="text-meta-md font-bold text-brand-dark">{t('auth.fastSetupTitle', 'Fast, Frictionless Account Setup')}</h4>
+              <p className="text-meta-sm text-[#666C66] mt-0.5">{t('auth.fastSetupDesc', 'Start in under 30 seconds with just your name and email.')}</p>
             </div>
           </div>
 
@@ -160,8 +164,8 @@ export function SignupPage() {
               <CheckCircle2 className="w-4 h-4 text-brand-teal" />
             </div>
             <div>
-              <h4 className="text-meta-md font-bold text-brand-dark">3-Minute Baseline Calibration</h4>
-              <p className="text-meta-sm text-[#666C66] mt-0.5">Personalize tracking factors and baseline trigger thresholds.</p>
+              <h4 className="text-meta-md font-bold text-brand-dark">{t('auth.baselineCalibTitle', '3-Minute Baseline Calibration')}</h4>
+              <p className="text-meta-sm text-[#666C66] mt-0.5">{t('auth.baselineCalibDesc', 'Personalize tracking factors and baseline trigger thresholds.')}</p>
             </div>
           </div>
 
@@ -170,8 +174,8 @@ export function SignupPage() {
               <CheckCircle2 className="w-4 h-4 text-brand-teal" />
             </div>
             <div>
-              <h4 className="text-meta-md font-bold text-brand-dark">Zero Upfront Clinical Burdens</h4>
-              <p className="text-meta-sm text-[#666C66] mt-0.5">No doctor prescriptions or medical records required.</p>
+              <h4 className="text-meta-md font-bold text-brand-dark">{t('auth.zeroBurdensTitle', 'Zero Upfront Clinical Burdens')}</h4>
+              <p className="text-meta-sm text-[#666C66] mt-0.5">{t('auth.zeroBurdensDesc', 'No doctor prescriptions or medical records required.')}</p>
             </div>
           </div>
         </div>
@@ -180,10 +184,10 @@ export function SignupPage() {
         <div className="p-4 rounded-[18px] bg-white/80 border-2 border-brand-sage/40 space-y-1.5 shadow-sm">
           <div className="flex items-center gap-2 text-meta-sm font-bold text-brand-dark">
             <LockKeyhole className="w-4 h-4 text-brand-teal" />
-            <span>Confidential & Private Promise</span>
+            <span>{t('auth.confidentialPromiseTitle', 'Confidential & Private Promise')}</span>
           </div>
           <p className="text-meta-sm text-[#666C66] leading-relaxed">
-            "Your health information deserves thoughtful handling. Zero third-party advertising or data monetization."
+            "{t('auth.confidentialPromiseDesc', 'Your health information deserves thoughtful handling. Zero third-party advertising or data monetization.')}"
           </p>
         </div>
       </div>
@@ -194,14 +198,14 @@ export function SignupPage() {
           <CardHeader className="text-left pb-3 border-b border-brand-sage/30 space-y-1">
             <div className="flex items-center justify-between">
               <CardTitle as="h2" className="text-app-lg font-bold text-brand-dark">
-                Create your account
+                {t('auth.signUpTitle', 'Create your account')}
               </CardTitle>
               <Badge variant="teal" size="sm">
-                Get Started
+                {t('common.beginJourney', 'Get Started')}
               </Badge>
             </div>
             <CardDescription className="text-body-md text-[#555B55]">
-              Join MigraineGuardian to begin gentle, evidence-based pattern tracking.
+              {t('auth.signUpSubtitle', 'Join MigraineGuardian to begin gentle, evidence-based pattern tracking.')}
             </CardDescription>
           </CardHeader>
 
@@ -213,7 +217,7 @@ export function SignupPage() {
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4 pt-1">
             <Input
-              label="Full Name"
+              label={t('profile.fullName', 'Full Name')}
               id="signup-fullname"
               name="fullName"
               type="text"
@@ -229,7 +233,7 @@ export function SignupPage() {
             />
 
             <Input
-              label="Email Address"
+              label={t('auth.emailAddress', 'Email Address')}
               id="signup-email"
               name="email"
               type="email"
@@ -239,14 +243,14 @@ export function SignupPage() {
                 setEmail(e.target.value);
                 if (errors.email) setErrors((prev) => ({ ...prev, email: null }));
               }}
-              placeholder="name@domain.com"
+              placeholder={t('auth.emailPlaceholder', 'name@domain.com')}
               errorText={errors.email}
               required
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
-                label="Password"
+                label={t('auth.password', 'Password')}
                 id="signup-password"
                 name="password"
                 type="password"
@@ -256,13 +260,13 @@ export function SignupPage() {
                   setPassword(e.target.value);
                   if (errors.password) setErrors((prev) => ({ ...prev, password: null }));
                 }}
-                placeholder="Min 8 characters"
+                placeholder={t('auth.passwordPlaceholder', 'Min 8 characters')}
                 errorText={errors.password}
                 required
               />
 
               <Input
-                label="Confirm Password"
+                label={t('auth.confirmPassword', 'Confirm Password')}
                 id="signup-confirm-password"
                 name="confirmPassword"
                 type="password"
@@ -272,7 +276,7 @@ export function SignupPage() {
                   setConfirmPassword(e.target.value);
                   if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: null }));
                 }}
-                placeholder="Repeat password"
+                placeholder={t('auth.confirmPasswordPlaceholder', 'Repeat password')}
                 errorText={errors.confirmPassword}
                 required
               />
@@ -291,7 +295,10 @@ export function SignupPage() {
                   className="rounded text-brand-teal focus:ring-brand-teal w-4 h-4 mt-0.5 flex-shrink-0 cursor-pointer"
                 />
                 <span className="leading-snug">
-                  I agree to the <Link to={ROUTES.TERMS} className="text-brand-dark underline font-semibold hover:text-brand-teal">Terms</Link> and <Link to={ROUTES.PRIVACY} className="text-brand-dark underline font-semibold hover:text-brand-teal">Privacy Policy</Link>.
+                  {t('auth.agreeTo', 'I agree to the')}{' '}
+                  <Link to={ROUTES.TERMS} className="text-brand-dark underline font-semibold hover:text-brand-teal">{t('footer.terms', 'Terms')}</Link>
+                  {' '}{t('auth.and', 'and')}{' '}
+                  <Link to={ROUTES.PRIVACY} className="text-brand-dark underline font-semibold hover:text-brand-teal">{t('footer.privacy', 'Privacy Policy')}</Link>.
                 </span>
               </label>
               {errors.consent && (
@@ -310,7 +317,7 @@ export function SignupPage() {
               isLoading={isLoading}
               iconRight={ArrowRight}
             >
-              Create Account & Proceed to Onboarding
+              {t('auth.signUpBtn', 'Create Account & Proceed to Onboarding')}
             </Button>
           </form>
 
@@ -319,7 +326,7 @@ export function SignupPage() {
             <div className="relative flex items-center justify-center my-3">
               <div className="border-t border-brand-sage/35 w-full" />
               <span className="bg-[#FAF9F5] px-3 text-[12px] uppercase tracking-wider text-muted-text font-semibold absolute">
-                or
+                {t('auth.or', 'or')}
               </span>
             </div>
 
@@ -348,19 +355,19 @@ export function SignupPage() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span>Continue with Google</span>
+              <span>{t('auth.googleSignIn', 'Continue with Google')}</span>
             </button>
           </div>
 
           {/* Switch to Login */}
           <div className="pt-3 text-center text-body-md text-muted-text border-t border-brand-sage/30">
-            <span>Already have an account? </span>
+            <span>{t('auth.haveAccount', 'Already have an account?')} </span>
             <Link
               to={ROUTES.LOGIN}
               state={location.state}
               className="font-bold text-brand-dark hover:text-brand-teal hover:underline ml-1"
             >
-              Sign In
+              {t('auth.signInBtn', 'Sign In')}
             </Link>
           </div>
         </Card>
@@ -369,3 +376,4 @@ export function SignupPage() {
   );
 }
 
+export default SignupPage;

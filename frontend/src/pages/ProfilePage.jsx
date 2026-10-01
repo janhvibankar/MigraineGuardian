@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { MOCK_USER } from '../data/mockUser';
 import { ROUTES } from '../utils/constants';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   User,
   Activity,
@@ -34,6 +35,7 @@ import { authService } from '../services/authService';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 
 export function ProfilePage() {
+  const { t } = useTranslation();
   const currentUser = useCurrentUser();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(() => currentUser?.name || 'Janhvi');
@@ -61,16 +63,27 @@ export function ProfilePage() {
     }
   };
 
+  const factorLabels = {
+    sleep: t('factors.sleepCircadian', 'Sleep & Circadian Rhythm'),
+    stress: t('factors.stressStrain', 'Daily Stress & Strain'),
+    screen: t('factors.screenExposure', 'Screen & Optical Exposure'),
+    hydration: t('factors.fluidHydration', 'Fluid Intake & Hydration'),
+    weather: t('factors.weatherFronts', 'Barometric & Weather Fronts'),
+    caffeine: t('factors.caffeineTiming', 'Caffeine Timing'),
+    exercise: t('factors.physicalActivity', 'Physical Activity & Movement'),
+    meals: t('factors.bloodSugarMeals', 'Blood Sugar & Skipped Meals'),
+  };
+
   // Tracking factors toggle state
   const [activeFactors, setActiveFactors] = useState([
-    { id: 'sleep', label: 'Sleep & Circadian Rhythm', active: true, icon: Moon },
-    { id: 'stress', label: 'Daily Stress & Strain', active: true, icon: Brain },
-    { id: 'screen', label: 'Screen & Optical Exposure', active: true, icon: SunMedium },
-    { id: 'hydration', label: 'Fluid Intake & Hydration', active: true, icon: Droplets },
-    { id: 'weather', label: 'Barometric & Weather Fronts', active: true, icon: CloudSun },
-    { id: 'caffeine', label: 'Caffeine Timing', active: true, icon: Coffee },
-    { id: 'exercise', label: 'Physical Activity & Movement', active: true, icon: Dumbbell },
-    { id: 'meals', label: 'Blood Sugar & Skipped Meals', active: true, icon: Utensils },
+    { id: 'sleep', active: true, icon: Moon },
+    { id: 'stress', active: true, icon: Brain },
+    { id: 'screen', active: true, icon: SunMedium },
+    { id: 'hydration', active: true, icon: Droplets },
+    { id: 'weather', active: true, icon: CloudSun },
+    { id: 'caffeine', active: true, icon: Coffee },
+    { id: 'exercise', active: true, icon: Dumbbell },
+    { id: 'meals', active: true, icon: Utensils },
   ]);
 
   const toggleFactor = (id) => {
@@ -80,22 +93,22 @@ export function ProfilePage() {
   };
 
   const pssHistory = [
-    { date: 'Oct 10, 2024', score: 14, label: 'Low Perceived Stress', note: 'Consistent sleep buffer' },
-    { date: 'Sept 12, 2024', score: 18, label: 'Moderate Baseline', note: 'Work transition window' },
-    { date: 'Aug 14, 2024', score: 22, label: 'Elevated Baseline', note: 'Higher fatigue logged' },
+    { date: 'Oct 10, 2024', score: 14, label: t('pss.lowStress'), note: t('profile.noteConsistentSleep', 'Consistent sleep buffer') },
+    { date: 'Sept 12, 2024', score: 18, label: t('pss.moderateStress'), note: t('profile.noteWorkTransition', 'Work transition window') },
+    { date: 'Aug 14, 2024', score: 22, label: t('pss.moderateStress'), note: t('profile.noteHigherFatigue', 'Higher fatigue logged') },
   ];
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-200">
       {/* HEADER */}
       <PageHeader
-        title="Health Profile & Preferences"
-        subtitle="Manage your personal information, clinical migraine background, PSS evaluation history, and active tracking parameters."
-        badge="Health Profile"
+        title={t('profile.title')}
+        subtitle={t('profile.subtitle')}
+        badge={t('nav.profile')}
         actions={
           <Link to={ROUTES.SETTINGS}>
             <Button variant="secondary" size="md">
-              Account Settings
+              {t('nav.settings')}
             </Button>
           </Link>
         }
@@ -112,9 +125,9 @@ export function ProfilePage() {
             </div>
             <div>
               <h2 className="text-section-lg font-semibold text-brand-dark">
-                Personal Information
+                {t('profile.personalInfoTitle')}
               </h2>
-              <span className="text-meta-sm text-muted-text">Basic details for localized health personalization</span>
+              <span className="text-meta-sm text-muted-text">{t('profile.basicDetails')}</span>
             </div>
           </div>
 
@@ -124,14 +137,14 @@ export function ProfilePage() {
             onClick={handleToggleEdit}
             icon={isEditing ? Check : Edit2}
           >
-            {isEditing ? 'Save Changes' : 'Edit Info'}
+            {isEditing ? t('common.saveChanges') : t('common.edit')}
           </Button>
         </div>
 
         {isEditing ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
             <div className="space-y-1.5">
-              <label className="text-meta-sm font-semibold text-brand-dark">Full Name</label>
+              <label className="text-meta-sm font-semibold text-brand-dark">{t('profile.fullName')}</label>
               <input
                 type="text"
                 value={name}
@@ -140,7 +153,7 @@ export function ProfilePage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-meta-sm font-semibold text-brand-dark">Age</label>
+              <label className="text-meta-sm font-semibold text-brand-dark">{t('profile.age')}</label>
               <input
                 type="number"
                 value={age}
@@ -149,7 +162,7 @@ export function ProfilePage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-meta-sm font-semibold text-brand-dark">Optional Gender</label>
+              <label className="text-meta-sm font-semibold text-brand-dark">{t('profile.genderOptional')}</label>
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
@@ -165,15 +178,15 @@ export function ProfilePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-meta-md">
             <div className="p-4 rounded-card-sm bg-white border border-muted-border space-y-1">
-              <span className="text-meta-sm text-muted-text block">Full Name</span>
+              <span className="text-meta-sm text-muted-text block">{t('profile.fullName')}</span>
               <span className="text-section-md font-bold text-brand-dark block">{name}</span>
             </div>
             <div className="p-4 rounded-card-sm bg-white border border-muted-border space-y-1">
-              <span className="text-meta-sm text-muted-text block">Age</span>
-              <span className="text-section-md font-bold text-brand-dark block">{age} years</span>
+              <span className="text-meta-sm text-muted-text block">{t('profile.age')}</span>
+              <span className="text-section-md font-bold text-brand-dark block">{age} {t('common.hours', { count: '' }).trim() === 'घंटे' ? 'वर्ष' : t('common.hours', { count: '' }).trim() === 'तास' ? 'वर्षे' : 'years'}</span>
             </div>
             <div className="p-4 rounded-card-sm bg-white border border-muted-border space-y-1">
-              <span className="text-meta-sm text-muted-text block">Gender (Optional)</span>
+              <span className="text-meta-sm text-muted-text block">{t('profile.genderOptional')}</span>
               <span className="text-section-md font-bold text-brand-dark block">{gender}</span>
             </div>
           </div>
@@ -191,13 +204,13 @@ export function ProfilePage() {
             </div>
             <div>
               <h2 className="text-section-lg font-semibold text-brand-dark">
-                Migraine Tracking Baseline & History
+                {t('profile.clinicalBaselineTitle')}
               </h2>
-              <span className="text-meta-sm text-muted-text">Self-reported history configured during onboarding</span>
+              <span className="text-meta-sm text-muted-text">{t('profile.selfReportedHistory')}</span>
             </div>
           </div>
           <Badge variant="teal" size="sm">
-            Configured
+            {t('profile.configured')}
           </Badge>
         </div>
 
@@ -205,37 +218,37 @@ export function ProfilePage() {
           <div className="p-4 rounded-card-sm bg-white border border-muted-border space-y-1">
             <div className="flex items-center gap-1.5 text-muted-text text-meta-sm">
               <Calendar className="w-3.5 h-3.5 text-brand-teal" />
-              <span>Typical Frequency</span>
+              <span>{t('profile.typicalFrequency')}</span>
             </div>
             <div className="text-section-md font-bold text-brand-dark">{currentUser?.frequency || '1–3 times a month'}</div>
-            <div className="text-[11px] text-muted-text">Self-calibrated pattern</div>
+            <div className="text-[11px] text-muted-text">{t('profile.selfReportedHistory')}</div>
           </div>
 
           <div className="p-4 rounded-card-sm bg-white border border-muted-border space-y-1">
             <div className="flex items-center gap-1.5 text-muted-text text-meta-sm">
               <Activity className="w-3.5 h-3.5 text-brand-teal" />
-              <span>Typical Severity</span>
+              <span>{t('profile.averageSeverity')}</span>
             </div>
             <div className="text-section-md font-bold text-brand-dark">{currentUser?.severity !== undefined ? `${currentUser.severity} / 10` : '6 / 10'}</div>
-            <div className="text-[11px] text-muted-text">Baseline discomfort index</div>
+            <div className="text-[11px] text-muted-text">{t('profile.baselineDiscomfort')}</div>
           </div>
 
           <div className="p-4 rounded-card-sm bg-white border border-muted-border space-y-1">
             <div className="flex items-center gap-1.5 text-muted-text text-meta-sm">
               <Clock className="w-3.5 h-3.5 text-brand-teal" />
-              <span>Typical Duration</span>
+              <span>{t('profile.averageDuration')}</span>
             </div>
             <div className="text-section-md font-bold text-brand-dark">{currentUser?.duration || '4–12 hours'}</div>
-            <div className="text-[11px] text-muted-text">Standard window length</div>
+            <div className="text-[11px] text-muted-text">{t('profile.standardWindow')}</div>
           </div>
 
           <div className="p-4 rounded-card-sm bg-white border border-muted-border space-y-1">
             <div className="flex items-center gap-1.5 text-muted-text text-meta-sm">
               <Pill className="w-3.5 h-3.5 text-brand-teal" />
-              <span>Medication Status</span>
+              <span>{t('profile.usesMedication')}</span>
             </div>
             <div className="text-section-md font-bold text-brand-dark">{currentUser?.usesMedication === 'Yes' ? 'Active Prescribed' : (currentUser?.usesMedication || 'None / Lifestyle')}</div>
-            <div className="text-[11px] text-muted-text">Acute / Preventive</div>
+            <div className="text-[11px] text-muted-text">{t('profile.acutePreventive')}</div>
           </div>
         </div>
       </Card>
@@ -251,15 +264,15 @@ export function ProfilePage() {
             </div>
             <div>
               <h2 className="text-section-lg font-semibold text-brand-dark">
-                PSS-10 Assessment History
+                {t('profile.pssHistoryTitle')}
               </h2>
-              <span className="text-meta-sm text-muted-text">Validated Perceived Stress Scale (0–40 score range)</span>
+              <span className="text-meta-sm text-muted-text">{t('profile.pssHistoryDesc')}</span>
             </div>
           </div>
 
           <Link to={ROUTES.PSS_ASSESSMENT}>
             <Button variant="secondary" size="sm" iconRight={ArrowRight}>
-              Take New PSS Assessment
+              {t('profile.takeNewPss')}
             </Button>
           </Link>
         </div>
@@ -282,14 +295,14 @@ export function ProfilePage() {
 
               <div className="text-left sm:text-right">
                 <span className="text-section-lg font-bold text-brand-dark">{item.score} / 40</span>
-                <span className="text-[11px] text-muted-text block">Perceived Stress Index</span>
+                <span className="text-[11px] text-muted-text block">{t('dashboard.riskIndex')}</span>
               </div>
             </div>
           ))}
         </div>
 
         <div className="p-3.5 rounded-card-sm bg-white/60 border border-muted-border/70 text-meta-sm text-muted-text">
-          Higher scores indicate greater perceived stress over the preceding month. This score is an awareness metric, not a clinical diagnosis.
+          {t('pss.scoreDescDisclaimer')}
         </div>
       </Card>
 
@@ -299,10 +312,10 @@ export function ProfilePage() {
       <Card variant="warm" className="p-6 sm:p-8 space-y-6 border-card-warm-border shadow-soft">
         <div className="space-y-1 pb-3 border-b border-muted-border/60">
           <h2 className="text-section-lg font-semibold text-brand-dark">
-            Current Tracking Factors
+            {t('profile.currentTrackingFactors')}
           </h2>
           <p className="text-body-md text-muted-text">
-            Parameters actively monitored during your daily micro check-in.
+            {t('profile.currentTrackingFactorsDesc')}
           </p>
         </div>
 
@@ -325,11 +338,11 @@ export function ProfilePage() {
                   <div className={cn('p-1.5 rounded-md', factor.active ? 'bg-brand-teal/15 text-brand-teal-dark' : 'bg-muted-border/40 text-muted-text')}>
                     <Icon className="w-4 h-4" />
                   </div>
-                  <span className="font-semibold text-meta-md">{factor.label}</span>
+                  <span className="font-semibold text-meta-md">{factorLabels[factor.id] || factor.label}</span>
                 </div>
 
                 <Badge variant={factor.active ? 'sage' : 'neutral'} size="sm">
-                  {factor.active ? 'Active' : 'Paused'}
+                  {factor.active ? t('profile.active') : t('profile.paused')}
                 </Badge>
               </button>
             );
@@ -339,3 +352,5 @@ export function ProfilePage() {
     </div>
   );
 }
+
+export default ProfilePage;

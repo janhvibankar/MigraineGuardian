@@ -38,9 +38,11 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { useTranslation } from '../hooks/useTranslation';
 
 export function DailyCheckinPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   // Load existing draft or default values via storageService / trackingService
   const savedDraft = storageService.getItem('daily_checkin_draft', null) || trackingService.getTodayLog();
@@ -301,51 +303,73 @@ export function DailyCheckinPage() {
     setWeatherNotice(null);
   };
 
-
   // Sleep Quality Options (1-5)
   const sleepQualityOptions = [
-    { value: 1, label: 'Very Poor' },
-    { value: 2, label: 'Poor' },
-    { value: 3, label: 'Fair' },
-    { value: 4, label: 'Restful' },
-    { value: 5, label: 'Very Restful' },
+    { value: 1, label: t('checkin.sleepQualityOptions.1') },
+    { value: 2, label: t('checkin.sleepQualityOptions.2') },
+    { value: 3, label: t('checkin.sleepQualityOptions.3') },
+    { value: 4, label: t('checkin.sleepQualityOptions.4') },
+    { value: 5, label: t('checkin.sleepQualityOptions.5') },
   ];
 
-  // Mood Options (1-5) with accessible text labels
+  // Mood Options (1-5)
   const moodOptions = [
-    { value: 1, label: 'Very Low / Exhausted' },
-    { value: 2, label: 'Low / Tense' },
-    { value: 3, label: 'Neutral / Steady' },
-    { value: 4, label: 'Pleasant / Calm' },
-    { value: 5, label: 'Uplifted / Energetic' },
+    { value: 1, label: t('checkin.moodOptions.1') },
+    { value: 2, label: t('checkin.moodOptions.2') },
+    { value: 3, label: t('checkin.moodOptions.3') },
+    { value: 4, label: t('checkin.moodOptions.4') },
+    { value: 5, label: t('checkin.moodOptions.5') },
   ];
 
   // Meals Options
-  const mealOptions = ['No', 'Breakfast', 'Lunch', 'Dinner', 'More than one'];
+  const mealOptions = [
+    { id: 'No', label: t('checkin.mealOptions.no') },
+    { id: 'Breakfast', label: t('checkin.mealOptions.breakfast') },
+    { id: 'Lunch', label: t('checkin.mealOptions.lunch') },
+    { id: 'Dinner', label: t('checkin.mealOptions.dinner') },
+    { id: 'More than one', label: t('checkin.mealOptions.multiple') },
+  ];
 
   // Symptom Options
   const symptomOptions = [
-    'Nausea',
-    'Light sensitivity',
-    'Sound sensitivity',
-    'Aura',
-    'Neck tension',
-    'Other',
+    { id: 'Light sensitivity', label: t('checkin.symptomOptions.lightSensitivity') },
+    { id: 'Sound sensitivity', label: t('checkin.symptomOptions.soundSensitivity') },
+    { id: 'Nausea', label: t('checkin.symptomOptions.nausea') },
+    { id: 'Aura', label: t('checkin.symptomOptions.aura') },
+    { id: 'Neck tension', label: t('checkin.symptomOptions.neckTension') },
+    { id: 'Other', label: t('checkin.symptomOptions.other') },
   ];
 
-  const toggleSymptom = (sym) => {
-    if (migraineSymptoms.includes(sym)) {
-      setMigraineSymptoms(migraineSymptoms.filter((s) => s !== sym));
+  const toggleSymptom = (symId) => {
+    if (migraineSymptoms.includes(symId)) {
+      setMigraineSymptoms(migraineSymptoms.filter((s) => s !== symId));
     } else {
-      setMigraineSymptoms([...migraineSymptoms, sym]);
+      setMigraineSymptoms([...migraineSymptoms, symId]);
     }
   };
 
   const getStressLabel = (val) => {
-    if (val <= 2) return `Low (${val}/10) — Serene`;
-    if (val <= 5) return `Moderate (${val}/10) — Manageable`;
-    if (val <= 7) return `Elevated (${val}/10) — Noticeable load`;
-    return `High (${val}/10) — Heavy strain`;
+    if (val <= 2) return `${t('common.low')} (${val}/10)`;
+    if (val <= 5) return `${t('common.moderate')} (${val}/10)`;
+    if (val <= 7) return `${t('common.high')} (${val}/10)`;
+    return `${t('common.severe')} (${val}/10)`;
+  };
+
+  const formatPressureTrend = (trend) => {
+    if (!trend) return t('checkin.steady', 'Steady');
+    const lower = String(trend).toLowerCase();
+    if (lower.includes('fall') || lower.includes('drop')) return t('checkin.dropping', 'Dropping');
+    if (lower.includes('ris')) return t('checkin.rising', 'Rising');
+    return t('checkin.steady', 'Steady');
+  };
+
+  const getDurationLabel = (dur) => {
+    if (dur === '< 2 hours') return `< 2 ${t('common.hours')}`;
+    if (dur === '2–4 hours') return `2–4 ${t('common.hours')}`;
+    if (dur === '4–8 hours') return `4–8 ${t('common.hours')}`;
+    if (dur === '8–12 hours') return `8–12 ${t('common.hours')}`;
+    if (dur === '12+ hours') return `12+ ${t('common.hours')}`;
+    return dur;
   };
 
   const handleSave = async (e) => {
@@ -357,7 +381,6 @@ export function DailyCheckinPage() {
     let currentWeatherData = weatherData;
     if (!currentWeatherData) {
       try {
-        console.log('[Weather] Auto-detecting location & weather context during check-in save...');
         const locRes = await weatherService.requestBrowserLocation();
         if (locRes.success && locRes.coords) {
           const weatherRes = await weatherService.fetchCurrentWeather(
@@ -368,8 +391,6 @@ export function DailyCheckinPage() {
             currentWeatherData = weatherRes.data;
             setWeatherData(weatherRes.data);
           }
-        } else {
-          console.log('[Weather] Location access not granted — proceeding with lifestyle check-in save.');
         }
       } catch (wErr) {
         console.warn('[Weather] Non-blocking error during weather check-in save:', wErr.message);
@@ -408,7 +429,6 @@ export function DailyCheckinPage() {
   };
 
   const handleNavigateToPss = () => {
-    // Collect all unsubmitted form entries to prevent draft loss
     const draft = {
       sleep_hours: sleepHours,
       sleep_quality: sleepQuality,
@@ -429,18 +449,17 @@ export function DailyCheckinPage() {
     navigate(ROUTES.PSS_ASSESSMENT, { state: { fromCheckin: true } });
   };
 
-
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-200">
       {/* Top Header */}
       <PageHeader
-        title="How are you feeling today?"
-        subtitle="Your daily check-in helps MigraineGuardian understand your personal patterns."
-        badge="1–2 Minute Check-in"
+        title={t('checkin.title')}
+        subtitle={t('checkin.subtitle')}
+        badge={t('checkin.badge')}
         actions={
           <Link to={ROUTES.DASHBOARD}>
             <Button variant="secondary" size="md">
-              Dashboard
+              {t('nav.dashboard')}
             </Button>
           </Link>
         }
@@ -455,43 +474,43 @@ export function DailyCheckinPage() {
 
           <div className="space-y-2 max-w-md mx-auto">
             <h2 className="text-section-lg sm:text-app-lg font-semibold text-brand-dark">
-              Today's check-in has been recorded.
+              {t('checkin.recordedNotice')}
             </h2>
             <p className="text-body-md text-muted-text leading-relaxed">
-              Your insights will update as more information is collected.
+              {t('checkin.recordedSub')}
             </p>
           </div>
 
           {/* Quick Summary of today's logged baseline */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-meta-md text-left pt-2">
             <div className="p-3 rounded-card-sm bg-white border border-muted-border">
-              <span className="text-meta-sm text-muted-text block">Sleep:</span>
+              <span className="text-meta-sm text-muted-text block">{t('dashboard.sleepDuration')}:</span>
               <span className="font-semibold text-brand-dark">{sleepHours}h ({sleepQualityOptions.find(o => o.value === sleepQuality)?.label})</span>
             </div>
             <div className="p-3 rounded-card-sm bg-white border border-muted-border">
-              <span className="text-meta-sm text-muted-text block">Daily Stress:</span>
+              <span className="text-meta-sm text-muted-text block">{t('dashboard.dailyStress')}:</span>
               <span className="font-semibold text-brand-dark">{dailyStress} / 10</span>
             </div>
             <div className="p-3 rounded-card-sm bg-white border border-muted-border">
-              <span className="text-meta-sm text-muted-text block">Hydration:</span>
+              <span className="text-meta-sm text-muted-text block">{t('dashboard.hydrationIntake')}:</span>
               <span className="font-semibold text-brand-dark">{hydrationLiters} L</span>
             </div>
             <div className="p-3 rounded-card-sm bg-white border border-muted-border">
-              <span className="text-meta-sm text-muted-text block">Migraine:</span>
-              <span className="font-semibold text-brand-dark">{hadMigraine === 'Yes' ? 'Episode Logged' : 'None'}</span>
+              <span className="text-meta-sm text-muted-text block">{t('nav.riskForecast')}:</span>
+              <span className="font-semibold text-brand-dark">{hadMigraine === 'Yes' ? t('dashboard.episodeLogged') : t('common.no')}</span>
             </div>
           </div>
 
           <div className="pt-4 border-t border-muted-border/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
             <Link to={ROUTES.DASHBOARD} className="flex-1">
               <Button variant="primary" size="lg" className="w-full" iconRight={ArrowRight}>
-                Go to Dashboard
+                {t('nav.dashboard')}
               </Button>
             </Link>
 
             <Link to={ROUTES.RISK_ANALYSIS} className="flex-1 sm:flex-initial">
               <Button variant="secondary" size="lg" className="w-full">
-                View Risk Forecast
+                {t('checkin.viewForecastBtn')}
               </Button>
             </Link>
 
@@ -501,7 +520,7 @@ export function DailyCheckinPage() {
               onClick={() => setIsSaved(false)}
               icon={RotateCcw}
             >
-              Edit Today's Check-in
+              {t('common.edit')}
             </Button>
           </div>
         </Card>
@@ -512,7 +531,7 @@ export function DailyCheckinPage() {
         <form onSubmit={handleSave} className="space-y-6">
           {serverError && (
             <div className="p-4 rounded-card-sm bg-alert-muted/15 border border-alert-muted/40 text-brand-dark flex items-center gap-3 animate-in fade-in duration-200">
-              <span className="font-semibold text-meta-md">Error: {serverError}</span>
+              <span className="font-semibold text-meta-md">{t('checkin.errorPrefix')} {serverError}</span>
             </div>
           )}
 
@@ -525,13 +544,13 @@ export function DailyCheckinPage() {
                 </div>
                 <div>
                   <h3 className="text-section-md font-semibold text-brand-dark">
-                    Section 1 — Sleep
+                    {t('checkin.sleepTitle')}
                   </h3>
-                  <span className="text-meta-sm text-muted-text">Rest duration & restorative quality</span>
+                  <span className="text-meta-sm text-muted-text">{t('checkin.sleepSub')}</span>
                 </div>
               </div>
               <Badge variant="sage" size="sm">
-                {sleepHours}h Logged
+                {sleepHours}h
               </Badge>
             </div>
 
@@ -539,10 +558,10 @@ export function DailyCheckinPage() {
             <div className="space-y-2 bg-white/70 p-4 rounded-card-sm border border-muted-border">
               <div className="flex items-center justify-between">
                 <label className="text-body-md font-medium text-brand-dark">
-                  How long did you sleep last night?
+                  {t('checkin.sleepQuestion')}
                 </label>
                 <span className="text-app-lg font-bold text-brand-dark">
-                  {sleepHours} hrs
+                  {sleepHours} {t('common.hours')}
                 </span>
               </div>
 
@@ -559,7 +578,7 @@ export function DailyCheckinPage() {
               <div className="flex justify-between text-[11px] text-muted-text font-medium px-1">
                 <span>0h</span>
                 <span>4h</span>
-                <span>7.5h (Target)</span>
+                <span>{t('dashboard.targetHours')}</span>
                 <span>10h</span>
                 <span>12h</span>
               </div>
@@ -568,7 +587,7 @@ export function DailyCheckinPage() {
             {/* Sleep Quality 1-5 */}
             <div className="space-y-2.5">
               <label className="text-meta-md font-medium text-brand-dark block">
-                How would you rate your sleep quality?
+                {t('checkin.sleepQualityQuestion')}
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
                 {sleepQualityOptions.map((opt) => (
@@ -577,7 +596,7 @@ export function DailyCheckinPage() {
                     type="button"
                     onClick={() => setSleepQuality(opt.value)}
                     className={cn(
-                      'p-3 rounded-card-sm border text-center transition-all min-h-[48px] flex flex-col items-center justify-center',
+                      'p-3 rounded-card-sm border text-center transition-all min-h-[48px] flex flex-col items-center justify-center cursor-pointer',
                       sleepQuality === opt.value
                         ? 'bg-brand-sage/25 text-brand-dark font-bold border-brand-sage/60 ring-1 ring-brand-sage/40 shadow-soft'
                         : 'bg-white/70 border-muted-border hover:bg-white text-brand-dark'
@@ -591,7 +610,7 @@ export function DailyCheckinPage() {
             </div>
           </Card>
 
-          {/* SECTION 2: STRESS (Daily Stress, NOT PSS-10) */}
+          {/* SECTION 2: STRESS */}
           <Card variant="warm" className="p-6 sm:p-7 space-y-5 border-card-warm-border shadow-soft">
             <div className="flex items-center justify-between pb-3 border-b border-muted-border/60">
               <div className="flex items-center gap-2.5">
@@ -600,9 +619,9 @@ export function DailyCheckinPage() {
                 </div>
                 <div>
                   <h3 className="text-section-md font-semibold text-brand-dark">
-                    Section 2 — Daily Stress
+                    {t('checkin.stressTitle')}
                   </h3>
-                  <span className="text-meta-sm text-muted-text">Daily perceived mental strain (Not PSS-10)</span>
+                  <span className="text-meta-sm text-muted-text">{t('checkin.stressSub')}</span>
                 </div>
               </div>
               <Badge variant={dailyStress > 6 ? 'alert' : dailyStress > 3 ? 'teal' : 'sage'} size="sm">
@@ -613,7 +632,7 @@ export function DailyCheckinPage() {
             <div className="space-y-3 bg-white/70 p-4 rounded-card-sm border border-muted-border">
               <div className="flex items-center justify-between">
                 <label className="text-body-md font-medium text-brand-dark">
-                  How stressed did you feel today?
+                  {t('checkin.stressQuestion')}
                 </label>
                 <span className="text-meta-md font-bold text-brand-dark">
                   {getStressLabel(dailyStress)}
@@ -631,9 +650,9 @@ export function DailyCheckinPage() {
               />
 
               <div className="flex justify-between text-[11px] text-muted-text font-medium px-1">
-                <span>0 — Serene</span>
-                <span>5 — Moderate</span>
-                <span>10 — Severe Strain</span>
+                <span>0</span>
+                <span>5 ({t('common.moderate')})</span>
+                <span>10 ({t('common.severe')})</span>
               </div>
             </div>
 
@@ -646,14 +665,14 @@ export function DailyCheckinPage() {
                 <div className="space-y-0.5 text-left">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-body-md font-bold text-brand-dark">
-                      Check Your Weekly PSS Score
+                      {t('pss.title')}
                     </span>
                     <Badge variant="sage" size="sm">
-                      Clinical Baseline
+                      {t('common.active')}
                     </Badge>
                   </div>
                   <p className="text-meta-sm text-muted-text-dark leading-relaxed">
-                    Calculate your validated 10-item Perceived Stress Scale (PSS-10) to power your collective weekly analytics and clinical reports.
+                    {t('pss.subtitle')}
                   </p>
                 </div>
               </div>
@@ -665,7 +684,7 @@ export function DailyCheckinPage() {
                 iconRight={ArrowRight}
                 className="font-semibold text-meta-sm whitespace-nowrap flex-shrink-0 self-end sm:self-auto cursor-pointer"
               >
-                Take PSS-10 (2 min)
+                {t('auth.startPssBtn')}
               </Button>
             </div>
           </Card>
@@ -679,9 +698,9 @@ export function DailyCheckinPage() {
                 </div>
                 <div>
                   <h3 className="text-section-md font-semibold text-brand-dark">
-                    Section 3 — Mood & Emotional State
+                    {t('checkin.moodTitle')}
                   </h3>
-                  <span className="text-meta-sm text-muted-text">General autonomic & emotional valence</span>
+                  <span className="text-meta-sm text-muted-text">{t('checkin.moodSub')}</span>
                 </div>
               </div>
             </div>
@@ -694,7 +713,7 @@ export function DailyCheckinPage() {
                     type="button"
                     onClick={() => setMood(opt.value)}
                     className={cn(
-                      'p-3 rounded-card-sm border text-left sm:text-center transition-all min-h-[52px] flex flex-row sm:flex-col items-center justify-between sm:justify-center gap-1',
+                      'p-3 rounded-card-sm border text-left sm:text-center transition-all min-h-[52px] flex flex-row sm:flex-col items-center justify-between sm:justify-center gap-1 cursor-pointer',
                       mood === opt.value
                         ? 'bg-brand-sage/25 text-brand-dark font-bold border-brand-sage/60 ring-1 ring-brand-sage/40 shadow-soft'
                         : 'bg-white/70 border-muted-border hover:bg-white text-brand-dark'
@@ -715,15 +734,15 @@ export function DailyCheckinPage() {
               <div className="flex items-center gap-2.5 pb-2 border-b border-muted-border/60">
                 <SunMedium className="w-4 h-4 text-brand-teal" />
                 <h3 className="text-section-md font-semibold text-brand-dark">
-                  Section 4 — Screen Time
+                  {t('checkin.screenTitle')}
                 </h3>
               </div>
 
               <div className="space-y-2 bg-white/70 p-4 rounded-card-sm border border-muted-border">
                 <div className="flex items-center justify-between">
-                  <span className="text-meta-md text-muted-text">Estimated exposure:</span>
+                  <span className="text-meta-md text-muted-text">{t('dashboard.screenTime')}:</span>
                   <span className="text-section-lg font-bold text-brand-dark">
-                    {screenHours} hrs
+                    {screenHours} {t('common.hoursShort')}
                   </span>
                 </div>
 
@@ -739,7 +758,7 @@ export function DailyCheckinPage() {
 
                 <div className="flex justify-between text-[11px] text-muted-text font-medium">
                   <span>0h</span>
-                  <span>6h baseline</span>
+                  <span>6h</span>
                   <span>14h+</span>
                 </div>
               </div>
@@ -750,15 +769,15 @@ export function DailyCheckinPage() {
               <div className="flex items-center gap-2.5 pb-2 border-b border-muted-border/60">
                 <Droplets className="w-4 h-4 text-brand-teal" />
                 <h3 className="text-section-md font-semibold text-brand-dark">
-                  Section 5 — Hydration
+                  {t('checkin.hydrationTitle')}
                 </h3>
               </div>
 
               <div className="space-y-2 bg-white/70 p-4 rounded-card-sm border border-muted-border">
                 <div className="flex items-center justify-between">
-                  <span className="text-meta-md text-muted-text">Water & Fluids:</span>
+                  <span className="text-meta-md text-muted-text">{t('dashboard.hydrationIntake')}:</span>
                   <span className="text-section-lg font-bold text-brand-dark">
-                    {hydrationLiters} Litres
+                    {hydrationLiters} {t('common.litersShort')}
                   </span>
                 </div>
 
@@ -774,7 +793,7 @@ export function DailyCheckinPage() {
 
                 <div className="flex justify-between text-[11px] text-muted-text font-medium">
                   <span>0.5L</span>
-                  <span>2.2L target</span>
+                  <span>{t('dashboard.targetLiters')}</span>
                   <span>4.0L</span>
                 </div>
               </div>
@@ -790,39 +809,39 @@ export function DailyCheckinPage() {
                 </div>
                 <div>
                   <h3 className="text-section-md font-semibold text-brand-dark">
-                    Section 6 — Meals & Nutrition
+                    {t('checkin.mealsTitle')}
                   </h3>
-                  <span className="text-meta-sm text-muted-text">Blood sugar stability monitoring</span>
+                  <span className="text-meta-sm text-muted-text">{t('checkin.mealsSub')}</span>
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-body-md font-medium text-brand-dark block">
-                Did you skip a major meal today?
+                {t('checkin.skippedMealQuestion')}
               </label>
 
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
                 {mealOptions.map((opt) => (
                   <button
-                    key={opt}
+                    key={opt.id}
                     type="button"
-                    onClick={() => setSkippedMeal(opt)}
+                    onClick={() => setSkippedMeal(opt.id)}
                     className={cn(
-                      'p-3 rounded-card-sm border text-center transition-all min-h-[48px] font-medium text-meta-md',
-                      skippedMeal === opt
+                      'p-3 rounded-card-sm border text-center transition-all min-h-[48px] font-medium text-meta-md cursor-pointer',
+                      skippedMeal === opt.id
                         ? 'bg-brand-sage/25 text-brand-dark font-bold border-brand-sage/60 ring-1 ring-brand-sage/40 shadow-soft'
                         : 'bg-white/70 border-muted-border hover:bg-white text-brand-dark'
                     )}
                   >
-                    {opt === 'No' ? 'No (All meals)' : opt}
+                    {opt.label}
                   </button>
                 ))}
               </div>
             </div>
           </Card>
 
-          {/* SECTION 7: OPTIONAL LIFESTYLE (Visually Secondary) */}
+          {/* SECTION 7: OPTIONAL LIFESTYLE */}
           <Card variant="warm" className="p-5 sm:p-6 space-y-4 border-muted-border/80 bg-card-warm/60">
             <button
               type="button"
@@ -831,10 +850,10 @@ export function DailyCheckinPage() {
             >
               <div className="flex items-center gap-2.5">
                 <span className="text-meta-sm font-semibold uppercase tracking-wider text-muted-text">
-                  Section 7 — Optional Lifestyle Factors
+                  {t('checkin.lifestyleTitle')}
                 </span>
                 <Badge variant="neutral" size="sm">
-                  Optional
+                  {t('common.optional')}
                 </Badge>
               </div>
               {showOptionalLifestyle ? (
@@ -850,22 +869,27 @@ export function DailyCheckinPage() {
                 <div className="space-y-2">
                   <label className="text-meta-md font-medium text-brand-dark flex items-center gap-2">
                     <Coffee className="w-4 h-4 text-brand-teal" />
-                    <span>Caffeine Intake</span>
+                    <span>{t('checkin.caffeineLabel')}</span>
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {['None', '1 cup', '2 cups', '3+ cups'].map((opt) => (
+                    {[
+                      { id: 'none', label: t('checkin.caffeineOptions.none') },
+                      { id: '1 cup', label: t('checkin.caffeineOptions.one') },
+                      { id: '2 cups', label: t('checkin.caffeineOptions.two') },
+                      { id: '3+ cups', label: t('checkin.caffeineOptions.threePlus') },
+                    ].map((opt) => (
                       <button
-                        key={opt}
+                        key={opt.id}
                         type="button"
-                        onClick={() => setCaffeineIntake(opt)}
+                        onClick={() => setCaffeineIntake(opt.id)}
                         className={cn(
-                          'p-2.5 rounded-card-sm border text-meta-sm text-center transition-all',
-                          caffeineIntake === opt
+                          'p-2.5 rounded-card-sm border text-meta-sm text-center transition-all cursor-pointer',
+                          caffeineIntake === opt.id
                             ? 'bg-brand-sage/25 text-brand-dark font-bold border-brand-sage/60 ring-1 ring-brand-sage/40 shadow-soft'
                             : 'bg-white/60 border-muted-border hover:bg-white text-muted-text-dark'
                         )}
                       >
-                        {opt}
+                        {opt.label}
                       </button>
                     ))}
                   </div>
@@ -875,27 +899,27 @@ export function DailyCheckinPage() {
                 <div className="space-y-2">
                   <label className="text-meta-md font-medium text-brand-dark flex items-center gap-2">
                     <Dumbbell className="w-4 h-4 text-brand-sage-dark" />
-                    <span>Physical Activity / Movement</span>
+                    <span>{t('checkin.exerciseLabel')}</span>
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                     {[
-                      'None',
-                      'Light walk / gentle stretch',
-                      'Moderate workout (30m+)',
-                      'High intensity',
+                      { id: 'none', label: t('checkin.exerciseOptions.none') },
+                      { id: 'light', label: t('checkin.exerciseOptions.light') },
+                      { id: 'moderate', label: t('checkin.exerciseOptions.moderate') },
+                      { id: 'intense', label: t('checkin.exerciseOptions.intense') },
                     ].map((opt) => (
                       <button
-                        key={opt}
+                        key={opt.id}
                         type="button"
-                        onClick={() => setExerciseLevel(opt)}
+                        onClick={() => setExerciseLevel(opt.id)}
                         className={cn(
-                          'p-2.5 rounded-card-sm border text-meta-sm text-center transition-all',
-                          exerciseLevel === opt
+                          'p-2.5 rounded-card-sm border text-meta-sm text-center transition-all cursor-pointer',
+                          exerciseLevel === opt.id
                             ? 'bg-brand-sage/25 text-brand-dark font-bold border-brand-sage/60 ring-1 ring-brand-sage/40 shadow-soft'
                             : 'bg-white/60 border-muted-border hover:bg-white text-muted-text-dark'
                         )}
                       >
-                        {opt}
+                        {opt.label}
                       </button>
                     ))}
                   </div>
@@ -913,9 +937,9 @@ export function DailyCheckinPage() {
                 </div>
                 <div>
                   <h3 className="text-section-md font-semibold text-brand-dark">
-                    Section 8 — Migraine Attack Log
+                    {t('checkin.migraineTitle')}
                   </h3>
-                  <span className="text-meta-sm text-muted-text">Record episode specifics without diagnosis</span>
+                  <span className="text-meta-sm text-muted-text">{t('checkin.migraineSub')}</span>
                 </div>
               </div>
             </div>
@@ -923,24 +947,27 @@ export function DailyCheckinPage() {
             {/* Question */}
             <div className="space-y-3">
               <label className="text-body-md font-semibold text-brand-dark block">
-                Did you experience a migraine today?
+                {t('checkin.hadMigraineQuestion')}
               </label>
               <div className="grid grid-cols-2 gap-3">
-                {['No', 'Yes'].map((opt) => (
+                {[
+                  { id: 'No', label: t('common.no') },
+                  { id: 'Yes', label: t('common.yes') },
+                ].map((opt) => (
                   <button
-                    key={opt}
+                    key={opt.id}
                     type="button"
-                    onClick={() => setHadMigraine(opt)}
+                    onClick={() => setHadMigraine(opt.id)}
                     className={cn(
-                      'p-3.5 rounded-card-sm border text-body-md font-semibold text-center transition-all min-h-[48px]',
-                      hadMigraine === opt
-                        ? opt === 'Yes'
+                      'p-3.5 rounded-card-sm border text-body-md font-semibold text-center transition-all min-h-[48px] cursor-pointer',
+                      hadMigraine === opt.id
+                        ? opt.id === 'Yes'
                           ? 'bg-alert-muted/20 text-[#8F443B] font-bold border-alert-muted/50 ring-1 ring-alert-muted/40 shadow-soft'
                           : 'bg-brand-sage/25 text-brand-dark font-bold border-brand-sage/60 ring-1 ring-brand-sage/40 shadow-soft'
                         : 'bg-white/80 border-muted-border hover:bg-white text-brand-dark'
                     )}
                   >
-                    {opt === 'No' ? 'No Episode Today' : 'Yes, Experienced Episode'}
+                    {opt.label}
                   </button>
                 ))}
               </div>
@@ -953,7 +980,7 @@ export function DailyCheckinPage() {
                 <div className="space-y-2 bg-white/80 p-4 rounded-card-sm border border-muted-border">
                   <div className="flex items-center justify-between">
                     <label className="text-meta-md font-medium text-brand-dark">
-                      Attack Severity (0–10)
+                      {t('checkin.severityLabel')}
                     </label>
                     <span className="text-section-md font-bold text-[#8F443B]">
                       {migraineSeverity} / 10
@@ -971,16 +998,16 @@ export function DailyCheckinPage() {
                   />
 
                   <div className="flex justify-between text-[11px] text-muted-text font-medium px-1">
-                    <span>0 — Mild</span>
-                    <span>5 — Moderate</span>
-                    <span>10 — Severe / Incapacitating</span>
+                    <span>0 — {t('common.mild')}</span>
+                    <span>5 — {t('common.moderate')}</span>
+                    <span>10 — {t('common.severe')}</span>
                   </div>
                 </div>
 
                 {/* Duration */}
                 <div className="space-y-2">
                   <label className="text-meta-md font-medium text-brand-dark block">
-                    Duration in Hours:
+                    {t('checkin.durationLabel')}
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                     {['< 2 hours', '2–4 hours', '4–8 hours', '8–12 hours', '12+ hours'].map((dur) => (
@@ -989,13 +1016,13 @@ export function DailyCheckinPage() {
                         type="button"
                         onClick={() => setMigraineDuration(dur)}
                         className={cn(
-                          'p-2.5 rounded-card-sm border text-meta-sm text-center transition-all',
+                          'p-2.5 rounded-card-sm border text-meta-sm text-center transition-all cursor-pointer',
                           migraineDuration === dur
                             ? 'bg-brand-sage/25 text-brand-dark font-bold border-brand-sage/60 ring-1 ring-brand-sage/40 shadow-soft'
                             : 'bg-white/70 border-muted-border hover:bg-white text-muted-text-dark'
                         )}
                       >
-                        {dur}
+                        {getDurationLabel(dur)}
                       </button>
                     ))}
                   </div>
@@ -1004,32 +1031,29 @@ export function DailyCheckinPage() {
                 {/* Optional Symptoms */}
                 <div className="space-y-2">
                   <label className="text-meta-md font-medium text-brand-dark block">
-                    Optional Symptoms Noticed:
+                    {t('checkin.symptomsLabel')}
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {symptomOptions.map((sym) => {
-                      const isSelected = migraineSymptoms.includes(sym);
+                      const isSelected = migraineSymptoms.includes(sym.id);
                       return (
                         <button
-                          key={sym}
+                          key={sym.id}
                           type="button"
-                          onClick={() => toggleSymptom(sym)}
+                          onClick={() => toggleSymptom(sym.id)}
                           className={cn(
-                            'p-3 rounded-card-sm border text-meta-md text-left transition-all flex items-center justify-between',
+                            'p-3 rounded-card-sm border text-meta-md text-left transition-all flex items-center justify-between cursor-pointer',
                             isSelected
                               ? 'bg-white border-brand-teal text-brand-dark font-medium shadow-soft'
                               : 'bg-white/60 border-muted-border hover:bg-white text-muted-text'
                           )}
                         >
-                          <span>{sym}</span>
+                          <span>{sym.label}</span>
                           {isSelected && <Check className="w-3.5 h-3.5 text-brand-teal" />}
                         </button>
                       );
                     })}
                   </div>
-                  <span className="text-[11px] text-muted-text block pt-1">
-                    * Recorded for lifestyle correlation. MigraineGuardian does not provide medical diagnoses.
-                  </span>
                 </div>
               </div>
             )}
@@ -1044,19 +1068,15 @@ export function DailyCheckinPage() {
                 </div>
                 <div>
                   <h3 className="text-section-md font-semibold text-brand-dark">
-                    Environmental Context
+                    {t('checkin.weatherTitle')}
                   </h3>
-                  <span className="text-meta-sm text-muted-text">Historical weather & barometric conditions</span>
+                  <span className="text-meta-sm text-muted-text">{t('checkin.weatherSub')}</span>
                 </div>
               </div>
               <Badge variant={weatherData ? 'teal' : weatherMode === 'skip' ? 'neutral' : 'sage'} size="sm">
-                {weatherData ? 'Historical weather retrieved' : weatherMode === 'skip' ? 'Weather Skipped' : 'Environmental Signal'}
+                {weatherData ? t('common.completed') : weatherMode === 'skip' ? t('common.optional') : t('common.active')}
               </Badge>
             </div>
-
-            <p className="text-meta-md text-muted-text-dark leading-relaxed">
-              Local weather conditions can provide additional environmental context for your migraine risk assessment.
-            </p>
 
             {/* THREE PRIVACY-FIRST LOCATION OPTIONS */}
             {!weatherData && weatherMode !== 'skip' && (
@@ -1068,9 +1088,9 @@ export function DailyCheckinPage() {
                   isLoading={isFetchingWeather && weatherMode === 'usual'}
                   onClick={handleUseUsualLocation}
                   icon={Navigation}
-                  className="font-semibold shadow-soft justify-center"
+                  className="font-semibold shadow-soft justify-center cursor-pointer"
                 >
-                  Use my usual location
+                  {t('checkin.useUsualLocation')}
                 </Button>
 
                 <Button
@@ -1083,9 +1103,9 @@ export function DailyCheckinPage() {
                     setShowLocationModal(true);
                   }}
                   icon={Plane}
-                  className="font-semibold justify-center"
+                  className="font-semibold justify-center cursor-pointer"
                 >
-                  I travelled recently
+                  {t('checkin.searchLocation')}
                 </Button>
 
                 <Button
@@ -1094,9 +1114,9 @@ export function DailyCheckinPage() {
                   size="sm"
                   onClick={handleSkipWeather}
                   icon={X}
-                  className="font-semibold border-brand-sage/50 text-muted-text hover:text-brand-dark justify-center"
+                  className="font-semibold border-brand-sage/50 text-muted-text hover:text-brand-dark justify-center cursor-pointer"
                 >
-                  Skip weather
+                  {t('checkin.skipWeather')}
                 </Button>
               </div>
             )}
@@ -1105,10 +1125,10 @@ export function DailyCheckinPage() {
             {weatherMode === 'skip' && (
               <div className="p-4 rounded-card-sm bg-white/70 border border-muted-border flex items-center justify-between gap-3">
                 <p className="text-meta-md text-muted-text-dark leading-relaxed">
-                  {weatherNotice || "Location access & weather context skipped for today. Today's risk assessment can continue without local weather data."}
+                  {weatherNotice || t('checkin.weatherSub')}
                 </p>
-                <Button type="button" variant="outline" size="sm" onClick={handleResetWeatherMode} icon={RotateCcw}>
-                  Change
+                <Button type="button" variant="outline" size="sm" onClick={handleResetWeatherMode} icon={RotateCcw} className="cursor-pointer">
+                  {t('checkin.resetWeather')}
                 </Button>
               </div>
             )}
@@ -1121,90 +1141,42 @@ export function DailyCheckinPage() {
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span className="text-body-md font-semibold text-brand-dark">
                       {weatherMode === 'travel'
-                        ? `Travel Location: ${historicalSummary?.locationName || 'Selected Location'}`
-                        : `Home / Usual Location: ${usualLocation?.name || historicalSummary?.locationName || 'Saved Location'}`}
+                        ? `${historicalSummary?.locationName || 'Travel'}`
+                        : `${usualLocation?.name || historicalSummary?.locationName || 'Home'}`}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-body-md font-bold text-brand-teal">
-                      {weatherData.temperature}°C • {weatherData.humidity}% humidity • {weatherData.weatherDescription || weatherData.weatherCondition}
+                      {weatherData.temperature}°C • {weatherData.humidity}% {t('checkin.humidityLabel')}
                     </span>
-                    {weatherMode === 'travel' ? (
-                      <button
-                        type="button"
-                        onClick={handleResetWeatherMode}
-                        className="text-meta-sm text-muted-text hover:text-brand-dark underline ml-2"
-                      >
-                        Clear travel location
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSettingUsualTarget(true);
-                          setShowLocationModal(true);
-                        }}
-                        className="text-meta-sm text-brand-teal font-semibold hover:underline ml-2 flex items-center gap-1"
-                      >
-                        <MapPin className="w-3.5 h-3.5" />
-                        <span>Change usual location</span>
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={handleResetWeatherMode}
+                      className="text-meta-sm text-muted-text hover:text-brand-dark underline ml-2 cursor-pointer"
+                    >
+                      {t('checkin.resetWeather')}
+                    </button>
                   </div>
                 </div>
 
-                {/* 1-3 DAYS HISTORICAL EXPOSURE GRID */}
-                {historicalRecords && historicalRecords.length > 0 ? (
-                  <div className="space-y-2 pt-1">
-                    <span className="text-meta-sm font-semibold text-brand-dark block uppercase tracking-wider text-[11px]">
-                      {historicalRecords.length > 1 ? `PAST ${historicalRecords.length} DAYS WEATHER EXPOSURE` : 'RECENT WEATHER EXPOSURE'}
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      {historicalRecords.map((rec) => (
-                        <div key={rec.date} className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30 space-y-1">
-                          <div className="flex items-center justify-between text-meta-sm">
-                            <span className="font-semibold text-brand-dark">{rec.date}</span>
-                            <span className="text-brand-teal capitalize text-[11px]">{rec.weatherCondition}</span>
-                          </div>
-                          <div className="text-meta-sm text-muted-text">
-                            <div>Temp: <span className="font-semibold text-brand-dark">{rec.temperature}°C</span> ({rec.tempMin}°–{rec.tempMax}°)</div>
-                            <div>Pressure: <span className="font-semibold text-brand-dark">{rec.pressure} hPa</span></div>
-                            <div>Humidity: <span className="font-semibold text-brand-dark">{rec.humidity}%</span></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {historicalSummary?.pressureDelta !== undefined && historicalSummary.pressureDelta !== 0 && (
-                      <div className="text-meta-sm text-muted-text pt-1 flex items-center gap-1.5">
-                        <Info className="w-3.5 h-3.5 text-brand-teal" />
-                        <span>
-                          Barometric trend over past 3 days: <strong className="text-brand-dark">{historicalSummary.pressureDelta > 0 ? `+${historicalSummary.pressureDelta}` : historicalSummary.pressureDelta} hPa</strong> ({historicalSummary.pressureTrend}).
-                        </span>
-                      </div>
-                    )}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-meta-md">
+                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                    <span className="text-meta-sm text-muted-text block">{t('checkin.temperatureLabel')}:</span>
+                    <span className="font-bold text-brand-dark">{weatherData.temperature}°C</span>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-meta-md">
-                    <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
-                      <span className="text-meta-sm text-muted-text block">Temperature:</span>
-                      <span className="font-bold text-brand-dark">{weatherData.temperature}°C</span>
-                    </div>
-                    <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
-                      <span className="text-meta-sm text-muted-text block">Condition:</span>
-                      <span className="font-bold text-brand-dark capitalize">{weatherData.weatherDescription}</span>
-                    </div>
-                    <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
-                      <span className="text-meta-sm text-muted-text block">Pressure:</span>
-                      <span className="font-bold text-brand-dark">{weatherData.pressure} hPa</span>
-                    </div>
-                    <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
-                      <span className="text-meta-sm text-muted-text block">Humidity:</span>
-                      <span className="font-bold text-brand-dark">{weatherData.humidity}%</span>
-                    </div>
+                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                    <span className="text-meta-sm text-muted-text block">{t('checkin.humidityLabel')}:</span>
+                    <span className="font-bold text-brand-dark">{weatherData.humidity}%</span>
                   </div>
-                )}
+                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                    <span className="text-meta-sm text-muted-text block">{t('checkin.pressureLabel')}:</span>
+                    <span className="font-bold text-brand-dark">{weatherData.pressure} hPa</span>
+                  </div>
+                  <div className="p-2.5 rounded bg-[#FAF9F5] border border-brand-sage/30">
+                    <span className="text-meta-sm text-muted-text block">{t('checkin.pressureTrend')}:</span>
+                    <span className="font-bold text-brand-teal">{formatPressureTrend(historicalSummary?.pressureTrend)}</span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1215,11 +1187,7 @@ export function DailyCheckinPage() {
                   <div className="flex items-center gap-2">
                     <Search className="w-4 h-4 text-brand-teal" />
                     <span className="text-body-md font-semibold text-brand-dark">
-                      {settingUsualTarget
-                        ? usualLocation
-                          ? 'Change Your Usual Location'
-                          : 'Set Your Usual Location'
-                        : 'Search Travel Location'}
+                      {settingUsualTarget ? t('checkin.setUsualLocation') : t('checkin.searchLocation')}
                     </span>
                   </div>
                   <button
@@ -1230,15 +1198,11 @@ export function DailyCheckinPage() {
                       setShowLocationModal(false);
                       setSettingUsualTarget(false);
                     }}
-                    className="text-muted-text hover:text-brand-dark p-1"
+                    className="text-muted-text hover:text-brand-dark p-1 cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-
-                <p className="text-meta-sm text-muted-text">
-                  Search any city or region to automatically retrieve historical weather metrics without enabling GPS.
-                </p>
 
                 <div className="flex gap-2">
                   <input
@@ -1252,7 +1216,7 @@ export function DailyCheckinPage() {
                         handleSearchCity(e);
                       }
                     }}
-                    placeholder="Enter city name (e.g. Sangola, Islampur, Seattle)..."
+                    placeholder={t('checkin.searchLocationPlaceholder')}
                     className="flex-1 px-3 py-2 text-meta-md rounded border border-muted-border focus:outline-none focus:border-brand-teal bg-white"
                   />
                   <Button
@@ -1265,8 +1229,9 @@ export function DailyCheckinPage() {
                       e.stopPropagation();
                       handleSearchCity(e);
                     }}
+                    className="cursor-pointer"
                   >
-                    Search
+                    {t('common.search')}
                   </Button>
                 </div>
 
@@ -1275,23 +1240,22 @@ export function DailyCheckinPage() {
                     <button
                       type="button"
                       onClick={handleUseBrowserGpsForUsualLocation}
-                      className="text-meta-sm font-semibold text-brand-teal hover:underline flex items-center gap-1.5"
+                      className="text-meta-sm font-semibold text-brand-teal hover:underline flex items-center gap-1.5 cursor-pointer"
                     >
                       <MapPin className="w-3.5 h-3.5" />
-                      <span>Or click to detect & save current GPS coordinates as usual location</span>
+                      <span>{t('checkin.useCurrentGps')}</span>
                     </button>
                   </div>
                 )}
 
                 {searchResults.length > 0 && (
                   <div className="space-y-1.5 pt-2 max-h-48 overflow-y-auto">
-                    <span className="text-meta-sm font-semibold text-muted-text block">Select a location:</span>
                     {searchResults.map((item) => (
                       <button
                         key={item.id}
                         type="button"
                         onClick={(e) => handleSelectLocationResult(item, e)}
-                        className="w-full text-left p-2 rounded hover:bg-brand-sage/20 border border-transparent hover:border-brand-sage/30 text-meta-md text-brand-dark flex items-center justify-between"
+                        className="w-full text-left p-2 rounded hover:bg-brand-sage/20 border border-transparent hover:border-brand-sage/30 text-meta-md text-brand-dark flex items-center justify-between cursor-pointer"
                       >
                         <span>{item.label}</span>
                         <span className="text-meta-sm text-muted-text">({item.latitude}°, {item.longitude}°)</span>
@@ -1307,7 +1271,7 @@ export function DailyCheckinPage() {
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-meta-sm text-muted-text">
               <ShieldCheck className="w-4 h-4 text-brand-teal" />
-              <span>Auto-saved to your private browser storage</span>
+              <span>{t('auth.secureBadge')}</span>
             </div>
 
             <Button
@@ -1316,9 +1280,9 @@ export function DailyCheckinPage() {
               size="xl"
               isLoading={isSubmitting}
               iconRight={Check}
-              className="w-full sm:w-auto shadow-soft"
+              className="w-full sm:w-auto shadow-soft cursor-pointer"
             >
-              Save today's check-in
+              {t('checkin.submitCheckin')}
             </Button>
           </div>
         </form>
@@ -1326,3 +1290,5 @@ export function DailyCheckinPage() {
     </div>
   );
 }
+
+export default DailyCheckinPage;

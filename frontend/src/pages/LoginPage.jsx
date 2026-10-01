@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Mail,
   Lock,
@@ -19,6 +20,7 @@ import {
 import { authService } from '../services/authService';
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -35,15 +37,15 @@ export function LoginPage() {
     const newErrors = {};
 
     if (!email.trim()) {
-      newErrors.email = 'Please enter your email address.';
+      newErrors.email = t('auth.emailRequired', 'Please enter your email address.');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = 'Please enter a valid email address.';
+      newErrors.email = t('auth.emailInvalid', 'Please enter a valid email address.');
     }
 
     if (!password) {
-      newErrors.password = 'Please enter your password.';
+      newErrors.password = t('auth.passwordRequired', 'Please enter your password.');
     } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters.';
+      newErrors.password = t('auth.passwordTooShort', 'Password must be at least 6 characters.');
     }
 
     setErrors(newErrors);
@@ -69,12 +71,12 @@ export function LoginPage() {
           state: { fromOnboarding: Boolean(location.state?.fromOnboarding) },
         });
       } else {
-        const errMsg = res?.error || 'Invalid email or password. Please try again.';
+        const errMsg = res?.error || t('auth.invalidCredentials', 'Invalid email or password. Please try again.');
         setServerError(errMsg);
       }
     } catch (err) {
       console.error(err);
-      setServerError('An unexpected error occurred during sign in.');
+      setServerError(t('auth.unexpectedError', 'An unexpected error occurred during sign in.'));
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +99,7 @@ export function LoginPage() {
       }
     } catch (err) {
       console.error(err);
-      setServerError('Google sign-in failed. Please try again.');
+      setServerError(t('auth.googleSignInFailed', 'Google sign-in failed. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -109,15 +111,15 @@ export function LoginPage() {
       <div className="lg:col-span-5 space-y-7 text-left">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-brand-sage/20 to-brand-teal/15 border border-brand-sage/50 text-meta-sm text-brand-dark shadow-sm">
           <span className="w-2 h-2 rounded-full bg-brand-sage animate-pulse" />
-          <span className="font-semibold uppercase tracking-wider text-[11px]">Calm Digital Health</span>
+          <span className="font-semibold uppercase tracking-wider text-[11px]">{t('auth.calmDigitalHealth', 'Calm Digital Health')}</span>
         </div>
 
         <div className="space-y-3.5">
           <h1 className="text-app-xl sm:text-[34px] font-bold text-brand-dark tracking-tight leading-[1.2]">
-            A calm digital space for your well-being.
+            {t('auth.signInTitle', 'A calm digital space for your well-being.')}
           </h1>
           <p className="text-body-lg text-[#555B55] leading-relaxed">
-            Sign in to check today's risk estimate, review longitudinal pattern insights, and record your 60-second micro-log.
+            {t('auth.signInSubtitle', "Sign in to check today's risk estimate, review longitudinal pattern insights, and record your 60-second micro-log.")}
           </p>
         </div>
 
@@ -128,8 +130,8 @@ export function LoginPage() {
               <CheckCircle2 className="w-4 h-4 text-brand-teal" />
             </div>
             <div>
-              <h4 className="text-meta-md font-bold text-brand-dark">Gentle Sensitivity Forecasting</h4>
-              <p className="text-meta-sm text-[#666C66] mt-0.5">Non-alarmist early likelihood windows based on empirical habits.</p>
+              <h4 className="text-meta-md font-bold text-brand-dark">{t('auth.gentleForecastingTitle', 'Gentle Sensitivity Forecasting')}</h4>
+              <p className="text-meta-sm text-[#666C66] mt-0.5">{t('auth.gentleForecastingDesc', 'Non-alarmist early likelihood windows based on empirical habits.')}</p>
             </div>
           </div>
 
@@ -138,8 +140,8 @@ export function LoginPage() {
               <CheckCircle2 className="w-4 h-4 text-brand-teal" />
             </div>
             <div>
-              <h4 className="text-meta-md font-bold text-brand-dark">Zero 3rd-Party Trackers</h4>
-              <p className="text-meta-sm text-[#666C66] mt-0.5">Your daily entries remain completely confidential and local.</p>
+              <h4 className="text-meta-md font-bold text-brand-dark">{t('auth.zeroTrackersTitle', 'Zero 3rd-Party Trackers')}</h4>
+              <p className="text-meta-sm text-[#666C66] mt-0.5">{t('auth.zeroTrackersDesc', 'Your daily entries remain completely confidential and local.')}</p>
             </div>
           </div>
 
@@ -148,8 +150,8 @@ export function LoginPage() {
               <CheckCircle2 className="w-4 h-4 text-brand-teal" />
             </div>
             <div>
-              <h4 className="text-meta-md font-bold text-brand-dark">Sensory Ergonomics</h4>
-              <p className="text-meta-sm text-[#666C66] mt-0.5">Low-contrast, warm canvas palette tailored for photophobia.</p>
+              <h4 className="text-meta-md font-bold text-brand-dark">{t('auth.sensoryErgonomicsTitle', 'Sensory Ergonomics')}</h4>
+              <p className="text-meta-sm text-[#666C66] mt-0.5">{t('auth.sensoryErgonomicsDesc', 'Low-contrast, warm canvas palette tailored for photophobia.')}</p>
             </div>
           </div>
         </div>
@@ -158,10 +160,10 @@ export function LoginPage() {
         <div className="p-4 rounded-[18px] bg-white/80 border-2 border-brand-sage/40 space-y-1.5 shadow-sm">
           <div className="flex items-center gap-2 text-meta-sm font-bold text-brand-dark">
             <ShieldCheck className="w-4 h-4 text-brand-teal" />
-            <span>Privacy Promise</span>
+            <span>{t('auth.privacyPromiseTitle', 'Privacy Promise')}</span>
           </div>
           <p className="text-meta-sm text-[#666C66] leading-relaxed">
-            "Your health information deserves thoughtful handling. Protected by clinical-grade privacy."
+            "{t('auth.privacyPromiseDesc', 'Your health information deserves thoughtful handling. Protected by clinical-grade privacy.')}"
           </p>
         </div>
       </div>
@@ -172,14 +174,14 @@ export function LoginPage() {
           <CardHeader className="text-left pb-3 border-b border-brand-sage/30 space-y-1">
             <div className="flex items-center justify-between">
               <CardTitle as="h2" className="text-app-lg font-bold text-brand-dark">
-                Sign in to your account
+                {t('auth.signInTitle', 'Sign in to your account')}
               </CardTitle>
               <Badge variant="sage" size="sm">
-                Account Sign In
+                {t('nav.signIn', 'Account Sign In')}
               </Badge>
             </div>
             <CardDescription className="text-body-md text-[#555B55]">
-              Enter your email and password to access your dashboard.
+              {t('auth.signInSubtitle', 'Enter your email and password to access your dashboard.')}
             </CardDescription>
           </CardHeader>
 
@@ -191,20 +193,20 @@ export function LoginPage() {
 
           {showForgotMsg && (
             <div className="p-3.5 rounded-[14px] bg-brand-teal/15 border border-brand-teal/40 text-brand-dark text-meta-md flex items-center justify-between animate-in fade-in duration-200">
-              <span>Password reset instructions simulated. Check your inbox.</span>
+              <span>{t('auth.resetSimulated', 'Password reset instructions simulated. Check your inbox.')}</span>
               <button
                 type="button"
                 onClick={() => setShowForgotMsg(false)}
                 className="text-meta-sm underline hover:text-brand-dark font-semibold"
               >
-                Dismiss
+                {t('common.close', 'Dismiss')}
               </button>
             </div>
           )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4 pt-1">
             <Input
-              label="Email Address"
+              label={t('auth.emailAddress', 'Email Address')}
               id="login-email"
               name="email"
               type="email"
@@ -214,13 +216,13 @@ export function LoginPage() {
                 setEmail(e.target.value);
                 if (errors.email) setErrors((prev) => ({ ...prev, email: null }));
               }}
-              placeholder="e.g. name@domain.com"
+              placeholder={t('auth.emailPlaceholder', 'e.g. name@domain.com')}
               errorText={errors.email}
               required
             />
 
             <Input
-              label="Password"
+              label={t('auth.password', 'Password')}
               id="login-password"
               name="password"
               type="password"
@@ -230,7 +232,7 @@ export function LoginPage() {
                 setPassword(e.target.value);
                 if (errors.password) setErrors((prev) => ({ ...prev, password: null }));
               }}
-              placeholder="Enter your password"
+              placeholder={t('auth.passwordPlaceholder', 'Enter your password')}
               errorText={errors.password}
               required
             />
@@ -244,7 +246,7 @@ export function LoginPage() {
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="rounded text-brand-teal focus:ring-brand-teal w-4 h-4 cursor-pointer"
                 />
-                <span className="font-medium">Remember on this device</span>
+                <span className="font-medium">{t('auth.rememberMe', 'Remember on this device')}</span>
               </label>
 
               <button
@@ -252,7 +254,7 @@ export function LoginPage() {
                 onClick={() => setShowForgotMsg(true)}
                 className="text-brand-dark hover:text-brand-teal hover:underline font-semibold text-meta-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-teal rounded"
               >
-                Forgot password?
+                {t('auth.forgotPassword', 'Forgot password?')}
               </button>
             </div>
 
@@ -265,7 +267,7 @@ export function LoginPage() {
               isLoading={isLoading}
               iconRight={ArrowRight}
             >
-              Sign In to Dashboard
+              {t('auth.signInBtn', 'Sign In to Dashboard')}
             </Button>
           </form>
 
@@ -274,7 +276,7 @@ export function LoginPage() {
             <div className="relative flex items-center justify-center my-3">
               <div className="border-t border-brand-sage/35 w-full" />
               <span className="bg-[#FAF9F5] px-3 text-[12px] uppercase tracking-wider text-muted-text font-semibold absolute">
-                or
+                {t('auth.or', 'or')}
               </span>
             </div>
 
@@ -303,19 +305,19 @@ export function LoginPage() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span>Continue with Google</span>
+              <span>{t('auth.googleSignIn', 'Continue with Google')}</span>
             </button>
           </div>
 
           {/* Switch to Signup */}
           <div className="pt-3 text-center text-body-md text-muted-text border-t border-brand-sage/30">
-            <span>Don't have an account yet? </span>
+            <span>{t('auth.noAccount', "Don't have an account yet?")} </span>
             <Link
               to={ROUTES.SIGNUP}
               state={location.state}
               className="font-bold text-brand-dark hover:text-brand-teal hover:underline ml-1"
             >
-              Create an account
+              {t('auth.signUpBtn', 'Create an account')}
             </Link>
           </div>
         </Card>
@@ -323,3 +325,5 @@ export function LoginPage() {
     </div>
   );
 }
+
+export default LoginPage;

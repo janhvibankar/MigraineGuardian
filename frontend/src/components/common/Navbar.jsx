@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Logo } from './Logo';
 import { Button } from '../ui/Button';
-import { PUBLIC_NAV_ITEMS } from '../../data/navigation';
+import { LanguageSelector } from './LanguageSelector';
+import { useTranslation } from '../../hooks/useTranslation';
 import { ROUTES } from '../../utils/constants';
 import { Menu, X, ArrowRight } from 'lucide-react';
 import { cn } from '../../utils/cn';
@@ -10,6 +11,12 @@ import { cn } from '../../utils/cn';
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const { t } = useTranslation();
+
+  const publicNavItems = [
+    { label: t('nav.overview'), href: ROUTES.HOME },
+    { label: t('nav.howItWorks'), href: ROUTES.HOW_IT_WORKS },
+  ];
 
   return (
     <header className="sticky top-0 z-40 w-full bg-canvas/90 backdrop-blur-md border-b border-muted-border/70 transition-all">
@@ -19,7 +26,7 @@ export function Navbar() {
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
-          {PUBLIC_NAV_ITEMS.map((item) => {
+          {publicNavItems.map((item) => {
             const isActive = location.pathname === item.href;
             return (
               <Link
@@ -38,25 +45,31 @@ export function Navbar() {
           })}
         </nav>
 
-        {/* Desktop CTA actions */}
-        <div className="hidden md:flex items-center space-x-3">
+        {/* Desktop Controls (Language Selector, CTA actions) */}
+        <div className="hidden md:flex items-center space-x-2.5">
+          <LanguageSelector />
+
+          <div className="h-5 w-px bg-muted-border mx-1" />
+
           <Link to={ROUTES.LOGIN}>
             <Button variant="ghost" size="md">
-              Sign In
+              {t('nav.signIn')}
             </Button>
           </Link>
           <Link to={ROUTES.ONBOARDING}>
             <Button variant="primary" size="md" iconRight={ArrowRight}>
-              Begin Journey
+              {t('nav.beginJourney')}
             </Button>
           </Link>
         </div>
 
-        {/* Mobile menu toggle */}
-        <div className="flex md:hidden items-center space-x-2">
+        {/* Mobile menu toggle & controls */}
+        <div className="flex md:hidden items-center space-x-1 sm:space-x-2">
+          <LanguageSelector variant="compact" />
+
           <Link to={ROUTES.LOGIN}>
             <Button variant="ghost" size="sm">
-              Sign In
+              {t('nav.signIn')}
             </Button>
           </Link>
           <button
@@ -75,7 +88,7 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="md:hidden border-b border-muted-border bg-canvas px-4 pt-3 pb-6 space-y-3 shadow-soft-md animate-in fade-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col space-y-1">
-            {PUBLIC_NAV_ITEMS.map((item) => {
+            {publicNavItems.map((item) => {
               const isActive = location.pathname === item.href;
               return (
                 <Link
@@ -98,12 +111,12 @@ export function Navbar() {
           <div className="pt-3 border-t border-muted-border/60 flex flex-col gap-2.5">
             <Link to={ROUTES.ONBOARDING} onClick={() => setMobileMenuOpen(false)}>
               <Button variant="primary" size="lg" className="w-full" iconRight={ArrowRight}>
-                Begin Journey
+                {t('nav.beginJourney')}
               </Button>
             </Link>
             <Link to={ROUTES.LOGIN} onClick={() => setMobileMenuOpen(false)}>
               <Button variant="secondary" size="md" className="w-full">
-                Sign In
+                {t('nav.signIn')}
               </Button>
             </Link>
           </div>
@@ -112,3 +125,5 @@ export function Navbar() {
     </header>
   );
 }
+
+export default Navbar;

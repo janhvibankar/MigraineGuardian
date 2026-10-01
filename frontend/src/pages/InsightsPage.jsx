@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { insightsService } from '../services/insightsService';
 import { reportService } from '../services/reportService';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Sparkles,
   Moon,
@@ -36,6 +37,7 @@ import {
 import { cn } from '../utils/cn';
 
 export function InsightsPage() {
+  const { t } = useTranslation();
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [weeklyData, setWeeklyData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -69,16 +71,28 @@ export function InsightsPage() {
     setTimeout(() => setDownloadSuccess(false), 3000);
   };
 
+  const getPatternTitle = (p) => {
+    if (p.id === 'sleep_deficit') return t('insights.patternSleepTitle');
+    if (p.id === 'elevated_stress') return t('insights.patternStressTitle');
+    return p.title;
+  };
+
+  const getPatternDesc = (p) => {
+    if (p.id === 'sleep_deficit') return t('insights.patternSleepDesc', { count: p.count, avg: p.avg });
+    if (p.id === 'elevated_stress') return t('insights.patternStressDesc', { avg: p.avg });
+    return p.description;
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-200 text-left">
       {/* HEADER & TOP ACTIONS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-muted-border/60">
         <div>
           <h1 className="text-app-xl sm:text-[32px] font-semibold text-brand-dark tracking-tight leading-tight">
-            Weekly Insights & Patterns
+            {t('insights.title')}
           </h1>
           <p className="text-body-md text-muted-text mt-0.5">
-            Empirical pattern discoveries based on your daily check-in signals.
+            {t('insights.subtitle')}
           </p>
         </div>
 
@@ -89,7 +103,7 @@ export function InsightsPage() {
             onClick={handleDownload}
             icon={Download}
           >
-            Export Summary
+            {t('common.export')}
           </Button>
 
           <Link to={ROUTES.CHAT}>
@@ -99,7 +113,7 @@ export function InsightsPage() {
               icon={MessageSquare}
               iconRight={ArrowRight}
             >
-              Ask Assistant
+              {t('chat.askMigraineGuardian')}
             </Button>
           </Link>
         </div>
@@ -109,7 +123,7 @@ export function InsightsPage() {
         <div className="min-h-[300px] flex flex-col items-center justify-center space-y-3 py-12">
           <Loader2 className="w-8 h-8 text-brand-teal animate-spin" />
           <span className="text-body-md font-semibold text-brand-dark">
-            Discovering your pattern insights...
+            {t('common.loading')}
           </span>
         </div>
       ) : !hasData ? (
@@ -120,15 +134,15 @@ export function InsightsPage() {
           </div>
           <div className="space-y-1">
             <h2 className="text-section-lg font-bold text-brand-dark">
-              No pattern insights discovered yet
+              {t('common.noData')}
             </h2>
             <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
-              Log your daily sleep, stress, screen time, and hydration to generate evidence-based pattern insights.
+              {t('dashboard.noForecastDesc')}
             </p>
           </div>
           <Link to={ROUTES.DAILY_CHECKIN} className="inline-block pt-2">
             <Button variant="primary" size="lg" icon={CalendarCheck} iconRight={ArrowRight}>
-              Complete Today's Check-in
+              {t('dashboard.completeCheckinBtn')}
             </Button>
           </Link>
         </Card>
@@ -137,34 +151,34 @@ export function InsightsPage() {
           {/* SUMMARY TILES */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
-              <span className="text-meta-sm text-muted-text font-medium">Logged Migraine Days</span>
+              <span className="text-meta-sm text-muted-text font-medium">{t('analytics.migraineDays')}</span>
               <div className="text-app-xl font-bold text-brand-dark">
-                {weeklyData.summary.migraineDays} days
+                {weeklyData.summary.migraineDays} {t('common.daysAgo', { count: '' }).trim() || 'days'}
               </div>
-              <span className="text-[11px] text-muted-text">Past 7 days</span>
+              <span className="text-[11px] text-muted-text">{t('analytics.timeRange7')}</span>
             </div>
 
             <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
-              <span className="text-meta-sm text-muted-text font-medium">Average Sleep</span>
+              <span className="text-meta-sm text-muted-text font-medium">{t('dashboard.sleepDuration')}</span>
               <div className="text-app-xl font-bold text-brand-dark">
-                {weeklyData.summary.avgSleep}
+                {weeklyData.summary.rawAvgSleep ? `${weeklyData.summary.rawAvgSleep} ${t('common.hoursShort')}` : weeklyData.summary.avgSleep}
               </div>
-              <span className="text-[11px] text-muted-text">Target: 7.5 hrs</span>
+              <span className="text-[11px] text-muted-text">{t('dashboard.targetHours')}</span>
             </div>
 
             <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
-              <span className="text-meta-sm text-muted-text font-medium">Average Stress</span>
+              <span className="text-meta-sm text-muted-text font-medium">{t('dashboard.dailyStress')}</span>
               <div className="text-app-xl font-bold text-brand-dark">
-                {weeklyData.summary.avgStress}
+                {weeklyData.summary.rawAvgStress ? `${weeklyData.summary.rawAvgStress} / 10` : weeklyData.summary.avgStress}
               </div>
-              <span className="text-[11px] text-muted-text">Target: &lt; 5.0</span>
+              <span className="text-[11px] text-muted-text">{t('dashboard.outOfTen')}</span>
             </div>
           </div>
 
           {/* DISCOVERED PATTERNS */}
           <div className="space-y-4">
             <h2 className="text-section-lg font-bold text-brand-dark">
-              Discovered Behavioral Patterns
+              {t('insights.keyFindingsTitle')}
             </h2>
 
             {weeklyData.noticedPatterns && weeklyData.noticedPatterns.length > 0 ? (
@@ -172,18 +186,18 @@ export function InsightsPage() {
                 {weeklyData.noticedPatterns.map((p, idx) => (
                   <Card key={idx} className="p-5 bg-white border border-muted-border rounded-card shadow-soft space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-section-md font-bold text-brand-dark">{p.title}</h3>
+                      <h3 className="text-section-md font-bold text-brand-dark">{getPatternTitle(p)}</h3>
                       <Badge variant={p.impact === 'High' ? 'alert' : 'teal'} size="sm">
-                        {p.impact} Impact
+                        {p.impact} {t('common.impact')}
                       </Badge>
                     </div>
-                    <p className="text-meta-md text-[#555B55] leading-relaxed">{p.description}</p>
+                    <p className="text-meta-md text-[#555B55] leading-relaxed">{getPatternDesc(p)}</p>
                   </Card>
                 ))}
               </div>
             ) : (
               <div className="p-6 bg-white border border-muted-border rounded-card text-muted-text text-center">
-                No high-impact risk pattern disruptions detected over your past logs.
+                {t('insights.noPatterns')}
               </div>
             )}
           </div>

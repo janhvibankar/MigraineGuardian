@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { authService } from '../services/authService';
 import { auth } from '../config/firebase';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   User,
   Activity,
@@ -35,6 +36,7 @@ import {
 import { cn } from '../utils/cn';
 
 export function OnboardingPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const guestDraft = authService.getGuestOnboarding();
 
@@ -45,7 +47,7 @@ export function OnboardingPage() {
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
   const [authError, setAuthError] = useState(null);
 
-  // Step 1: About You - Always start clean from guestDraft (never silent reuse of currentUser)
+  // Step 1: About You - Always start clean from guestDraft
   const [name, setName] = useState(() => guestDraft?.name || '');
   const [age, setAge] = useState(() => guestDraft?.age || '25-34');
   const [gender, setGender] = useState(() => guestDraft?.gender || 'Female');
@@ -231,17 +233,17 @@ export function OnboardingPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 py-4 sm:py-6 text-left">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-brand-sage/30">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-brand-sage/30">
         <div>
           <h1 className="text-section-lg sm:text-app-xl font-bold text-brand-dark tracking-tight">
-            Personal Baseline Calibration
+            {t('onboarding.title')}
           </h1>
           <p className="text-body-md text-[#555B55] mt-0.5">
-            Step {step} of 4 • {stepsMeta[step - 1].title}
+            {t('onboarding.stepOf', { step, title: stepsMeta[step - 1].title })}
           </p>
         </div>
         <Badge variant="teal" size="md">
-          Personalized Setup
+          {t('onboarding.personalizedSetup')}
         </Badge>
       </div>
 
@@ -292,16 +294,16 @@ export function OnboardingPage() {
           <div className="space-y-5 animate-in fade-in duration-200">
             <div className="space-y-1 pb-2 border-b border-brand-sage/30">
               <h2 className="text-section-lg font-bold text-brand-dark">
-                Tell us a little about yourself
+                {t('onboarding.aboutYouTitle')}
               </h2>
               <p className="text-body-md text-[#555B55]">
-                We use this information to personalize your baseline and greeting.
+                {t('onboarding.aboutYouSub')}
               </p>
             </div>
 
             <div className="space-y-4 pt-1">
               <Input
-                label="Your Preferred Name"
+                label={t('onboarding.yourPreferredName')}
                 id="onboarding-name"
                 name="name"
                 type="text"
@@ -319,7 +321,7 @@ export function OnboardingPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-meta-sm font-semibold text-brand-dark">
-                    Age Group
+                    {t('onboarding.ageGroup')}
                   </label>
                   <select
                     value={age}
@@ -337,17 +339,17 @@ export function OnboardingPage() {
 
                 <div className="space-y-1.5">
                   <label className="text-meta-sm font-semibold text-brand-dark">
-                    Gender Identity
+                    {t('onboarding.genderIdentity')}
                   </label>
                   <select
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-[12px] bg-white border border-brand-sage/50 text-body-md text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
                   >
-                    <option value="Female">Female</option>
-                    <option value="Male">Male</option>
-                    <option value="Non-binary">Non-binary</option>
-                    <option value="Prefer not to say">Prefer not to say</option>
+                    <option value="Female">{t('onboarding.female', 'Female')}</option>
+                    <option value="Male">{t('onboarding.male', 'Male')}</option>
+                    <option value="Non-binary">{t('onboarding.nonBinary', 'Non-binary')}</option>
+                    <option value="Prefer not to say">{t('onboarding.preferNotToSay', 'Prefer not to say')}</option>
                   </select>
                 </div>
               </div>
@@ -362,10 +364,10 @@ export function OnboardingPage() {
           <div className="space-y-5 animate-in fade-in duration-200">
             <div className="space-y-1 pb-2 border-b border-brand-sage/30">
               <h2 className="text-section-lg font-bold text-brand-dark">
-                Your Migraine Experience & History
+                {t('onboarding.migraineExpTitle')}
               </h2>
               <p className="text-body-md text-[#555B55]">
-                Helps calibrate pattern thresholds for your personal sensitivity profile.
+                {t('onboarding.migraineExpSub')}
               </p>
             </div>
 
@@ -373,22 +375,26 @@ export function OnboardingPage() {
               {/* Do you experience migraines? */}
               <div className="space-y-2">
                 <label className="text-meta-sm font-semibold text-brand-dark block">
-                  Do you experience migraines or severe recurrent headaches?
+                  {t('onboarding.doYouExperienceMigraines')}
                 </label>
                 <div className="grid grid-cols-3 gap-2.5">
-                  {['Yes', 'No', 'Not sure'].map((opt) => (
+                  {[
+                    { val: 'Yes', label: t('common.yes') },
+                    { val: 'No', label: t('common.no') },
+                    { val: 'Not sure', label: t('onboarding.notSure', 'Not sure') },
+                  ].map((opt) => (
                     <button
-                      key={opt}
+                      key={opt.val}
                       type="button"
-                      onClick={() => setHasMigraines(opt)}
+                      onClick={() => setHasMigraines(opt.val)}
                       className={cn(
                         'py-2.5 px-3 rounded-[12px] border-2 text-meta-md font-bold transition-all cursor-pointer text-center',
-                        hasMigraines === opt
+                        hasMigraines === opt.val
                           ? 'bg-brand-dark text-white border-brand-dark shadow-sm'
                           : 'bg-white text-brand-dark border-brand-sage/40 hover:border-brand-teal'
                       )}
                     >
-                      {opt}
+                      {opt.label}
                     </button>
                   ))}
                 </div>
@@ -397,28 +403,28 @@ export function OnboardingPage() {
               {/* Typical Frequency */}
               <div className="space-y-2">
                 <label className="text-meta-sm font-semibold text-brand-dark block">
-                  Typical episode frequency:
+                  {t('onboarding.typicalFrequency')}
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {[
-                    'Less than once a month',
-                    '1–3 times a month',
-                    '1–2 times a week',
-                    '3+ times a week / Chronic',
+                    { val: 'Less than once a month', label: t('onboarding.freqLessMonthly', 'Less than once a month') },
+                    { val: '1–3 times a month', label: t('onboarding.freq1to3Monthly', '1–3 times a month') },
+                    { val: '1–2 times a week', label: t('onboarding.freq1to2Weekly', '1–2 times a week') },
+                    { val: '3+ times a week / Chronic', label: t('onboarding.freq3PlusWeekly', '3+ times a week / Chronic') },
                   ].map((freq) => (
                     <button
-                      key={freq}
+                      key={freq.val}
                       type="button"
-                      onClick={() => setFrequency(freq)}
+                      onClick={() => setFrequency(freq.val)}
                       className={cn(
                         'p-3 rounded-[14px] border-2 text-meta-md font-semibold text-left transition-all cursor-pointer flex items-center justify-between',
-                        frequency === freq
+                        frequency === freq.val
                           ? 'bg-white border-brand-teal text-brand-dark ring-2 ring-brand-teal/20 shadow-sm font-bold'
                           : 'bg-white/80 border-brand-sage/40 hover:bg-white text-[#555B55]'
                       )}
                     >
-                      <span>{freq}</span>
-                      {frequency === freq && <Check className="w-4 h-4 text-brand-teal" />}
+                      <span>{freq.label}</span>
+                      {frequency === freq.val && <Check className="w-4 h-4 text-brand-teal" />}
                     </button>
                   ))}
                 </div>
@@ -427,7 +433,7 @@ export function OnboardingPage() {
               {/* Severity Slider */}
               <div className="p-4 rounded-[18px] bg-white border-2 border-brand-sage/45 space-y-2">
                 <div className="flex items-center justify-between text-meta-md">
-                  <span className="font-bold text-brand-dark">Typical Episode Severity</span>
+                  <span className="font-bold text-brand-dark">{t('onboarding.typicalSeverity')}</span>
                   <span className="font-extrabold text-brand-dark text-section-md">
                     {getSeverityLabel(severity)}
                   </span>
@@ -441,9 +447,9 @@ export function OnboardingPage() {
                   className="w-full accent-brand-dark h-2 bg-brand-sage/30 rounded-lg cursor-pointer"
                 />
                 <div className="flex justify-between text-[11px] text-[#666C66] font-semibold">
-                  <span>0 (No Pain)</span>
-                  <span>5 (Moderate Pain)</span>
-                  <span>10 (Debilitating)</span>
+                  <span>{t('onboarding.severityNoPain')}</span>
+                  <span>{t('onboarding.severityModPain')}</span>
+                  <span>{t('onboarding.severityDebilitating')}</span>
                 </div>
               </div>
             </div>
@@ -458,10 +464,10 @@ export function OnboardingPage() {
             <div className="flex items-center justify-between pb-2 border-b border-brand-sage/30">
               <div>
                 <h2 className="text-section-lg font-bold text-brand-dark">
-                  Choose your active tracking factors
+                  {t('onboarding.chooseActiveFactors')}
                 </h2>
                 <p className="text-body-md text-[#555B55]">
-                  Select the lifestyle areas you wish to observe during your daily check-in.
+                  {t('onboarding.chooseActiveFactorsSub')}
                 </p>
               </div>
               <Button
@@ -470,7 +476,7 @@ export function OnboardingPage() {
                 onClick={selectAllFactors}
                 className="text-brand-teal hover:text-brand-dark font-semibold"
               >
-                {selectedFactors.length === trackingOptions.length ? 'Reset' : 'Select All'}
+                {selectedFactors.length === trackingOptions.length ? t('onboarding.reset') : t('onboarding.selectAll')}
               </Button>
             </div>
 
@@ -521,34 +527,34 @@ export function OnboardingPage() {
           <div className="space-y-6 animate-in fade-in duration-200">
             <div className="space-y-1.5 pb-2 border-b border-brand-sage/30">
               <Badge variant="sage" size="sm">
-                Final Step
+                {t('onboarding.finalStepBadge')}
               </Badge>
               <h2 className="text-section-lg md:text-app-lg font-bold text-brand-dark">
-                Perceived Stress Scale (PSS-10)
+                {t('onboarding.pssTitle')}
               </h2>
               <p className="text-body-md text-[#555B55] leading-relaxed">
-                Stress is one of the most significant autonomic influences on migraine vulnerability. Taking our clinically validated 10-question evaluation helps establish your baseline stress index.
+                {t('onboarding.pssDesc')}
               </p>
             </div>
 
             {/* Summary Review Card */}
             <div className="p-5 sm:p-6 rounded-[20px] bg-white border-2 border-brand-sage/50 shadow-soft space-y-3.5">
               <span className="text-meta-sm font-bold uppercase tracking-wider text-brand-teal block">
-                Calibrated Health Profile
+                {t('onboarding.calibratedProfile')}
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-meta-md">
                 <div className="p-3 rounded-[14px] bg-card-warm/60 border border-brand-sage/35">
-                  <span className="text-meta-sm text-muted-text block">Name:</span>
+                  <span className="text-meta-sm text-muted-text block">{t('onboarding.nameLabel')}</span>
                   <span className="font-bold text-brand-dark">{name}</span>
                 </div>
                 <div className="p-3 rounded-[14px] bg-card-warm/60 border border-brand-sage/35">
-                  <span className="text-meta-sm text-muted-text block">Migraine History:</span>
+                  <span className="text-meta-sm text-muted-text block">{t('onboarding.migraineHistoryLabel')}</span>
                   <span className="font-bold text-brand-dark">{hasMigraines === 'Yes' ? frequency : 'General Wellness'}</span>
                 </div>
                 <div className="p-3 rounded-[14px] bg-card-warm/60 border border-brand-sage/35">
-                  <span className="text-meta-sm text-muted-text block">Active Factors:</span>
-                  <span className="font-bold text-brand-dark">{selectedFactors.length} Monitored</span>
+                  <span className="text-meta-sm text-muted-text block">{t('onboarding.activeFactorsLabel')}</span>
+                  <span className="font-bold text-brand-dark">{t('onboarding.factorsMonitored', { count: selectedFactors.length })}</span>
                 </div>
               </div>
             </div>
@@ -561,10 +567,10 @@ export function OnboardingPage() {
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-section-md font-bold text-brand-dark">
-                    Take the 3-Minute Stress Evaluation Now
+                    {t('onboarding.takeStressEvalNow')}
                   </h3>
                   <p className="text-meta-md text-[#484E48] leading-relaxed">
-                    Completing this 10-item questionnaire now provides immediate calibration for your upcoming risk forecasts.
+                    {t('onboarding.takeStressEvalDesc')}
                   </p>
                 </div>
               </div>
@@ -577,7 +583,7 @@ export function OnboardingPage() {
                   iconRight={ArrowRight}
                   className="flex-1 shadow-md font-bold"
                 >
-                  Start PSS Assessment
+                  {t('onboarding.startPssAssessment')}
                 </Button>
                 <Button
                   variant="secondary"
@@ -585,7 +591,7 @@ export function OnboardingPage() {
                   onClick={handleCompleteLater}
                   className="flex-1"
                 >
-                  Complete Later
+                  {t('onboarding.completeLater')}
                 </Button>
               </div>
             </div>
@@ -603,12 +609,12 @@ export function OnboardingPage() {
               onClick={handleBack}
               icon={ArrowLeft}
             >
-              Back
+              {t('common.back')}
             </Button>
           ) : (
             <Link to={ROUTES.HOME}>
               <Button variant="ghost" size="md">
-                Cancel
+                {t('common.cancel')}
               </Button>
             </Link>
           )}
@@ -621,7 +627,7 @@ export function OnboardingPage() {
               iconRight={ArrowRight}
               className="shadow-md"
             >
-              Continue to Step {step + 1}
+              {t('onboarding.continueToStep', { next: step + 1 })}
             </Button>
           ) : null}
         </div>
@@ -676,7 +682,7 @@ export function OnboardingPage() {
                     disabled={isSubmittingAuth}
                     className="w-full"
                   >
-                    Sign In with Different Account
+                    {t('auth.signInDifferent', 'Sign In with Different Account')}
                   </Button>
 
                   <Button
@@ -686,7 +692,7 @@ export function OnboardingPage() {
                     disabled={isSubmittingAuth}
                     className="w-full border-brand-sage/50"
                   >
-                    Create New Account
+                    {t('auth.createNewAccount', 'Create New Account')}
                   </Button>
 
                   <div className="pt-2 flex flex-col items-center gap-2">
@@ -695,7 +701,7 @@ export function OnboardingPage() {
                       onClick={() => setShowAuthChoiceModal(false)}
                       className="text-meta-sm text-muted-text hover:text-brand-dark font-medium transition-colors cursor-pointer"
                     >
-                      Keep Editing Setup
+                      {t('auth.keepEditing', 'Keep Editing Setup')}
                     </button>
                   </div>
                 </div>
@@ -706,13 +712,13 @@ export function OnboardingPage() {
                 <div className="space-y-2">
                   <h3 className="text-section-md font-bold text-brand-dark">
                     {authModalType === 'pss'
-                      ? 'Sign In to Begin PSS Calibration'
-                      : 'Sign In to Access Your Dashboard'}
+                      ? t('auth.guestPssTitle', 'Sign In to Begin PSS Calibration')
+                      : t('auth.guestDashboardTitle', 'Sign In to Access Your Dashboard')}
                   </h3>
                   <p className="text-body-md text-[#555B55] leading-relaxed">
                     {authModalType === 'pss'
-                      ? 'To take your clinical baseline stress evaluation and link your calibration to your health records, please create a free account or sign in. Your onboarding answers are safely preserved.'
-                      : 'To access your personalized dashboard, record daily check-ins, and receive predictive risk forecasts, please create a free account or sign in. Your calibration responses have been safely saved.'}
+                      ? t('auth.guestPssDesc', 'To take your clinical baseline stress evaluation and link your calibration to your health records, please create a free account or sign in. Your onboarding answers are safely preserved.')
+                      : t('auth.guestDashboardDesc', 'To access your personalized dashboard, record daily check-ins, and receive predictive risk forecasts, please create a free account or sign in. Your calibration responses have been safely saved.')}
                   </p>
                 </div>
 
@@ -733,7 +739,7 @@ export function OnboardingPage() {
                     className="block"
                   >
                     <Button variant="primary" size="lg" className="w-full shadow-md font-bold" iconRight={ArrowRight}>
-                      Create Free Account
+                      {t('common.createFreeAccount')}
                     </Button>
                   </Link>
                   <Link
@@ -745,7 +751,7 @@ export function OnboardingPage() {
                     className="block"
                   >
                     <Button variant="secondary" size="md" className="w-full">
-                      Sign In to Existing Account
+                      {t('nav.signIn')}
                     </Button>
                   </Link>
 
@@ -756,7 +762,7 @@ export function OnboardingPage() {
                     disabled={isSubmittingAuth}
                     className="w-full border-brand-sage/50"
                   >
-                    {isSubmittingAuth ? 'Connecting Google...' : 'Continue with Google'}
+                    {isSubmittingAuth ? t('onboarding.connectingGoogle', 'Connecting Google...') : t('auth.googleSignIn')}
                   </Button>
 
                   <div className="pt-2 flex flex-col items-center gap-2">
@@ -765,13 +771,13 @@ export function OnboardingPage() {
                       onClick={() => setShowAuthChoiceModal(false)}
                       className="text-meta-sm text-muted-text hover:text-brand-dark font-medium transition-colors cursor-pointer"
                     >
-                      Continue Editing Onboarding
+                      {t('auth.keepEditing', 'Keep Editing Setup')}
                     </button>
                     <Link
                       to={ROUTES.HOME}
                       className="text-meta-sm text-muted-text hover:text-brand-dark transition-colors"
                     >
-                      Return to Overview
+                      {t('auth.backToOverview')}
                     </Link>
                   </div>
                 </div>

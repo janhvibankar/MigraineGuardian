@@ -1,45 +1,67 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../utils/constants';
 import { chatService } from '../../services/chatService';
+import { useTranslation } from '../../hooks/useTranslation';
 import {
   Bot,
   Sparkles,
   Send,
   X,
   Maximize2,
-  Minimize2,
   ShieldCheck,
-  ArrowRight,
-  MessageSquare,
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 export function FloatingChatBot() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t, language } = useTranslation();
 
   const [isOpen, setIsOpen] = useState(false);
+  const getWelcomeText = (lang) => {
+    if (lang === 'hi') return 'नमस्ते! मैं MigraineGuardian हूँ, आपका शांत स्वास्थ्य साथी। आज मैं आपके स्वास्थ्य में कैसे सहायता कर सकता हूँ?';
+    if (lang === 'mr') return 'नमस्कार! मी MigraineGuardian आहे, तुमचा शांत आरोग्य साथीदार. आज मी तुम्हाला कशी मदत करू शकतो?';
+    return 'Hello! I am MigraineGuardian, your calm companion. How can I support your migraine wellness today?';
+  };
+
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
       sender: 'assistant',
-      text: 'Hello! I am MigraineGuardian, your calm companion. How can I support your migraine wellness today?',
-      time: 'Just now',
+      text: getWelcomeText(language),
+      time: t('common.justNow', 'Just now'),
     },
   ]);
+
+  // Update initial welcome message whenever language switches if user hasn't started chatting
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 1 && prev[0].id === 'welcome') {
+        return [
+          {
+            id: 'welcome',
+            sender: 'assistant',
+            text: getWelcomeText(language),
+            time: t('common.justNow', 'Just now'),
+          },
+        ];
+      }
+      return prev;
+    });
+  }, [language, t]);
+
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [hasUnread, setHasUnread] = useState(false);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
   // Suggested prompt chips for fast interaction
   const quickPrompts = [
-    'Why is my risk elevated today?',
-    'What patterns are in my recent logs?',
-    'Soothing sleep routine tips',
+    t('chat.quickQuestions.0') || 'Why is my risk elevated today?',
+    t('chat.quickQuestions.1') || 'What patterns are in my recent logs?',
+    t('chat.quickQuestions.2') || 'Soothing sleep routine tips',
   ];
 
   // Auto-scroll to bottom inside floating chat
@@ -71,7 +93,8 @@ export function FloatingChatBot() {
     setIsTyping(true);
 
     try {
-      const reply = await chatService.sendMessage(query.trim());
+      // Pass selected language forward to chatService (future RAG backend integration readiness)
+      const reply = await chatService.sendMessage(query.trim(), { language });
       setMessages((prev) => [...prev, reply]);
     } catch (err) {
       console.error(err);
@@ -103,7 +126,7 @@ export function FloatingChatBot() {
             'flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200'
           )}
           role="dialog"
-          aria-label="MigraineGuardian AI Assistant"
+          aria-label={t('chat.title')}
         >
           {/* Header */}
           <div className="p-3.5 sm:p-4 bg-gradient-to-r from-brand-dark to-[#1C2822] text-white flex items-center justify-between gap-2 border-b border-brand-dark/40 shadow-sm flex-shrink-0">
@@ -114,12 +137,12 @@ export function FloatingChatBot() {
               <div className="flex flex-col text-left overflow-hidden">
                 <div className="flex items-center gap-1.5">
                   <span className="text-body-md font-bold text-white truncate">
-                    Ask MigraineGuardian
+                    {t('chat.askMigraineGuardian')}
                   </span>
                   <span className="w-2 h-2 rounded-full bg-brand-sage animate-pulse flex-shrink-0" />
                 </div>
                 <span className="text-[11px] text-white/70 truncate">
-                  Calm AI Wellness Assistant
+                  {t('chat.calmAiAssistant')}
                 </span>
               </div>
             </div>
@@ -128,7 +151,7 @@ export function FloatingChatBot() {
               <button
                 type="button"
                 onClick={handleOpenFullChat}
-                title="Expand to full screen chat"
+                title={t('chat.expandChat') || 'Expand to full screen chat'}
                 className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
               >
                 <Maximize2 className="w-4 h-4" />
@@ -136,7 +159,7 @@ export function FloatingChatBot() {
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                title="Close chat"
+                title={t('chat.closeAssistant')}
                 className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -145,9 +168,9 @@ export function FloatingChatBot() {
           </div>
 
           {/* Quick Notice */}
-          <div className="px-3.5 py-1.5 bg-brand-sage/15 border-b border-brand-sage/30 text-[11px] text-[#484E48] flex items-center gap-1.5 flex-shrink-0">
+          <div className="px-3.5 py-1.5 bg-brand-sage/15 border-b border-brand-sage/30 text-[11px] text-muted-text-dark flex items-center gap-1.5 flex-shrink-0">
             <ShieldCheck className="w-3.5 h-3.5 text-brand-teal flex-shrink-0" />
-            <span className="truncate">Evidence-based educational guidance • Confidential</span>
+            <span className="truncate">{t('chat.evidenceGuidance')}</span>
           </div>
 
           {/* Messages Scroll Area */}
@@ -192,7 +215,7 @@ export function FloatingChatBot() {
             {isTyping && (
               <div className="flex items-center gap-2 text-meta-sm text-muted-text mr-auto p-2.5 bg-white border border-brand-sage/40 rounded-[14px]">
                 <Bot className="w-3.5 h-3.5 text-brand-teal animate-spin" />
-                <span className="italic">MigraineGuardian is reflecting...</span>
+                <span className="italic">{t('chat.reflecting')}</span>
               </div>
             )}
 
@@ -223,7 +246,7 @@ export function FloatingChatBot() {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Ask a question..."
+              placeholder={t('chat.placeholder')}
               className="flex-1 min-h-[38px] px-3 py-1.5 rounded-full bg-[#FAF9F5] border border-brand-sage/50 text-meta-md text-brand-dark placeholder:text-muted-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-teal"
             />
             <button
@@ -254,7 +277,7 @@ export function FloatingChatBot() {
           'border border-brand-teal/40 hover:border-brand-teal hover:bg-[#1C2822] active:scale-95',
           'transition-all duration-200 cursor-pointer'
         )}
-        aria-label={isOpen ? 'Close chat assistant' : 'Open Ask MigraineGuardian assistant'}
+        aria-label={isOpen ? t('chat.closeAssistant') : t('chat.askMigraineGuardian')}
       >
         {/* Animated Bot Avatar Circle */}
         <div className="relative w-7 h-7 rounded-full bg-brand-teal/25 border border-brand-teal/60 flex items-center justify-center flex-shrink-0">
@@ -262,9 +285,9 @@ export function FloatingChatBot() {
           <span className="w-2 h-2 rounded-full bg-brand-sage absolute -top-0.5 -right-0.5 animate-pulse" />
         </div>
 
-        {/* Text Label matching user design */}
+        {/* Text Label */}
         <span className="text-body-md font-bold text-white tracking-tight flex items-center gap-1.5">
-          <span>{isOpen ? 'Close Assistant' : 'Ask MigraineGuardian'}</span>
+          <span>{isOpen ? t('chat.closeAssistant') : t('chat.askMigraineGuardian')}</span>
         </span>
 
         {/* Subtle sparkle icon */}

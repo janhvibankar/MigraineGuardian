@@ -39,16 +39,21 @@ export const insightsService = {
     const noticedPatterns = [];
     if (avgSleep < 6.5) {
       noticedPatterns.push({
+        id: 'sleep_deficit',
         title: 'Sleep Rest Deficit',
         description: `Average sleep over your past ${count} log(s) was ${avgSleep} hours (target: 7.5 hrs).`,
+        count,
+        avg: avgSleep,
         impact: 'High',
       });
     }
 
     if (avgStress > 6.0) {
       noticedPatterns.push({
+        id: 'elevated_stress',
         title: 'Elevated Daily Stress',
         description: `Average daily stress was ${avgStress} / 10. Consider 5-minute breathing breaks.`,
+        avg: avgStress,
         impact: 'Moderate',
       });
     }
@@ -64,6 +69,8 @@ export const insightsService = {
       hasData: true,
       summary: {
         migraineDays,
+        rawAvgSleep: avgSleep,
+        rawAvgStress: avgStress,
         avgSleep: `${avgSleep} hrs`,
         avgStress: `${avgStress} / 10`,
       },

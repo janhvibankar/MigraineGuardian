@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../co
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   HelpCircle,
   Mail,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 
 export function ContactPage() {
+  const { t } = useTranslation();
   const [feedbackCategory, setFeedbackCategory] = useState('general');
   const [messageText, setMessageText] = useState('');
   const [userEmail, setUserEmail] = useState('');
@@ -36,33 +38,33 @@ export function ContactPage() {
 
   const faqs = [
     {
-      q: 'How does the Daily Check-in work?',
-      a: 'The daily micro-checkin takes under 60 seconds. You record key indicators (sleep hours, quality, daily stress, hydration, and screen time). These signals are fed into our machine learning model to compute today\'s sensitivity likelihood.',
+      q: t('contact.faqQ1', 'How does the Daily Check-in work?'),
+      a: t('contact.faqA1', 'The daily micro-checkin takes under 60 seconds. You record key indicators (sleep hours, quality, daily stress, hydration, and screen time). These signals are fed into our machine learning model to compute today\'s sensitivity likelihood.'),
     },
     {
-      q: 'What is the PSS-10 assessment?',
-      a: 'The Perceived Stress Scale (PSS-10) is a clinically validated 10-item questionnaire that measures how unpredictable, uncontrollable, and overloaded you have found your life over the past month.',
+      q: t('contact.faqQ2', 'What is the PSS-10 assessment?'),
+      a: t('contact.faqA2', 'The Perceived Stress Scale (PSS-10) is a clinically validated 10-item questionnaire that measures how unpredictable, uncontrollable, and overloaded you have found your life over the past month.'),
     },
     {
-      q: 'Is my health tracking data private?',
-      a: 'Yes. All personal check-in records are protected by Firebase Auth and stored in Cloud Firestore scoped exclusively to your verified user account. We never sell or monetize your data.',
+      q: t('contact.faqQ3', 'Is my health tracking data private?'),
+      a: t('contact.faqA3', 'Yes. All personal check-in records are protected by Firebase Auth and stored in Cloud Firestore scoped exclusively to your verified user account. We never sell or monetize your data.'),
     },
     {
-      q: 'Can MigraineGuardian diagnose migraines?',
-      a: 'No. MigraineGuardian is designed for wellness tracking, trigger awareness, and proactive lifestyle support. It does not replace professional medical diagnosis from a licensed neurologist or physician.',
+      q: t('contact.faqQ4', 'Can MigraineGuardian diagnose migraines?'),
+      a: t('contact.faqA4', 'No. MigraineGuardian is designed for wellness tracking, trigger awareness, and proactive lifestyle support. It does not replace professional medical diagnosis from a licensed neurologist or physician.'),
     },
   ];
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 md:py-12 space-y-10 animate-in fade-in duration-200 text-left">
       <PageHeader
-        title="Help & Contact Support"
-        subtitle="Have questions about tracking, machine learning forecasts, or need technical assistance? We are here to help."
-        badge="Community & Support"
+        title={t('footer.contact', 'Help & Contact Support')}
+        subtitle={t('contact.subtitle', 'Have questions about tracking, machine learning forecasts, or need technical assistance? We are here to help.')}
+        badge={t('contact.badge', 'Community & Support')}
         actions={
           <Link to={ROUTES.HOME}>
             <Button variant="secondary" size="md">
-              Back to Overview
+              {t('auth.backToOverview', 'Back to Overview')}
             </Button>
           </Link>
         }
@@ -73,10 +75,10 @@ export function ContactPage() {
         <AlertCircle className="w-5 h-5 text-[#8F443B] flex-shrink-0 mt-0.5" />
         <div className="space-y-1 text-meta-md">
           <span className="font-bold text-[#8F443B] block">
-            Emergency Health Notice
+            {t('contact.emergencyNoticeTitle', 'Emergency Health Notice')}
           </span>
           <p className="text-[#555B55] leading-relaxed">
-            If you are experiencing sudden, severe head pain, confusion, weakness, vision loss, or symptoms accompanied by high fever and neck stiffness, please call your local emergency medical services or visit the nearest emergency room immediately.
+            {t('contact.emergencyNoticeDesc', 'If you are experiencing sudden, severe head pain, confusion, weakness, vision loss, or symptoms accompanied by high fever and neck stiffness, please call your local emergency medical services or visit the nearest emergency room immediately.')}
           </p>
         </div>
       </div>
@@ -91,9 +93,9 @@ export function ContactPage() {
               </div>
               <div>
                 <h3 className="text-section-md font-bold text-brand-dark">
-                  Project Support & Inquiries
+                  {t('contact.supportInquiriesTitle', 'Project Support & Inquiries')}
                 </h3>
-                <span className="text-meta-sm text-muted-text">Open-source & repository help</span>
+                <span className="text-meta-sm text-muted-text">{t('contact.supportInquiriesSub', 'Open-source & repository help')}</span>
               </div>
             </div>
 
@@ -116,7 +118,7 @@ export function ContactPage() {
                 to={ROUTES.HOW_IT_WORKS}
                 className="p-3 rounded-card-sm bg-white border border-brand-sage/50 hover:border-brand-teal text-brand-dark font-medium text-meta-md flex items-center justify-between transition-colors shadow-sm"
               >
-                <span>Learn How the System Works</span>
+                <span>{t('landing.howItWorksTitle', 'Learn How the System Works')}</span>
                 <ArrowRight className="w-4 h-4 text-brand-teal" />
               </Link>
             </div>
@@ -130,9 +132,9 @@ export function ContactPage() {
               </div>
               <div>
                 <h3 className="text-section-md font-bold text-brand-dark">
-                  Ask MigraineGuardian AI
+                  {t('chat.askMigraineGuardian', 'Ask MigraineGuardian AI')}
                 </h3>
-                <span className="text-meta-sm text-brand-teal font-semibold">Evidence-based conversational guide</span>
+                <span className="text-meta-sm text-brand-teal font-semibold">{t('chat.evidenceGuidance', 'Evidence-based conversational guide')}</span>
               </div>
             </div>
             <p className="text-body-md text-[#555B55] leading-relaxed">
@@ -146,10 +148,10 @@ export function ContactPage() {
           <Card variant="warm" className="p-6 sm:p-8 space-y-5 border-2 border-brand-sage/55 rounded-[24px] shadow-sm">
             <div className="space-y-1 pb-3 border-b border-brand-sage/30">
               <h3 className="text-section-md font-bold text-brand-dark">
-                Send a Message or Question
+                {t('contact.sendFeedbackTitle', 'Send In-App Feedback')}
               </h3>
               <p className="text-meta-sm text-[#555B55]">
-                Share feedback, feature suggestions, or user experience inquiries.
+                {t('contact.feedbackDesc', 'Share your suggestions, report issues, or suggest new lifestyle tracking features directly to our team.')}
               </p>
             </div>
 
@@ -159,17 +161,17 @@ export function ContactPage() {
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <h4 className="text-section-md font-bold text-brand-dark">
-                  Thank You for Your Message
+                  {t('contact.feedbackSentTitle', 'Thank you for your feedback!')}
                 </h4>
                 <p className="text-meta-md text-[#555B55] leading-relaxed">
-                  Your feedback helps make MigraineGuardian gentler, more accurate, and more accessible for everyone.
+                  {t('contact.feedbackSentDesc', 'Your note has been recorded. We continuously refine MigraineGuardian to support your calm wellness journey.')}
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setIsSubmitted(false)}
                 >
-                  Send another message
+                  {t('contact.sendAnotherBtn', 'Send Another Note')}
                 </Button>
               </div>
             ) : (
@@ -183,23 +185,22 @@ export function ContactPage() {
                     onChange={(e) => setFeedbackCategory(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-[12px] bg-white border border-brand-sage/50 text-body-md text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
                   >
-                    <option value="general">General Inquiry / Feedback</option>
-                    <option value="checkin">Daily Check-in or Tracking Question</option>
-                    <option value="pss">PSS-10 Stress Scale Question</option>
-                    <option value="ml">Machine Learning / Risk Forecast Insight</option>
-                    <option value="bug">Technical Bug Report</option>
+                    <option value="general">{t('contact.categoryGeneral')}</option>
+                    <option value="feature">{t('contact.categoryFeature')}</option>
+                    <option value="ml">{t('contact.categoryMl')}</option>
+                    <option value="bug">{t('contact.categoryBug')}</option>
                   </select>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-meta-sm font-semibold text-brand-dark">
-                    Your Email (Optional, for response)
+                    {t('auth.emailAddress', 'Your Email')}
                   </label>
                   <input
                     type="email"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
-                    placeholder="e.g. name@domain.com"
+                    placeholder={t('contact.emailPlaceholder', 'Your email (optional, for follow-up)')}
                     className="w-full px-3.5 py-2.5 rounded-[12px] bg-white border border-brand-sage/50 text-body-md text-brand-dark placeholder:text-muted-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal"
                   />
                 </div>
@@ -212,7 +213,7 @@ export function ContactPage() {
                     rows={4}
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    placeholder="How can we assist you?"
+                    placeholder={t('contact.feedbackPlaceholder', 'Describe your feedback or question here in detail...')}
                     required
                     className="w-full px-3.5 py-2.5 rounded-[12px] bg-white border border-brand-sage/50 text-body-md text-brand-dark placeholder:text-muted-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal resize-none"
                   />
@@ -226,7 +227,7 @@ export function ContactPage() {
                   iconRight={Send}
                   disabled={!messageText.trim()}
                 >
-                  Send Message
+                  {t('contact.sendBtn', 'Submit Feedback')}
                 </Button>
               </form>
             )}
@@ -238,7 +239,7 @@ export function ContactPage() {
       <div className="space-y-6 pt-4">
         <div className="space-y-1 pb-2 border-b border-muted-border/60">
           <h2 className="text-section-lg font-bold text-brand-dark">
-            Frequently Asked Questions
+            {t('contact.faqTitle', 'Frequently Asked Questions')}
           </h2>
           <p className="text-body-md text-muted-text">
             Quick answers to common questions about using MigraineGuardian.

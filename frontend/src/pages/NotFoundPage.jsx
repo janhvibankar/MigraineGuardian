@@ -1,11 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Card, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
+import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { ROUTES } from '../utils/constants';
-import { Compass, ArrowRight, Home } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
+import { Compass, Home } from 'lucide-react';
 
 export function NotFoundPage() {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4 py-16">
       <Card variant="warm" className="max-w-md w-full text-center p-8 space-y-6 shadow-soft">
@@ -15,25 +18,25 @@ export function NotFoundPage() {
 
         <div className="space-y-2">
           <span className="text-meta-sm font-semibold uppercase tracking-widest text-muted-text-light">
-            404 — Page Not Found
+            {t('common.pageNotFound', '404 — Page Not Found')}
           </span>
           <h1 className="text-app-xl font-semibold text-brand-dark">
-            A quiet, uncharted path
+            {t('nav.overview')}
           </h1>
           <p className="text-body-md text-muted-text leading-relaxed">
-            The page you are looking for does not exist or has been peacefully relocated.
+            {t('common.pageNotFoundDesc', 'The page you are looking for does not exist or has been peacefully relocated.')}
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <Link to={ROUTES.DASHBOARD} className="w-full sm:w-auto">
             <Button variant="primary" size="md" className="w-full" icon={Home}>
-              Dashboard
+              {t('nav.dashboard')}
             </Button>
           </Link>
           <Link to={ROUTES.HOME} className="w-full sm:w-auto">
             <Button variant="secondary" size="md" className="w-full">
-              Public Overview
+              {t('auth.backToOverview')}
             </Button>
           </Link>
         </div>
@@ -41,3 +44,5 @@ export function NotFoundPage() {
     </div>
   );
 }
+
+export default NotFoundPage;

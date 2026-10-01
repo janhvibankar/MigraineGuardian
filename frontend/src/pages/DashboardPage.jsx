@@ -4,13 +4,14 @@ import { Card, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
-import { getTimeBasedGreeting } from '../utils/formatters';
 import { predictionService } from '../services/predictionService';
 import { trackingService } from '../services/trackingService';
 import { insightsService } from '../services/insightsService';
 import { reportService } from '../services/reportService';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useTranslation } from '../hooks/useTranslation';
 import { weatherService } from '../services/weatherService';
+import { localizeElevatedFactor, localizeFocusArea } from '../utils/baselineHelper';
 import { cn } from '../utils/cn';
 import {
   ResponsiveContainer,
@@ -37,6 +38,7 @@ import {
 
 export function DashboardPage() {
   const currentUser = useCurrentUser();
+  const { t, language } = useTranslation();
   const [prediction, setPrediction] = useState(null);
   const [todayLog, setTodayLog] = useState(null);
   const [reportSummary, setReportSummary] = useState(null);
@@ -82,7 +84,7 @@ export function DashboardPage() {
       const result = await predictionService.submitMorningPrediction(payload);
       if (result) {
         setPrediction(result);
-        setTodayLog(prev => ({
+        setTodayLog((prev) => ({
           ...prev,
           sleep_hours: Number(morningSleep),
           sleep_quality: Number(morningSleepQuality),
@@ -90,7 +92,7 @@ export function DashboardPage() {
           mood: Number(morningMood),
         }));
       } else {
-        setMorningError('Could not calculate risk forecast. Please try again.');
+        setMorningError(t('risk.serviceUnavailable'));
       }
     } catch (err) {
       setMorningError(err.message || 'An error occurred.');
@@ -137,6 +139,19 @@ export function DashboardPage() {
   const focusAreas = prediction?.focusAreas || [];
   const riskTrend = reportSummary?.riskTrend || [];
 
+  const userName = currentUser?.name ? currentUser.name.split(' ')[0] : 'User';
+
+  const getGreetingText = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return t('dashboard.goodMorning', { name: userName });
+    } else if (hour < 18) {
+      return t('dashboard.goodAfternoon', { name: userName });
+    } else {
+      return t('dashboard.goodEvening', { name: userName });
+    }
+  };
+
   // Custom Chart Tooltip
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
@@ -147,12 +162,12 @@ export function DashboardPage() {
             <span>{item.day || item.date}</span>
             {item.isMigraineDay && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-alert-muted/20 text-[#8F443B] font-bold">
-                Episode Logged
+                {t('dashboard.episodeLogged')}
               </span>
             )}
           </div>
           <div className="text-muted-text-dark flex items-center justify-between gap-4 font-medium">
-            <span>Risk Index:</span>
+            <span>{t('dashboard.riskIndex')}:</span>
             <span className="font-extrabold text-brand-dark">{item.risk}%</span>
           </div>
         </div>
@@ -166,7 +181,7 @@ export function DashboardPage() {
       <div className="min-h-[400px] flex flex-col items-center justify-center space-y-3 py-12">
         <Loader2 className="w-8 h-8 text-brand-teal animate-spin" />
         <span className="text-body-md font-semibold text-brand-dark">
-          Loading your health data...
+          {t('dashboard.loadingData')}
         </span>
       </div>
     );
@@ -179,13 +194,13 @@ export function DashboardPage() {
         <div className="space-y-1 text-left">
           <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-brand-sage/20 border border-brand-sage/45 text-meta-sm text-brand-dark font-medium mb-1">
             <span className="w-2 h-2 rounded-full bg-brand-teal animate-pulse" />
-            <span>Active Continuous Monitoring</span>
+            <span>{t('dashboard.activeContinuousMonitoring')}</span>
           </div>
           <h1 className="text-app-xl sm:text-[34px] font-extrabold text-brand-dark tracking-tight leading-tight">
-            {getTimeBasedGreeting(currentUser?.name ? currentUser.name.split(' ')[0] : 'User')}
+            {getGreetingText()}
           </h1>
           <p className="text-body-md text-[#555B55]">
-            Here is your daily physiological sensitivity forecast and recovery baseline.
+            {t('dashboard.subtitle')}
           </p>
         </div>
 
@@ -196,9 +211,9 @@ export function DashboardPage() {
               size="lg"
               icon={CalendarCheck}
               iconRight={ArrowRight}
-              className="shadow-md font-bold px-5"
+              className="shadow-md font-bold px-5 cursor-pointer"
             >
-              Complete Today's Check-in
+              {t('dashboard.completeCheckinBtn')}
             </Button>
           </Link>
         </div>
@@ -211,10 +226,10 @@ export function DashboardPage() {
           <div className="lg:col-span-5 space-y-5 lg:border-r border-brand-sage/35 lg:pr-8 text-left">
             <div className="flex items-center justify-between">
               <span className="text-meta-sm font-bold uppercase tracking-wider text-muted-text-dark">
-                Today's Risk Estimate
+                {t('dashboard.todaysRiskEstimate')}
               </span>
               <Badge variant={currentLevel === 'High' ? 'alert' : currentLevel === 'Moderate' ? 'warning' : 'teal'} size="md">
-                {currentLevel ? `${currentLevel} Sensitivity` : 'No Forecast Yet'}
+                {currentLevel ? t('dashboard.sensitivity', { level: currentLevel }) : t('dashboard.noForecastYet')}
               </Badge>
             </div>
 
@@ -227,36 +242,45 @@ export function DashboardPage() {
                   {currentScore !== null ? `${currentScore}%` : '--'}
                 </span>
                 <span className="text-[10px] uppercase font-extrabold tracking-wider mt-1">
-                  {currentLevel || 'No Data'}
+                  {currentLevel || t('common.noData')}
                 </span>
               </div>
 
               <div className="space-y-1 text-left">
                 <h2 className="text-section-lg font-bold text-brand-dark leading-tight">
-                  {hasForecast ? prediction.headline : 'No Risk Estimate Yet'}
+                  {hasForecast
+                    ? currentLevel === 'High'
+                      ? t('risk.headlineHigh')
+                      : currentLevel === 'Low'
+                      ? t('risk.headlineLow')
+                      : t('risk.headlineModerate')
+                    : t('dashboard.noForecastYet')}
                 </h2>
                 <p className="text-meta-md text-[#555B55] leading-relaxed">
                   {hasForecast
-                    ? prediction.summary
-                    : "Complete today's check-in to generate your personalized AI risk forecast."}
+                    ? t('dashboard.forecastSummaryTemplate', { score: currentScore, level: currentLevel || 'Moderate' })
+                    : t('dashboard.noForecastDesc')}
                 </p>
               </div>
             </div>
 
             {/* Recommendation Pill */}
-            {focusAreas.length > 0 && (
-              <div className="p-4 rounded-[18px] bg-white border border-brand-sage/40 text-meta-md text-brand-dark flex items-start gap-3 shadow-sm">
-                <Sparkles className="w-5 h-5 text-brand-teal flex-shrink-0 mt-0.5" />
-                <p className="leading-relaxed text-[#333833]">
-                  <strong className="font-semibold text-brand-dark block">{focusAreas[0].title}:</strong>
-                  {focusAreas[0].description}
-                </p>
-              </div>
-            )}
+            {focusAreas.length > 0 && (() => {
+              const localizedFocus = localizeFocusArea(focusAreas[0], t);
+              return (
+                <div className="p-4 rounded-[18px] bg-white border border-brand-sage/40 text-meta-md text-brand-dark flex items-start gap-3 shadow-sm">
+                  <Sparkles className="w-5 h-5 text-brand-teal flex-shrink-0 mt-0.5" />
+                  <p className="leading-relaxed text-[#333833]">
+                    <strong className="font-semibold text-brand-dark block">{localizedFocus.title}:</strong>
+                    {localizedFocus.description}
+                  </p>
+                </div>
+              );
+            })()}
 
             <Link to={ROUTES.RISK_ANALYSIS} className="block pt-1">
-              <Button variant="outline" size="md" className="w-full font-semibold border-brand-sage/60" iconRight={ArrowRight}>
-                View Full Diagnostic Breakdown
+              <Button variant="outline" size="md" className="w-full font-semibold border-brand-sage/60 cursor-pointer" iconRight={ArrowRight}>
+                {t('dashboard.viewRiskDetails')}
               </Button>
             </Link>
           </div>
@@ -267,37 +291,40 @@ export function DashboardPage() {
               <div className="flex items-center gap-2">
                 <Info className="w-4 h-4 text-brand-teal" />
                 <h3 className="text-section-md font-bold text-brand-dark">
-                  Primary Contributing Factors
+                  {t('dashboard.elevatedFactors')}
                 </h3>
               </div>
-              <span className="text-meta-sm text-muted-text">Measured vs personal baseline</span>
+              <span className="text-meta-sm text-muted-text">{t('dashboard.measuredVsBaseline')}</span>
             </div>
 
             <div className="space-y-3">
               {elevatedFactors.length > 0 ? (
-                elevatedFactors.slice(0, 3).map((factor, idx) => (
-                  <div key={idx} className="p-4 rounded-[18px] bg-white border-2 border-brand-sage/40 shadow-sm flex items-center justify-between gap-4 hover:border-brand-teal transition-all">
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-10 h-10 rounded-xl bg-alert-muted/15 border border-alert-muted/30 flex items-center justify-center text-[#8F443B] flex-shrink-0">
-                        {factor.factor === 'Sleep' ? <Moon className="w-5 h-5" /> : factor.factor === 'Stress' ? <Brain className="w-5 h-5" /> : <SunMedium className="w-5 h-5 text-brand-teal" />}
+                elevatedFactors.slice(0, 3).map((rawFactor, idx) => {
+                  const factor = localizeElevatedFactor(rawFactor, t);
+                  return (
+                    <div key={idx} className="p-4 rounded-[18px] bg-white border-2 border-brand-sage/40 shadow-sm flex items-center justify-between gap-4 hover:border-brand-teal transition-all">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-alert-muted/15 border border-alert-muted/30 flex items-center justify-center text-[#8F443B] flex-shrink-0">
+                          {rawFactor.factor === 'Sleep' ? <Moon className="w-5 h-5" /> : rawFactor.factor === 'Stress' ? <Brain className="w-5 h-5" /> : <SunMedium className="w-5 h-5 text-brand-teal" />}
+                        </div>
+                        <div>
+                          <span className="text-body-md font-bold text-brand-dark block leading-none">
+                            {factor.factor} ({factor.value})
+                          </span>
+                          <span className="text-meta-sm text-muted-text mt-1 block">
+                            {factor.description}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-body-md font-bold text-brand-dark block leading-none">
-                          {factor.factor} ({factor.value})
-                        </span>
-                        <span className="text-meta-sm text-muted-text mt-1 block">
-                          {factor.description}
-                        </span>
-                      </div>
+                      <Badge variant={factor.statusType === 'alert' ? 'alert' : 'teal'} size="sm">
+                        {factor.comparison}
+                      </Badge>
                     </div>
-                    <Badge variant={factor.statusType === 'alert' ? 'alert' : 'teal'} size="sm">
-                      {factor.comparison}
-                    </Badge>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="p-5 rounded-[18px] bg-white border border-brand-sage/35 text-center text-muted-text">
-                  {hasForecast ? 'No elevated risk factors detected today.' : 'No check-in signals recorded for today yet.'}
+                  {hasForecast ? t('dashboard.noElevatedFactors') : t('dashboard.noForecastDesc')}
                 </div>
               )}
             </div>
@@ -310,10 +337,10 @@ export function DashboardPage() {
           <div className="space-y-1">
             <h3 className="text-section-md font-bold text-brand-dark flex items-center gap-2">
               <SunMedium className="w-5 h-5 text-brand-teal" />
-              Morning Health Check & Forecast
+              {t('dashboard.morningCheckinTitle')}
             </h3>
             <p className="text-meta-md text-[#555B55]">
-              Log your waking metrics to calculate today's personal migraine susceptibility risk.
+              {t('dashboard.noForecastDesc')}
             </p>
           </div>
 
@@ -327,7 +354,7 @@ export function DashboardPage() {
           <form onSubmit={handleMorningPredictionSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-meta-sm font-bold text-brand-dark">Sleep Rest (Hours)</label>
+                <label className="block text-meta-sm font-bold text-brand-dark">{t('dashboard.sleepDuration')}</label>
                 <input
                   type="number"
                   step="0.5"
@@ -341,50 +368,50 @@ export function DashboardPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-meta-sm font-bold text-brand-dark">Sleep Quality (1-5)</label>
+                <label className="block text-meta-sm font-bold text-brand-dark">{t('dashboard.sleepQualityLabel')}</label>
                 <select
                   value={morningSleepQuality}
                   onChange={(e) => setMorningSleepQuality(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl border border-brand-sage/50 text-body-md text-brand-dark focus:border-brand-teal focus:ring-1 focus:ring-brand-teal focus:outline-none bg-white"
                   required
                 >
-                  <option value="1">1 - Very Poor</option>
-                  <option value="2">2 - Poor</option>
-                  <option value="3">3 - Fair</option>
-                  <option value="4">4 - Good</option>
-                  <option value="5">5 - Excellent</option>
+                  <option value="1">1 - {t('checkin.sleepQualityOptions.1')}</option>
+                  <option value="2">2 - {t('checkin.sleepQualityOptions.2')}</option>
+                  <option value="3">3 - {t('checkin.sleepQualityOptions.3')}</option>
+                  <option value="4">4 - {t('checkin.sleepQualityOptions.4')}</option>
+                  <option value="5">5 - {t('checkin.sleepQualityOptions.5')}</option>
                 </select>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-meta-sm font-bold text-brand-dark">Morning Stress (0-10)</label>
+                <label className="block text-meta-sm font-bold text-brand-dark">{t('dashboard.dailyStress')}</label>
                 <select
                   value={morningStress}
                   onChange={(e) => setMorningStress(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl border border-brand-sage/50 text-body-md text-brand-dark focus:border-brand-teal focus:ring-1 focus:ring-brand-teal focus:outline-none bg-white"
                   required
                 >
-                  {[...Array(11).keys()].map(num => (
-                    <option key={num} value={num}>{num} {num === 0 ? '(None)' : num === 10 ? '(Extreme)' : ''}</option>
+                  {[...Array(11).keys()].map((num) => (
+                    <option key={num} value={num}>{num} {num === 0 ? '(0)' : num === 10 ? '(10)' : ''}</option>
                   ))}
                 </select>
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-meta-sm font-bold text-brand-dark">Morning Mood (1-5)</label>
+                <label className="block text-meta-sm font-bold text-brand-dark">{t('dashboard.morningMoodLabel')}</label>
                 <select
                   value={morningMood}
                   onChange={(e) => setMorningMood(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl border border-brand-sage/50 text-body-md text-brand-dark focus:border-brand-teal focus:ring-1 focus:ring-brand-teal focus:outline-none bg-white"
                   required
                 >
-                  <option value="1">1 - Very Low</option>
-                  <option value="2">2 - Low</option>
-                  <option value="3">3 - Fair</option>
-                  <option value="4">4 - Good</option>
-                  <option value="5">5 - Excellent</option>
+                  <option value="1">1 - {t('checkin.moodOptions.1')}</option>
+                  <option value="2">2 - {t('checkin.moodOptions.2')}</option>
+                  <option value="3">3 - {t('checkin.moodOptions.3')}</option>
+                  <option value="4">4 - {t('checkin.moodOptions.4')}</option>
+                  <option value="5">5 - {t('checkin.moodOptions.5')}</option>
                 </select>
               </div>
             </div>
@@ -392,15 +419,15 @@ export function DashboardPage() {
             <Button
               type="submit"
               variant="primary"
-              className="w-full py-2.5 font-bold rounded-xl shadow-soft"
+              className="w-full py-2.5 font-bold rounded-xl shadow-soft cursor-pointer"
               disabled={submittingMorning}
             >
               {submittingMorning ? (
                 <span className="flex items-center justify-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Calculating risk...
+                  {t('common.loading')}
                 </span>
-              ) : 'Generate Today\'s Forecast'}
+              ) : t('dashboard.calculateForecastBtn')}
             </Button>
           </form>
         </Card>
@@ -411,10 +438,10 @@ export function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-section-lg font-bold text-brand-dark">
-              Today's Monitored Baselines
+              {t('dashboard.quickMetricsTitle')}
             </h2>
             <p className="text-meta-md text-muted-text">
-              Real-time balance across your active lifestyle pillars.
+              {t('dashboard.sevenDayRiskSub')}
             </p>
           </div>
         </div>
@@ -425,17 +452,17 @@ export function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-muted-text font-bold text-meta-md">
                 <Moon className="w-4 h-4 text-brand-teal" />
-                <span>Sleep Rest</span>
+                <span>{t('dashboard.sleepDuration')}</span>
               </div>
               <Badge variant={todayLog?.sleep_hours ? 'teal' : 'neutral'} size="sm">
-                {todayLog?.sleep_hours ? `${todayLog.sleep_hours} h` : 'No data'}
+                {todayLog?.sleep_hours ? `${todayLog.sleep_hours} h` : t('common.noData')}
               </Badge>
             </div>
             <div>
               <div className="text-[26px] font-extrabold text-brand-dark leading-none">
-                {todayLog?.sleep_hours ? `${todayLog.sleep_hours} hrs` : 'No data yet'}
+                {todayLog?.sleep_hours ? `${todayLog.sleep_hours} hrs` : t('common.noData')}
               </div>
-              <span className="text-meta-sm text-[#737873] mt-1 block">Target: 7.5 hrs</span>
+              <span className="text-meta-sm text-muted-text mt-1 block">{t('dashboard.targetHours')}</span>
             </div>
           </div>
 
@@ -444,17 +471,17 @@ export function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-muted-text font-bold text-meta-md">
                 <Brain className="w-4 h-4 text-brand-teal" />
-                <span>Daily Stress</span>
+                <span>{t('dashboard.dailyStress')}</span>
               </div>
               <Badge variant={todayLog?.daily_stress ? 'teal' : 'neutral'} size="sm">
-                {todayLog?.daily_stress ? `${todayLog.daily_stress} / 10` : 'No data'}
+                {todayLog?.daily_stress ? `${todayLog.daily_stress} / 10` : t('common.noData')}
               </Badge>
             </div>
             <div>
               <div className="text-[26px] font-extrabold text-brand-dark leading-none">
-                {todayLog?.daily_stress ? `${todayLog.daily_stress} / 10` : 'No data yet'}
+                {todayLog?.daily_stress ? `${todayLog.daily_stress} / 10` : t('common.noData')}
               </div>
-              <span className="text-meta-sm text-[#737873] mt-1 block">Target: &lt; 5 / 10</span>
+              <span className="text-meta-sm text-muted-text mt-1 block">{t('dashboard.outOfTen')}</span>
             </div>
           </div>
 
@@ -463,17 +490,17 @@ export function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-muted-text font-bold text-meta-md">
                 <SunMedium className="w-4 h-4 text-brand-teal" />
-                <span>Screen Glare</span>
+                <span>{t('dashboard.screenTime')}</span>
               </div>
               <Badge variant={todayLog?.screen_time ? 'teal' : 'neutral'} size="sm">
-                {todayLog?.screen_time ? `${todayLog.screen_time} h` : 'No data'}
+                {todayLog?.screen_time ? `${todayLog.screen_time} h` : t('common.noData')}
               </Badge>
             </div>
             <div>
               <div className="text-[26px] font-extrabold text-brand-dark leading-none">
-                {todayLog?.screen_time ? `${todayLog.screen_time} hrs` : 'No data yet'}
+                {todayLog?.screen_time ? `${todayLog.screen_time} hrs` : t('common.noData')}
               </div>
-              <span className="text-meta-sm text-[#737873] mt-1 block">Target: &lt; 6.0 hrs</span>
+              <span className="text-meta-sm text-muted-text mt-1 block">{t('dashboard.hoursRecorded')}</span>
             </div>
           </div>
 
@@ -482,17 +509,17 @@ export function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-muted-text font-bold text-meta-md">
                 <Droplets className="w-4 h-4 text-brand-teal" />
-                <span>Hydration</span>
+                <span>{t('dashboard.hydrationIntake')}</span>
               </div>
               <Badge variant={todayLog?.hydration ? 'teal' : 'neutral'} size="sm">
-                {todayLog?.hydration ? `${todayLog.hydration} L` : 'No data'}
+                {todayLog?.hydration ? `${todayLog.hydration} L` : t('common.noData')}
               </Badge>
             </div>
             <div>
               <div className="text-[26px] font-extrabold text-brand-dark leading-none">
-                {todayLog?.hydration ? `${todayLog.hydration} L` : 'No data yet'}
+                {todayLog?.hydration ? `${todayLog.hydration} L` : t('common.noData')}
               </div>
-              <span className="text-meta-sm text-[#737873] mt-1 block">Target: 2.2 L</span>
+              <span className="text-meta-sm text-muted-text mt-1 block">{t('dashboard.targetLiters')}</span>
             </div>
           </div>
         </div>
@@ -505,13 +532,13 @@ export function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle as="h2" className="text-section-lg font-bold text-brand-dark">
-                  7-Day Risk & Episode Horizon
+                  {t('dashboard.sevenDayRiskTrend')}
                 </CardTitle>
                 <CardDescription className="text-meta-md text-muted-text">
-                  Longitudinal likelihood trajectory and logged migraine days
+                  {t('dashboard.sevenDayRiskSub')}
                 </CardDescription>
               </div>
-              <Badge variant="sage" size="sm">7-Day History</Badge>
+              <Badge variant="sage" size="sm">{t('analytics.timeRange7')}</Badge>
             </div>
 
             <div className="h-64 sm:h-72 w-full pt-2">
@@ -541,9 +568,9 @@ export function DashboardPage() {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center p-6 border-2 border-dashed border-brand-sage/40 rounded-[20px] text-center space-y-2">
                   <AlertCircle className="w-6 h-6 text-brand-teal" />
-                  <p className="text-meta-md font-bold text-brand-dark">No risk history available yet.</p>
+                  <p className="text-meta-md font-bold text-brand-dark">{t('dashboard.noForecastYet')}</p>
                   <p className="text-meta-sm text-muted-text max-w-sm">
-                    Complete daily check-ins to build your personalized risk history.
+                    {t('dashboard.noForecastDesc')}
                   </p>
                 </div>
               )}
@@ -555,10 +582,10 @@ export function DashboardPage() {
           <Card className="p-6 sm:p-7 space-y-4 bg-white border-2 border-brand-sage/50 rounded-[26px] shadow-soft h-full flex flex-col justify-between">
             <div className="space-y-1">
               <CardTitle as="h2" className="text-section-lg font-bold text-brand-dark">
-                Weekly Health Snapshot
+                {t('reports.weeklySummaryTitle')}
               </CardTitle>
               <CardDescription className="text-meta-md text-muted-text">
-                Summary of your 7-day logged patterns
+                {t('dashboard.recentPatterns')}
               </CardDescription>
             </div>
 
@@ -566,7 +593,7 @@ export function DashboardPage() {
               <div className="p-4 rounded-[18px] bg-[#FAF9F5] border border-brand-sage/35 space-y-1">
                 <div className="flex items-center gap-1.5 text-muted-text text-meta-sm font-semibold">
                   <Calendar className="w-4 h-4 text-brand-teal" />
-                  <span>Migraine days</span>
+                  <span>{t('analytics.migraineDays')}</span>
                 </div>
                 <div className="text-[26px] font-black text-brand-dark">
                   {weeklyInsights?.summary?.migraineDays ?? 0}
@@ -576,17 +603,17 @@ export function DashboardPage() {
               <div className="p-4 rounded-[18px] bg-[#FAF9F5] border border-brand-sage/35 space-y-1">
                 <div className="flex items-center gap-1.5 text-muted-text text-meta-sm font-semibold">
                   <Moon className="w-4 h-4 text-brand-teal" />
-                  <span>Avg sleep</span>
+                  <span>{t('dashboard.sleepDuration')}</span>
                 </div>
                 <div className="text-[26px] font-black text-brand-dark">
-                  {weeklyInsights?.summary?.avgSleep || 'No data'}
+                  {weeklyInsights?.summary?.avgSleep || t('common.noData')}
                 </div>
               </div>
             </div>
 
             <Link to={ROUTES.ANALYTICS} className="pt-2">
-              <Button variant="secondary" size="md" className="w-full font-bold border-brand-sage/40" iconRight={ArrowRight}>
-                Explore Full Analytics
+              <Button variant="secondary" size="md" className="w-full font-bold border-brand-sage/40 cursor-pointer" iconRight={ArrowRight}>
+                {t('pageTitles.analytics')}
               </Button>
             </Link>
           </Card>

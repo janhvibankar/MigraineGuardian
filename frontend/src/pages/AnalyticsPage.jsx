@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
 import { analyticsService } from '../services/analyticsService';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -39,6 +40,7 @@ import {
 import { cn } from '../utils/cn';
 
 export function AnalyticsPage() {
+  const { t } = useTranslation();
   const [timeframe, setTimeframe] = useState('7days'); // '7days', '30days'
   const [currentData, setCurrentData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -92,18 +94,18 @@ export function AnalyticsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-muted-border/60">
         <div>
           <h1 className="text-app-xl sm:text-[32px] font-semibold text-brand-dark tracking-tight leading-tight">
-            Your Analytics
+            {t('analytics.title')}
           </h1>
           <p className="text-body-md text-muted-text mt-0.5">
-            Dedicated longitudinal tracking workspace across physiological and behavioral factors.
+            {t('analytics.subtitle')}
           </p>
         </div>
 
         {/* Filter: 7 days, 30 days */}
         <div className="inline-flex items-center p-1 rounded-card-sm bg-card-warm border border-card-warm-border self-start sm:self-auto select-none shadow-soft">
           {[
-            { id: '7days', label: '7 days' },
-            { id: '30days', label: '30 days' },
+            { id: '7days', label: t('analytics.timeRange7') },
+            { id: '30days', label: t('analytics.timeRange30') },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -126,7 +128,7 @@ export function AnalyticsPage() {
         <div className="min-h-[300px] flex flex-col items-center justify-center space-y-3 py-12">
           <Loader2 className="w-8 h-8 text-brand-teal animate-spin" />
           <span className="text-body-md font-semibold text-brand-dark">
-            Loading analytics dataset...
+            {t('common.loading')}
           </span>
         </div>
       ) : !hasData ? (
@@ -137,15 +139,15 @@ export function AnalyticsPage() {
           </div>
           <div className="space-y-1">
             <h2 className="text-section-lg font-bold text-brand-dark">
-              No analytics data available yet
+              {t('common.noData')}
             </h2>
             <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
-              Complete your daily check-ins to build longitudinal charts for sleep, stress, hydration, and risk trajectory.
+              {t('dashboard.noForecastDesc')}
             </p>
           </div>
           <Link to={ROUTES.DAILY_CHECKIN} className="inline-block pt-2">
             <Button variant="primary" size="lg" icon={CalendarCheck} iconRight={ArrowRight}>
-              Complete Today's Check-in
+              {t('dashboard.completeCheckinBtn')}
             </Button>
           </Link>
         </Card>
@@ -154,27 +156,27 @@ export function AnalyticsPage() {
           {/* SUMMARY TILES */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
-              <span className="text-meta-sm text-muted-text font-medium">Logged Check-ins</span>
+              <span className="text-meta-sm text-muted-text font-medium">{t('analytics.checkinRate')}</span>
               <div className="text-app-xl font-bold text-brand-dark">{currentData.totalLogs}</div>
-              <span className="text-[11px] text-muted-text">Recorded entries</span>
+              <span className="text-[11px] text-muted-text">{t('analytics.recordedEntries')}</span>
             </div>
 
             <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
-              <span className="text-meta-sm text-muted-text font-medium">Average Sleep</span>
+              <span className="text-meta-sm text-muted-text font-medium">{t('dashboard.sleepDuration')}</span>
               <div className="text-app-xl font-bold text-brand-dark">{currentData.summary.avgSleep}</div>
-              <span className="text-[11px] text-muted-text">Target: 7.5 hrs</span>
+              <span className="text-[11px] text-muted-text">{t('dashboard.targetHours')}</span>
             </div>
 
             <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
-              <span className="text-meta-sm text-muted-text font-medium">Average Stress</span>
+              <span className="text-meta-sm text-muted-text font-medium">{t('dashboard.dailyStress')}</span>
               <div className="text-app-xl font-bold text-brand-dark">{currentData.summary.avgStress}</div>
-              <span className="text-[11px] text-muted-text">Target: &lt; 5.0</span>
+              <span className="text-[11px] text-muted-text">{t('dashboard.outOfTen')}</span>
             </div>
 
             <div className="p-5 rounded-card bg-white border border-muted-border shadow-soft space-y-1">
-              <span className="text-meta-sm text-muted-text font-medium">Average Hydration</span>
+              <span className="text-meta-sm text-muted-text font-medium">{t('dashboard.hydrationIntake')}</span>
               <div className="text-app-xl font-bold text-brand-dark">{currentData.summary.avgHydration}</div>
-              <span className="text-[11px] text-muted-text">Target: 2.2 L</span>
+              <span className="text-[11px] text-muted-text">{t('dashboard.targetLiters')}</span>
             </div>
           </div>
 
@@ -185,13 +187,13 @@ export function AnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle as="h3" className="text-section-md font-bold text-brand-dark">
-                    Risk Estimate Trajectory
+                    {t('dashboard.sevenDayRiskTrend')}
                   </CardTitle>
                   <CardDescription className="text-meta-sm text-muted-text">
-                    Daily probability scores from your logged check-ins
+                    {t('dashboard.sevenDayRiskSub')}
                   </CardDescription>
                 </div>
-                <Badge variant="teal" size="sm">Risk</Badge>
+                <Badge variant="teal" size="sm">{t('dashboard.riskIndex')}</Badge>
               </div>
 
               <div className="h-64 w-full pt-2">
@@ -212,13 +214,13 @@ export function AnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle as="h3" className="text-section-md font-bold text-brand-dark">
-                    Sleep Rest Duration
+                    {t('analytics.riskVsSleepChart')}
                   </CardTitle>
                   <CardDescription className="text-meta-sm text-muted-text">
-                    Nightly sleep hours logged by day
+                    {t('checkin.sleepDesc')}
                   </CardDescription>
                 </div>
-                <Badge variant="sage" size="sm">Sleep</Badge>
+                <Badge variant="sage" size="sm">{t('dashboard.sleepDuration')}</Badge>
               </div>
 
               <div className="h-64 w-full pt-2">

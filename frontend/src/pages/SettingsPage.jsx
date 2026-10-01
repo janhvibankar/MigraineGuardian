@@ -10,6 +10,7 @@ import { storageService } from '../services/storageService';
 import { trackingService } from '../services/trackingService';
 import { predictionService } from '../services/predictionService';
 import { pssService } from '../services/pssService';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Settings,
   Bell,
@@ -27,8 +28,10 @@ import {
   Loader2,
   AlertCircle,
   X,
+  Languages,
 } from 'lucide-react';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { cn } from '../utils/cn';
 
 const PREFERENCES_STORAGE_KEY = 'migraineguardian_preferences';
 const DEFAULT_PREFERENCES = {
@@ -40,6 +43,7 @@ const DEFAULT_PREFERENCES = {
 export function SettingsPage() {
   const navigate = useNavigate();
   const currentUser = useCurrentUser();
+  const { t, language, setLanguage, languages } = useTranslation();
 
   // Notification & Environmental Tracking Preferences (Persisted)
   const [preferences, setPreferences] = useState(() => {
@@ -88,13 +92,12 @@ export function SettingsPage() {
     setExportLoading(true);
     setExportError(null);
     try {
-      // 1. Fetch user profile from backend or authService
       const profile = await authService.fetchUserProfile();
       const safeProfile = {
         userId: profile?.userId || profile?.id || currentUser?.userId,
         name: profile?.name || currentUser?.name,
         email: profile?.email || currentUser?.email,
-        diagnosis: profile?.diagnosis || 'Migraine with sensory aura (episodic)',
+        diagnosis: profile?.diagnosis || 'Migraine baseline',
         hasMigraines: profile?.hasMigraines || 'Yes',
         frequency: profile?.frequency || '1–3 times a month',
         severity: profile?.severity ?? 6,
@@ -108,26 +111,20 @@ export function SettingsPage() {
         joinedDate: profile?.joinedDate || null,
       };
 
-      // 2. Fetch daily check-in logs
       let checkinHistory = [];
       try {
         checkinHistory = await trackingService.getDailyLogs(60);
       } catch (e) {
-        console.warn('[Settings] Checkin history fetch fallback:', e);
         checkinHistory = storageService.getItem('migraineguardian_daily_logs', []);
       }
 
-      // 3. Fetch today's check-in draft or log
       let todayCheckin = trackingService.getTodayLog();
       if (!todayCheckin) {
         try {
           todayCheckin = await trackingService.fetchTodayLog();
-        } catch (e) {
-          // fallback
-        }
+        } catch (e) {}
       }
 
-      // 4. Fetch today's risk forecast
       let todayForecast = null;
       try {
         todayForecast = await predictionService.getTodayPrediction();
@@ -135,7 +132,6 @@ export function SettingsPage() {
         todayForecast = storageService.getItem('migraineguardian_today_forecast', null);
       }
 
-      // 5. Fetch PSS-10 assessments
       let pssHistory = [];
       let latestPss = null;
       try {
@@ -145,34 +141,21 @@ export function SettingsPage() {
         latestPss = storageService.getItem('pss_score_latest', null);
       }
 
-      // 6. User preferences
       const savedPrefs = storageService.getItem(PREFERENCES_STORAGE_KEY, DEFAULT_PREFERENCES);
 
-      // 7. Assemble comprehensive export bundle (strictly authenticated user data, zero secrets)
       const exportPackage = {
         exportMetadata: {
           application: 'MigraineGuardian',
           version: '1.0.0',
           exportedAt: new Date().toISOString(),
+          selectedLanguage: language,
           format: 'JSON',
           description: 'Personal MigraineGuardian health tracking data export.',
         },
         userProfile: safeProfile,
         preferences: savedPrefs,
         todayCheckin: todayCheckin || null,
-        todayRiskForecast: todayForecast
-          ? {
-              score: todayForecast.score,
-              level: todayForecast.level,
-              model_used: todayForecast.model_used,
-              headline: todayForecast.headline,
-              summary: todayForecast.summary,
-              elevatedFactors: todayForecast.elevatedFactors || [],
-              focusAreas: todayForecast.focusAreas || [],
-              xai: todayForecast.xai || null,
-              disclaimer: todayForecast.disclaimer || null,
-            }
-          : null,
+        todayRiskForecast: todayForecast,
         checkinHistory: Array.isArray(checkinHistory) ? checkinHistory : [],
         pssAssessments: {
           latest: latestPss || null,
@@ -180,7 +163,6 @@ export function SettingsPage() {
         },
       };
 
-      // 8. Generate and trigger download of JSON file
       const jsonString = JSON.stringify(exportPackage, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -205,18 +187,15 @@ export function SettingsPage() {
   };
 
   const handleClearLocalData = () => {
-    // Clear cached drafts, forecast cache, logs cache, and read notifications from local storage
     storageService.removeItem('daily_checkin_today');
     storageService.removeItem('migraineguardian_today_forecast');
     storageService.removeItem('migraineguardian_daily_logs');
     storageService.removeItem('pss_score_latest');
     storageService.removeItem('migraineguardian_read_notifications');
 
-    // Reset preferences to default
     storageService.setItem(PREFERENCES_STORAGE_KEY, DEFAULT_PREFERENCES);
     setPreferences(DEFAULT_PREFERENCES);
 
-    // Notify components of state reset
     window.dispatchEvent(new CustomEvent('migraineguardian_forecast_updated', { detail: null }));
 
     setDeleteModalOpen(false);
@@ -234,23 +213,23 @@ export function SettingsPage() {
     setPasswordError(null);
 
     if (!currentPassword) {
-      setPasswordError('Please enter your current password.');
+      setPasswordError(t('settings.enterCurrentPassword', 'Please enter your current password.'));
       return;
     }
     if (!newPassword) {
-      setPasswordError('Please enter a new password.');
+      setPasswordError(t('settings.enterNewPassword', 'Please enter a new password.'));
       return;
     }
     if (newPassword.length < 8) {
-      setPasswordError('New password must be at least 8 characters long.');
+      setPasswordError(t('settings.passwordMin8', 'New password must be at least 8 characters long.'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('New password and confirmation password do not match.');
+      setPasswordError(t('settings.passwordsMismatch', 'New password and confirmation password do not match.'));
       return;
     }
     if (newPassword === currentPassword) {
-      setPasswordError('New password must be different from your current password.');
+      setPasswordError(t('settings.passwordSameAsCurrent', 'New password must be different from your current password.'));
       return;
     }
 
@@ -263,7 +242,6 @@ export function SettingsPage() {
       return;
     }
 
-    // Reset fields & show success state
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
@@ -273,20 +251,21 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-200">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-200 text-left">
       {/* HEADER */}
       <PageHeader
-        title="Settings & Preferences"
-        subtitle="Manage reminders, environmental tracking preferences, and personal health data export."
-        badge="Preferences"
+        title={t('settings.title')}
+        subtitle={t('settings.subtitle')}
+        badge={t('nav.preferences')}
         actions={
           <Button
             variant="primary"
             size="md"
             onClick={handleSavePreferences}
             icon={savedSettings ? Check : Settings}
+            className="cursor-pointer"
           >
-            {savedSettings ? 'Preferences Saved' : 'Save Preferences'}
+            {savedSettings ? t('settings.preferencesSaved') : t('settings.savePreferencesBtn')}
           </Button>
         }
       />
@@ -294,21 +273,21 @@ export function SettingsPage() {
       {savedSettings && (
         <div className="p-3.5 rounded-card-sm bg-brand-sage/20 border border-brand-sage/40 text-brand-dark text-meta-md flex items-center gap-2 animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 text-brand-dark" />
-          <span>Your preferences have been safely updated and saved.</span>
+          <span>{t('common.saved')}</span>
         </div>
       )}
 
       {passwordSuccess && (
         <div className="p-3.5 rounded-card-sm bg-brand-teal/15 border border-brand-teal/30 text-brand-dark text-meta-md flex items-center gap-2 animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 text-brand-teal" />
-          <span>Your password has been changed successfully.</span>
+          <span>{t('settings.passwordChanged')}</span>
         </div>
       )}
 
       {exportSuccess && (
         <div className="p-3.5 rounded-card-sm bg-brand-teal/15 border border-brand-teal/30 text-brand-dark text-meta-md flex items-center gap-2 animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 text-brand-teal" />
-          <span>Data package successfully exported and downloaded as JSON.</span>
+          <span>{t('settings.dataExported')}</span>
         </div>
       )}
 
@@ -322,42 +301,97 @@ export function SettingsPage() {
       {deleteSuccess && (
         <div className="p-3.5 rounded-card-sm bg-brand-teal/15 border border-brand-teal/30 text-brand-dark text-meta-md flex items-center gap-2 animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 text-brand-teal" />
-          <span>Local session cache and temporary drafts cleared. Cloud records remain intact.</span>
+          <span>{t('settings.cacheCleared')}</span>
         </div>
       )}
 
       {/* =========================================================================
-          SECTION 1: HEALTH & SAFETY
+          SECTION 1: LANGUAGE PREFERENCES
+         ========================================================================= */}
+      <Card variant="warm" className="p-6 sm:p-8 space-y-6 border-brand-sage/50 shadow-soft">
+        <div className="flex items-center gap-2.5 pb-2 border-b border-muted-border/60">
+          <Languages className="w-5 h-5 text-brand-teal" />
+          <div>
+            <h2 className="text-section-lg font-semibold text-brand-dark">
+              {t('settings.languageLabel')}
+            </h2>
+            <span className="text-meta-sm text-muted-text">
+              {t('settings.languageDesc')}
+            </span>
+          </div>
+        </div>
+
+        {/* 1.1 Multilingual Selection */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            {languages.map((lang) => {
+              const isSelected = language === lang.code;
+              return (
+                <button
+                  key={lang.code}
+                  type="button"
+                  onClick={() => setLanguage(lang.code)}
+                  className={cn(
+                    'p-4 rounded-card-sm border text-left transition-all duration-150 flex items-center justify-between cursor-pointer',
+                    isSelected
+                      ? 'bg-brand-sage/20 border-brand-teal font-bold shadow-soft ring-2 ring-brand-teal/40'
+                      : 'bg-white border-muted-border hover:bg-card-warm/60'
+                  )}
+                  aria-pressed={isSelected}
+                >
+                  <div className="flex flex-col">
+                    <span className="text-section-md text-brand-dark font-bold">
+                      {lang.nativeLabel}
+                    </span>
+                    <span className="text-meta-sm text-muted-text">
+                      {lang.label}
+                    </span>
+                  </div>
+
+                  {isSelected && (
+                    <div className="w-6 h-6 rounded-full bg-brand-teal text-white flex items-center justify-center shadow-soft">
+                      <Check className="w-3.5 h-3.5" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      {/* =========================================================================
+          SECTION 2: HEALTH & SAFETY
          ========================================================================= */}
       <Card variant="warm" className="p-6 sm:p-8 space-y-4 border-brand-sage/50 shadow-soft">
         <div className="flex items-center gap-2.5 pb-2 border-b border-muted-border/60">
           <ShieldCheck className="w-5 h-5 text-brand-teal" />
           <h2 className="text-section-lg font-semibold text-brand-dark">
-            Health & Safety
+            {t('settings.healthSafetyTitle')}
           </h2>
         </div>
 
         <div className="p-4 rounded-card-sm bg-white border border-muted-border shadow-soft space-y-2">
           <p className="text-body-md font-medium text-brand-dark leading-relaxed">
-            "MigraineGuardian is designed for tracking, awareness and educational support. It does not diagnose migraine or replace professional medical advice."
+            {t('settings.healthSafetyText')}
           </p>
           <span className="text-[11px] text-muted-text block">
-            Always consult a licensed neurologist or physician for clinical diagnosis, acute prescription management, and emergency symptoms.
+            {t('settings.healthSafetySub')}
           </span>
         </div>
       </Card>
 
       {/* =========================================================================
-          SECTION 2: NOTIFICATIONS & TRACKING PREFERENCES
+          SECTION 3: NOTIFICATIONS & TRACKING PREFERENCES
          ========================================================================= */}
       <Card variant="warm" className="p-6 sm:p-8 space-y-5 border-card-warm-border shadow-soft">
         <div className="flex items-center gap-2.5 pb-2 border-b border-muted-border/60">
           <Bell className="w-5 h-5 text-brand-teal" />
           <div>
             <h2 className="text-section-lg font-semibold text-brand-dark">
-              Notifications & Gentle Reminders
+              {t('settings.notificationsTitle')}
             </h2>
-            <span className="text-meta-sm text-muted-text">Non-intrusive alerts to protect autonomic peace</span>
+            <span className="text-meta-sm text-muted-text">{t('settings.notificationsSubtitle')}</span>
           </div>
         </div>
 
@@ -366,10 +400,10 @@ export function SettingsPage() {
           <label className="flex items-center justify-between p-4 rounded-card-sm bg-white border border-muted-border cursor-pointer hover:border-brand-sage/60 transition-all">
             <div className="space-y-0.5">
               <span className="text-body-md font-semibold text-brand-dark block">
-                Daily Check-in Reminder
+                {t('settings.dailyReminderTitle')}
               </span>
               <span className="text-meta-sm text-muted-text">
-                Gentle prompt at 8:30 PM to log sleep, hydration, and daily stress.
+                {t('settings.dailyReminderDesc')}
               </span>
             </div>
             <input
@@ -384,10 +418,10 @@ export function SettingsPage() {
           <label className="flex items-center justify-between p-4 rounded-card-sm bg-white border border-muted-border cursor-pointer hover:border-brand-sage/60 transition-all">
             <div className="space-y-0.5">
               <span className="text-body-md font-semibold text-brand-dark block">
-                Weekly Insight Reminder
+                {t('settings.weeklyReminderTitle')}
               </span>
               <span className="text-meta-sm text-muted-text">
-                Sunday morning synthesis highlighting newly identified lifestyle patterns.
+                {t('settings.weeklyReminderDesc')}
               </span>
             </div>
             <input
@@ -402,10 +436,10 @@ export function SettingsPage() {
           <label className="flex items-center justify-between p-4 rounded-card-sm bg-white border border-muted-border cursor-pointer hover:border-brand-sage/60 transition-all">
             <div className="space-y-0.5">
               <span className="text-body-md font-semibold text-brand-dark block">
-                Environmental Risk Monitoring
+                {t('settings.weatherAlertsTitle')}
               </span>
               <span className="text-meta-sm text-muted-text">
-                Include atmospheric pressure changes in your environmental risk monitoring.
+                {t('settings.weatherAlertsDesc')}
               </span>
             </div>
             <input
@@ -419,16 +453,16 @@ export function SettingsPage() {
       </Card>
 
       {/* =========================================================================
-          SECTION 3: PRIVACY & DATA MANAGEMENT
+          SECTION 4: PRIVACY & DATA MANAGEMENT
          ========================================================================= */}
       <Card variant="warm" className="p-6 sm:p-8 space-y-6 border-card-warm-border shadow-soft">
         <div className="flex items-center gap-2.5 pb-2 border-b border-muted-border/60">
           <Database className="w-5 h-5 text-brand-teal" />
           <div>
             <h2 className="text-section-lg font-semibold text-brand-dark">
-              Privacy & Data Management
+              {t('settings.privacyTitle')}
             </h2>
-            <span className="text-meta-sm text-muted-text">Complete patient sovereignty over your logs and health data</span>
+            <span className="text-meta-sm text-muted-text">{t('settings.privacySubtitle')}</span>
           </div>
         </div>
 
@@ -437,14 +471,14 @@ export function SettingsPage() {
           <div className="p-4 rounded-card-sm bg-white border border-muted-border flex items-center justify-between">
             <div className="space-y-0.5 pr-4">
               <span className="text-body-md font-semibold text-brand-dark block">
-                Authenticated Account Storage
+                {t('settings.accountStorageStatus')}
               </span>
               <span className="text-meta-sm text-muted-text">
-                Your migraine tracking data is associated with your authenticated account and protected by the application's access controls.
+                {t('settings.accountStorageDesc')}
               </span>
             </div>
             <Badge variant="sage" size="sm" className="flex-shrink-0">
-              Protected
+              {t('common.protected')}
             </Badge>
           </div>
         </div>
@@ -452,7 +486,7 @@ export function SettingsPage() {
         {/* Data Portability & Erasure Action Buttons */}
         <div className="space-y-3 pt-2">
           <span className="text-meta-sm font-semibold uppercase tracking-wider text-muted-text block">
-            Data Portability & Storage Management:
+            {t('settings.dataPortability')}
           </span>
 
           <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -462,9 +496,9 @@ export function SettingsPage() {
               onClick={handleExportData}
               disabled={exportLoading}
               icon={exportLoading ? Loader2 : Download}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto cursor-pointer"
             >
-              {exportLoading ? 'Generating Export...' : 'Export My Data'}
+              {exportLoading ? 'Generating Export...' : t('settings.exportDataBtn')}
             </Button>
 
             <Button
@@ -472,32 +506,32 @@ export function SettingsPage() {
               size="md"
               onClick={() => setDeleteModalOpen(true)}
               icon={Trash2}
-              className="w-full sm:w-auto text-[#8F443B] border-alert-muted/40 hover:bg-alert-muted/10 hover:border-alert-muted/60"
+              className="w-full sm:w-auto text-[#8F443B] border-alert-muted/40 hover:bg-alert-muted/10 hover:border-alert-muted/60 cursor-pointer"
             >
-              Clear Local Data
+              {t('settings.clearLocalDataBtn')}
             </Button>
           </div>
           <span className="text-[11px] text-muted-text block">
-            Exports your available MigraineGuardian account data as a JSON file.
+            {t('settings.exportDataDesc')}
           </span>
         </div>
       </Card>
 
       {/* =========================================================================
-          SECTION 4: ACCOUNT & LOGOUT
+          SECTION 5: ACCOUNT & SECURITY
          ========================================================================= */}
       <Card variant="warm" className="p-6 sm:p-8 space-y-6 border-card-warm-border shadow-soft">
         <div className="flex items-center gap-2.5 pb-2 border-b border-muted-border/60">
           <Lock className="w-5 h-5 text-brand-teal" />
           <h2 className="text-section-lg font-semibold text-brand-dark">
-            Account & Security
+            {t('settings.accountTitle')}
           </h2>
         </div>
 
         <div className="space-y-3">
           <div className="p-4 rounded-card-sm bg-white border border-muted-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-0.5">
-              <span className="text-meta-sm text-muted-text block">Registered Account Email</span>
+              <span className="text-meta-sm text-muted-text block">{t('settings.registeredEmail')}</span>
               <span className="font-bold text-brand-dark text-body-md">
                 {currentUser?.email || 'janhvi@serene-health.org'}
               </span>
@@ -510,18 +544,19 @@ export function SettingsPage() {
                 setPasswordError(null);
                 setPasswordModalOpen(true);
               }}
+              className="cursor-pointer"
             >
-              Change Password
+              {t('settings.changePasswordBtn')}
             </Button>
           </div>
 
           <div className="pt-3 border-t border-muted-border/60 flex items-center justify-between">
             <div>
               <span className="text-body-md font-semibold text-brand-dark block">
-                Sign Out of Current Session
+                {t('settings.signOutSession')}
               </span>
               <span className="text-meta-sm text-muted-text">
-                Securely lock your session on this browser.
+                {t('settings.signOutDesc')}
               </span>
             </div>
 
@@ -530,9 +565,9 @@ export function SettingsPage() {
               size="md"
               onClick={handleLogout}
               icon={LogOut}
-              className="text-[#8F443B] border-alert-muted/40 hover:bg-alert-muted/10 hover:border-alert-muted/60 flex-shrink-0"
+              className="text-[#8F443B] border-alert-muted/40 hover:bg-alert-muted/10 hover:border-alert-muted/60 flex-shrink-0 cursor-pointer"
             >
-              Logout
+              {t('settings.logoutBtn')}
             </Button>
           </div>
         </div>
@@ -548,14 +583,14 @@ export function SettingsPage() {
                   <Key className="w-4 h-4 text-brand-teal" />
                 </div>
                 <h3 className="text-section-lg font-bold text-brand-dark">
-                  Change Password
+                  {t('settings.changePasswordBtn')}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setPasswordModalOpen(false)}
                 className="p-1 rounded-md text-muted-text hover:text-brand-dark hover:bg-card-warm cursor-pointer transition-colors"
-                aria-label="Close modal"
+                aria-label={t('common.close')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -572,7 +607,7 @@ export function SettingsPage() {
               {/* Current Password */}
               <div className="space-y-1.5">
                 <label className="text-meta-md font-semibold text-brand-dark block">
-                  Current Password
+                  {t('settings.currentPassword', 'Current Password')}
                 </label>
                 <div className="relative">
                   <input
@@ -580,13 +615,13 @@ export function SettingsPage() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     required
-                    placeholder="Enter your current password"
+                    placeholder={t('settings.currentPasswordPlaceholder', 'Enter current password')}
                     className="w-full px-3.5 py-2.5 rounded-btn border border-muted-border bg-card-warm/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-teal text-brand-dark text-body-md pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-text hover:text-brand-dark"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-text hover:text-brand-dark cursor-pointer"
                   >
                     {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -596,7 +631,7 @@ export function SettingsPage() {
               {/* New Password */}
               <div className="space-y-1.5">
                 <label className="text-meta-md font-semibold text-brand-dark block">
-                  New Password
+                  {t('settings.newPassword', 'New Password')}
                 </label>
                 <div className="relative">
                   <input
@@ -605,33 +640,33 @@ export function SettingsPage() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
                     minLength={8}
-                    placeholder="At least 8 characters"
+                    placeholder={t('settings.newPasswordPlaceholder', 'At least 8 characters')}
                     className="w-full px-3.5 py-2.5 rounded-btn border border-muted-border bg-card-warm/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-teal text-brand-dark text-body-md pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-text hover:text-brand-dark"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-text hover:text-brand-dark cursor-pointer"
                   >
                     {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 <span className="text-[11px] text-muted-text">
-                  Must be at least 8 characters.
+                  {t('settings.passwordRequirement', 'Must be at least 8 characters.')}
                 </span>
               </div>
 
               {/* Confirm New Password */}
               <div className="space-y-1.5">
                 <label className="text-meta-md font-semibold text-brand-dark block">
-                  Confirm New Password
+                  {t('settings.confirmNewPassword', 'Confirm New Password')}
                 </label>
                 <input
                   type={showNewPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  placeholder="Re-enter new password"
+                  placeholder={t('settings.confirmNewPasswordPlaceholder', 'Re-enter new password')}
                   className="w-full px-3.5 py-2.5 rounded-btn border border-muted-border bg-card-warm/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-teal text-brand-dark text-body-md"
                 />
               </div>
@@ -642,8 +677,9 @@ export function SettingsPage() {
                   size="md"
                   type="button"
                   onClick={() => setPasswordModalOpen(false)}
+                  className="cursor-pointer"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   variant="primary"
@@ -651,8 +687,9 @@ export function SettingsPage() {
                   type="submit"
                   disabled={passwordLoading}
                   icon={passwordLoading ? Loader2 : Key}
+                  className="cursor-pointer"
                 >
-                  {passwordLoading ? 'Updating...' : 'Update Password'}
+                  {passwordLoading ? t('common.loading') : t('settings.updatePasswordBtn', 'Update Password')}
                 </Button>
               </div>
             </form>
@@ -669,10 +706,10 @@ export function SettingsPage() {
                 <Trash2 className="w-5 h-5" />
               </div>
               <h3 className="text-section-lg font-semibold text-brand-dark">
-                Clear Local Browser Cache?
+                {t('settings.clearLocalDataBtn')}?
               </h3>
               <p className="text-meta-md text-muted-text leading-relaxed">
-                This will clear local offline drafts, cached forecast previews, and temporary browser data. Your permanent profile and recorded history stored securely in your cloud account will not be deleted.
+                {t('settings.clearLocalDataDesc')}
               </p>
             </div>
 
@@ -680,16 +717,16 @@ export function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setDeleteModalOpen(false)}
-                className="flex-1 px-4 py-2.5 rounded-btn border border-[#DFDCD1] bg-[#F4F3EE] text-brand-dark font-medium hover:bg-card-warm-hover text-body-md transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-btn border border-[#DFDCD1] bg-[#F4F3EE] text-brand-dark font-medium hover:bg-card-warm-hover text-body-md transition-colors cursor-pointer"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleClearLocalData}
-                className="flex-1 px-4 py-2.5 rounded-btn bg-alert-muted/20 text-[#8F443B] border border-alert-muted/40 font-medium hover:bg-alert-muted/30 text-body-md transition-colors shadow-none"
+                className="flex-1 px-4 py-2.5 rounded-btn bg-alert-muted/20 text-[#8F443B] border border-alert-muted/40 font-medium hover:bg-alert-muted/30 text-body-md transition-colors shadow-none cursor-pointer"
               >
-                Clear Local Data
+                {t('settings.clearLocalDataBtn')}
               </button>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { Logo } from './Logo';
 import { Badge } from '../ui/Badge';
 import { PRIMARY_NAV_ITEMS, SECONDARY_NAV_ITEMS } from '../../data/navigation';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useTranslation } from '../../hooks/useTranslation';
 import { predictionService } from '../../services/predictionService';
 import { authService } from '../../services/authService';
 import { storageService } from '../../services/storageService';
@@ -15,6 +16,7 @@ export function Sidebar({ className }) {
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const currentUser = useCurrentUser();
+  const { t } = useTranslation();
   const [todayForecast, setTodayForecast] = useState(() =>
     storageService.getItem('migraineguardian_today_forecast', null)
   );
@@ -53,6 +55,31 @@ export function Sidebar({ className }) {
   const activeRiskScore = todayForecast?.score ?? currentUser?.currentRiskScore;
   const hasActiveRisk = activeRiskScore !== null && activeRiskScore !== undefined;
 
+  const getNavLabel = (path, defaultLabel) => {
+    switch (path) {
+      case ROUTES.DASHBOARD:
+        return t('nav.dashboard');
+      case ROUTES.DAILY_CHECKIN:
+        return t('nav.dailyCheckin');
+      case ROUTES.INSIGHTS:
+        return t('nav.insights');
+      case ROUTES.ANALYTICS:
+        return t('nav.analytics');
+      case ROUTES.REPORTS:
+        return t('nav.reports');
+      case ROUTES.CHAT:
+        return t('nav.chat');
+      case ROUTES.RISK_ANALYSIS:
+        return t('nav.riskForecast');
+      case ROUTES.PROFILE:
+        return t('nav.profile');
+      case ROUTES.SETTINGS:
+        return t('nav.settings');
+      default:
+        return defaultLabel;
+    }
+  };
+
   return (
     <>
       <aside
@@ -70,10 +97,12 @@ export function Sidebar({ className }) {
           <div className="mt-4 px-3 py-2 rounded-card-sm bg-card-warm border border-card-warm-border flex items-center justify-between shadow-soft">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-brand-sage animate-pulse" />
-              <span className="text-meta-sm font-medium text-brand-dark">Active Monitoring</span>
+              <span className="text-meta-sm font-medium text-brand-dark">
+                {t('nav.activeMonitoring')}
+              </span>
             </div>
             <span className="text-[11px] text-brand-teal-dark uppercase font-semibold">
-              {hasActiveRisk ? `${activeRiskScore}% Risk` : 'NO DATA'}
+              {hasActiveRisk ? `${activeRiskScore}% ${t('dashboard.riskIndex')}` : t('common.noData')}
             </span>
           </div>
         </div>
@@ -82,7 +111,7 @@ export function Sidebar({ className }) {
         <div className="flex-1 overflow-y-auto px-3.5 py-4 space-y-6">
           <div className="space-y-1">
             <div className="px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-text-light mb-2">
-              Primary Navigation
+              {t('nav.primaryNav')}
             </div>
 
             <nav className="space-y-1" aria-label="Main menu">
@@ -93,7 +122,12 @@ export function Sidebar({ className }) {
                   ? hasActiveRisk
                     ? `${Math.round(activeRiskScore)}%`
                     : null
-                  : item.badge;
+                  : item.badge
+                  ? item.badge === 'Today'
+                    ? t('common.today')
+                    : item.badge
+                  : null;
+
                 const dynamicBadgeColor = isRiskNav
                   ? activeRiskScore > 60
                     ? 'alert'
@@ -101,6 +135,8 @@ export function Sidebar({ className }) {
                     ? 'warning'
                     : 'teal'
                   : item.badgeColor;
+
+                const localizedLabel = getNavLabel(item.path, item.label);
 
                 return (
                   <NavLink
@@ -124,7 +160,7 @@ export function Sidebar({ className }) {
                               isActive ? 'text-brand-dark' : 'text-muted-text group-hover:text-brand-dark'
                             )}
                           />
-                          <span className="truncate">{item.label}</span>
+                          <span className="truncate">{localizedLabel}</span>
                         </div>
 
                         {dynamicBadge && (
@@ -146,12 +182,14 @@ export function Sidebar({ className }) {
           {/* Secondary Navigation (Profile, Settings, Logout) */}
           <div className="space-y-1 pt-4 border-t border-muted-border/60">
             <div className="px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-text-light mb-2">
-              Preferences
+              {t('nav.preferences')}
             </div>
 
             <nav className="space-y-1" aria-label="Secondary menu">
               {SECONDARY_NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
+                const localizedLabel = getNavLabel(item.path, item.label);
+
                 return (
                   <NavLink
                     key={item.path}
@@ -173,7 +211,7 @@ export function Sidebar({ className }) {
                             isActive ? 'text-brand-dark' : 'text-muted-text group-hover:text-brand-dark'
                           )}
                         />
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate">{localizedLabel}</span>
                       </div>
                     )}
                   </NavLink>
@@ -187,7 +225,7 @@ export function Sidebar({ className }) {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-btn text-body-md font-medium text-muted-text hover:text-alert-muted hover:bg-alert-muted/10 transition-colors group cursor-pointer text-left"
               >
                 <LogOut className="w-4 h-4 text-muted-text group-hover:text-alert-muted transition-colors flex-shrink-0" />
-                <span>Sign Out</span>
+                <span>{t('nav.signOut')}</span>
               </button>
             </nav>
           </div>
@@ -201,7 +239,7 @@ export function Sidebar({ className }) {
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-full bg-brand-dark text-white font-bold text-meta-md flex items-center justify-center flex-shrink-0 shadow-soft">
-                {currentUser?.initials || 'JH'}
+                {currentUser?.initials || 'MG'}
               </div>
               <div className="flex flex-col text-left overflow-hidden">
                 <span className="text-body-md font-bold text-brand-dark truncate">
@@ -226,10 +264,10 @@ export function Sidebar({ className }) {
                 <LogOut className="w-5 h-5" />
               </div>
               <h3 className="text-section-lg font-semibold text-brand-dark">
-                Sign out of your account?
+                {t('settings.logoutModalTitle')}
               </h3>
               <p className="text-meta-md text-muted-text leading-relaxed">
-                Your tracking data will remain safely stored on this device.
+                {t('settings.logoutModalDesc')}
               </p>
             </div>
 
@@ -237,16 +275,16 @@ export function Sidebar({ className }) {
               <button
                 type="button"
                 onClick={() => setShowLogoutModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-btn border border-[#DFDCD1] bg-[#F4F3EE] text-brand-dark font-medium hover:bg-card-warm-hover text-body-md transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-btn border border-[#DFDCD1] bg-[#F4F3EE] text-brand-dark font-medium hover:bg-card-warm-hover text-body-md transition-colors cursor-pointer"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex-1 px-4 py-2.5 rounded-btn bg-brand-dark text-white font-medium hover:bg-[#1C2822] active:bg-[#141E19] text-body-md transition-colors shadow-soft"
+                className="flex-1 px-4 py-2.5 rounded-btn bg-brand-dark text-white font-medium hover:bg-[#1C2822] active:bg-[#141E19] text-body-md transition-colors shadow-soft cursor-pointer"
               >
-                Sign Out
+                {t('nav.signOut')}
               </button>
             </div>
           </div>

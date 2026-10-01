@@ -1,12 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Card, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
+import { Card, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
+import { useTranslation } from '../hooks/useTranslation';
 import {
-  Sparkles,
   ClipboardList,
   Compass,
   ArrowRight,
@@ -16,47 +16,49 @@ import {
 } from 'lucide-react';
 
 export function HowItWorksPage() {
+  const { t } = useTranslation();
+
   const steps = [
     {
       step: '01',
-      title: 'Establish Your Personal Baseline',
-      desc: 'Complete an initial 3-minute onboarding and clinical PSS (Perceived Stress Scale) evaluation to map your historical trigger thresholds.',
-      badge: 'Baseline Setup',
+      title: t('howItWorks.step1Title'),
+      desc: t('howItWorks.step1Desc'),
+      badge: t('howItWorks.step1Badge'),
       icon: ClipboardList,
     },
     {
       step: '02',
-      title: 'Daily Micro-Checkins',
-      desc: 'Each morning or evening, spend 60 seconds logging rest, water intake, screen intensity, and any subtle prodrome sensations.',
-      badge: '60 Seconds',
+      title: t('howItWorks.step2Title'),
+      desc: t('howItWorks.step2Desc'),
+      badge: t('howItWorks.step2Badge'),
       icon: Activity,
     },
     {
       step: '03',
-      title: 'Continuous Weather & Barometric Tracking',
-      desc: 'The platform quietly monitors localized atmospheric pressure variations and light intensity to anticipate environmental friction.',
-      badge: 'Passive Context',
+      title: t('howItWorks.step3Title'),
+      desc: t('howItWorks.step3Desc'),
+      badge: t('howItWorks.step3Badge'),
       icon: Compass,
     },
     {
       step: '04',
-      title: 'Calm Insights & Care Protocols',
-      desc: 'Receive non-intrusive, protective recommendations (hydration prompts, lighting dimming, rescue medication reminders) before symptoms intensify.',
-      badge: 'Gentle Foresight',
+      title: t('howItWorks.step4Title'),
+      desc: t('howItWorks.step4Desc'),
+      badge: t('howItWorks.step4Badge'),
       icon: HeartHandshake,
     },
   ];
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 md:py-12 space-y-12">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 md:py-12 space-y-12 text-left">
       <PageHeader
-        title="How MigraineGuardian Works"
-        subtitle="A respectful, evidence-grounded approach to understanding subtle physiological patterns and regaining peace of mind."
-        badge="System Methodology"
+        title={t('howItWorks.title')}
+        subtitle={t('howItWorks.subtitle')}
+        badge={t('howItWorks.badge')}
         actions={
           <Link to={ROUTES.ONBOARDING}>
             <Button variant="primary" size="md" iconRight={ArrowRight}>
-              Start Onboarding
+              {t('common.startOnboarding')}
             </Button>
           </Link>
         }
@@ -96,21 +98,21 @@ export function HowItWorksPage() {
         <div className="flex items-center gap-3">
           <ShieldCheck className="w-6 h-6 text-brand-teal" />
           <h3 className="text-section-lg font-medium text-brand-dark">
-            Our Clinical & Human Promise
+            {t('auth.secureBadge')}
           </h3>
         </div>
         <p className="text-body-md text-muted-text leading-relaxed max-w-3xl">
-          We never design for alarmist notifications or high-stress alert rings. Migraine management is about calming the autonomic nervous system. Every color, font, and interaction in MigraineGuardian is chosen to avoid sensory stimulation and cognitive strain.
+          {t('auth.privacyNote')}
         </p>
         <div className="pt-2 flex flex-wrap items-center gap-4">
           <Link to={ROUTES.ONBOARDING}>
             <Button variant="primary" size="md" iconRight={ArrowRight}>
-              Begin Journey
+              {t('nav.beginJourney')}
             </Button>
           </Link>
           <Link to={ROUTES.LOGIN}>
             <Button variant="secondary" size="md">
-              Sign In to Account
+              {t('nav.signIn')}
             </Button>
           </Link>
         </div>
@@ -118,3 +120,5 @@ export function HowItWorksPage() {
     </div>
   );
 }
+
+export default HowItWorksPage;

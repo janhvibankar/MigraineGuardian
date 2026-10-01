@@ -2,19 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
 import { Badge } from '../ui/Badge';
-import { ROUTE_PAGE_TITLES } from '../../data/navigation';
+import { LanguageSelector } from './LanguageSelector';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { trackingService } from '../../services/trackingService';
 import { predictionService } from '../../services/predictionService';
 import { storageService } from '../../services/storageService';
 import { ROUTES } from '../../utils/constants';
-import { Bell, X, CheckCircle2, ArrowRight, Check } from 'lucide-react';
+import { Bell, X, CheckCircle2, ArrowRight } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { localizeFocusArea } from '../../utils/baselineHelper';
 
 export function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentUser = useCurrentUser();
+  const { t } = useTranslation();
   const [showNotifications, setShowNotifications] = useState(false);
 
   // Dynamic application state for notifications
@@ -68,9 +71,9 @@ export function TopBar() {
   if (!todayLog) {
     advisories.push({
       id: `checkin_reminder_${todayDate}`,
-      title: 'Daily Check-in Reminder',
-      desc: 'Complete today’s check-in to generate your personalized migraine risk forecast.',
-      time: 'Action Required',
+      title: t('advisories.checkinReminderTitle'),
+      desc: t('advisories.checkinReminderDesc'),
+      time: t('advisories.actionRequired'),
       type: 'sage',
       route: ROUTES.DAILY_CHECKIN,
     });
@@ -81,9 +84,12 @@ export function TopBar() {
     const isHigh = todayForecast.level === 'High' || todayForecast.score > 60;
     advisories.push({
       id: `forecast_${todayDate}_${todayForecast.score}`,
-      title: isHigh ? 'Elevated Risk Advisory' : 'Risk Forecast Available',
-      desc: `Today’s migraine risk estimate is ${todayForecast.score}% (${todayForecast.level || 'Estimated'} Sensitivity).`,
-      time: 'Today',
+      title: isHigh ? t('advisories.elevatedRiskTitle') : t('advisories.riskForecastTitle'),
+      desc: t('advisories.forecastDesc', {
+        score: todayForecast.score,
+        level: todayForecast.level || 'Estimated',
+      }),
+      time: t('common.today'),
       type: isHigh ? 'alert' : 'teal',
       route: ROUTES.RISK_ANALYSIS,
     });
@@ -92,11 +98,12 @@ export function TopBar() {
     if (todayForecast.focusAreas && Array.isArray(todayForecast.focusAreas) && todayForecast.focusAreas.length > 0) {
       const topFocus = todayForecast.focusAreas[0];
       if (topFocus && topFocus.title) {
+        const localizedFocus = localizeFocusArea(topFocus, t);
         advisories.push({
           id: `focus_${todayDate}_${topFocus.title}`,
-          title: `Today’s Focus: ${topFocus.title}`,
-          desc: topFocus.description || topFocus.action || 'Targeted behavioral recommendation.',
-          time: 'Today',
+          title: t('advisories.todaysFocusTitle', { title: localizedFocus.title }),
+          desc: localizedFocus.description || topFocus.action || 'Targeted behavioral recommendation.',
+          time: t('common.today'),
           type: 'sage',
           route: ROUTES.RISK_ANALYSIS,
         });
@@ -121,12 +128,39 @@ export function TopBar() {
     navigate(item.route);
   };
 
-  // Dynamic page title
-  const currentTitle = ROUTE_PAGE_TITLES[location.pathname] || 'Dashboard';
+  // Dynamic localized page title
+  const getPageTitle = (pathname) => {
+    switch (pathname) {
+      case ROUTES.DASHBOARD:
+        return t('pageTitles.dashboard');
+      case ROUTES.DAILY_CHECKIN:
+        return t('pageTitles.dailyCheckin');
+      case ROUTES.INSIGHTS:
+        return t('pageTitles.insights');
+      case ROUTES.ANALYTICS:
+        return t('pageTitles.analytics');
+      case ROUTES.REPORTS:
+        return t('pageTitles.reports');
+      case ROUTES.CHAT:
+        return t('pageTitles.chat');
+      case ROUTES.RISK_ANALYSIS:
+        return t('pageTitles.riskForecast');
+      case ROUTES.PSS_ASSESSMENT:
+        return t('pageTitles.pssAssessment');
+      case ROUTES.PROFILE:
+        return t('pageTitles.profile');
+      case ROUTES.SETTINGS:
+        return t('pageTitles.settings');
+      default:
+        return t('pageTitles.dashboard');
+    }
+  };
+
+  const currentTitle = getPageTitle(location.pathname);
 
   return (
     <header className="sticky top-0 z-30 w-full bg-canvas/90 backdrop-blur-md border-b border-muted-border/60 select-none">
-      <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3 sm:gap-4">
         {/* Left: Mobile Logo & Current Page Title */}
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="md:hidden flex-shrink-0">
@@ -140,19 +174,22 @@ export function TopBar() {
           </div>
         </div>
 
-        {/* Right: Notification Bell and User Profile (Relief Protocol removed) */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        {/* Right: Language Selector, Notification Bell, User Profile */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+          {/* Language Selector */}
+          <LanguageSelector variant="compact" />
+
           {/* Notification Icon & Dynamic Dropdown */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowNotifications(!showNotifications)}
               className={cn(
-                'p-2.5 rounded-btn text-muted-text hover:text-brand-dark hover:bg-card-warm transition-colors relative cursor-pointer',
+                'p-2 sm:p-2.5 rounded-btn text-muted-text hover:text-brand-dark hover:bg-card-warm transition-colors relative cursor-pointer',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal',
                 showNotifications && 'bg-card-warm text-brand-dark'
               )}
-              aria-label="Notifications"
+              aria-label={t('advisories.title')}
               aria-expanded={showNotifications}
             >
               <Bell className="w-4 h-4" />
@@ -168,15 +205,15 @@ export function TopBar() {
                 <div className="flex items-center justify-between pb-2 border-b border-muted-border/60">
                   <div className="flex items-center gap-2">
                     <span className="text-body-md font-semibold text-brand-dark">
-                      Advisories
+                      {t('advisories.title')}
                     </span>
                     {unreadCount > 0 ? (
                       <Badge variant="sage" size="sm">
-                        {unreadCount} New
+                        {t('advisories.newBadge', { count: unreadCount })}
                       </Badge>
                     ) : (
                       <Badge variant="neutral" size="sm">
-                        Up to date
+                        {t('advisories.upToDate')}
                       </Badge>
                     )}
                   </div>
@@ -188,7 +225,7 @@ export function TopBar() {
                         onClick={markAllAsRead}
                         className="text-[11px] text-brand-teal font-medium hover:underline px-1.5 py-0.5 rounded cursor-pointer"
                       >
-                        Mark all read
+                        {t('advisories.markAllRead')}
                       </button>
                     )}
                     <button
@@ -207,10 +244,10 @@ export function TopBar() {
                     <div className="py-6 text-center space-y-1.5">
                       <CheckCircle2 className="w-6 h-6 text-brand-teal mx-auto" />
                       <span className="text-body-md font-semibold text-brand-dark block">
-                        No active advisories
+                        {t('advisories.noActive')}
                       </span>
                       <p className="text-meta-sm text-muted-text">
-                        Your check-in and baseline metrics are up to date.
+                        {t('advisories.noActiveDesc')}
                       </p>
                     </div>
                   ) : (
@@ -251,7 +288,7 @@ export function TopBar() {
                     onClick={() => setShowNotifications(false)}
                     className="text-meta-sm font-semibold text-brand-dark hover:underline flex items-center justify-center gap-1"
                   >
-                    <span>View All Insights & Patterns</span>
+                    <span>{t('advisories.viewAllInsights')}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -262,11 +299,11 @@ export function TopBar() {
           {/* User Avatar & Name */}
           <Link
             to={ROUTES.PROFILE}
-            className="flex items-center gap-2.5 p-1 sm:px-2.5 sm:py-1.5 rounded-btn hover:bg-card-warm transition-colors group"
+            className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-btn hover:bg-card-warm transition-colors group"
             aria-label="User Profile"
           >
             <div className="w-8 h-8 rounded-full bg-brand-dark text-white font-bold text-meta-sm flex items-center justify-center shadow-soft">
-              {currentUser?.initials || 'JH'}
+              {currentUser?.initials || 'MG'}
             </div>
             <span className="hidden sm:inline text-body-md font-bold text-brand-dark group-hover:text-brand-teal transition-colors">
               {currentUser?.name || 'Janhvi'}

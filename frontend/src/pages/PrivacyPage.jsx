@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   ShieldCheck,
   Lock,
@@ -18,79 +19,81 @@ import {
 } from 'lucide-react';
 
 export function PrivacyPage() {
+  const { t } = useTranslation();
+
   const sections = [
     {
       icon: Database,
-      title: '1. Information We Collect & Purpose',
+      title: t('privacy.sec1Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            MigraineGuardian collects only the minimum lifestyle indicators necessary to compute personalized migraine risk forecasts and pattern insights:
+            {t('privacy.sec1P1')}
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-meta-md">
-            <li><strong>Daily Micro Check-in Logs:</strong> Sleep duration, sleep quality, daily stress ratings (0–10), mood, screen exposure, hydration, skipped meals, caffeine timing, exercise level, and reported migraine episodes.</li>
-            <li><strong>Perceived Stress Scale (PSS-10):</strong> Clinically validated 10-item stress perception questionnaire responses used for autonomic baseline calibration.</li>
-            <li><strong>Environmental Context:</strong> Local ambient temperature, barometric pressure, humidity, and precipitation (retrieved via optional browser geolocation or chosen location).</li>
-            <li><strong>Account Identifiers:</strong> Your email address and display name managed via Firebase Authentication.</li>
+            <li>{t('privacy.sec1Li1')}</li>
+            <li>{t('privacy.sec1Li2')}</li>
+            <li>{t('privacy.sec1Li3')}</li>
+            <li>{t('privacy.sec1Li4')}</li>
           </ul>
         </div>
       ),
     },
     {
       icon: Lock,
-      title: '2. Data Isolation & Security Architecture',
+      title: t('privacy.sec2Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            Your health tracking records are strictly isolated and protected:
+            {t('privacy.sec2P1')}
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-meta-md">
-            <li><strong>Authenticated Owner Gating:</strong> All Cloud Firestore records are scoped exclusively to your verified Firebase UID (<code className="text-meta-sm bg-card-warm px-1.5 py-0.5 rounded">users/&#123;uid&#125;</code>). Other users cannot query or access your records.</li>
-            <li><strong>Encrypted in Transit:</strong> All communication between your browser, our API gateway, and our machine learning microservice is encrypted using TLS / HTTPS.</li>
-            <li><strong>On-Demand ML Inference:</strong> Daily check-in feature vectors are processed in memory by our dedicated Python FastAPI machine learning pipeline to produce SHAP explainability attributions and risk scores.</li>
+            <li>{t('privacy.sec2Li1')}</li>
+            <li>{t('privacy.sec2Li2')}</li>
+            <li>{t('privacy.sec2Li3')}</li>
           </ul>
         </div>
       ),
     },
     {
       icon: UserX,
-      title: '3. Zero Third-Party Advertising or Data Selling',
+      title: t('privacy.sec3Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            We adhere to a strict non-commercial privacy principle:
+            {t('privacy.sec3P1')}
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-meta-md">
-            <li>We do not sell, rent, monetize, or broker your personal health information to third parties, insurance companies, data brokers, or advertisers.</li>
-            <li>We do not embed third-party advertising tracking pixels or commercial ad SDKs.</li>
-            <li>Your data is used solely to generate your personal wellness insights, clinical PDF summaries, and proactive sensitivity forecasts.</li>
+            <li>{t('privacy.sec3Li1')}</li>
+            <li>{t('privacy.sec3Li2')}</li>
+            <li>{t('privacy.sec3Li3')}</li>
           </ul>
         </div>
       ),
     },
     {
       icon: Trash2,
-      title: '4. User Control & Data Deletion',
+      title: t('privacy.sec4Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            You maintain full ownership of your tracking history:
+            {t('privacy.sec4P1')}
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-meta-md">
-            <li><strong>Local Cache Clearing:</strong> You can reset local device preferences and stored check-in drafts at any time from the Settings page.</li>
-            <li><strong>History Export:</strong> You can generate a clinical 1-click PDF summary report from the Reports page to export your longitudinal patterns for personal review or physician consultation.</li>
-            <li><strong>Account Deletion:</strong> You may request complete removal of your account and associated Firestore documents.</li>
+            <li>{t('privacy.sec4Li1')}</li>
+            <li>{t('privacy.sec4Li2')}</li>
+            <li>{t('privacy.sec4Li3')}</li>
           </ul>
         </div>
       ),
     },
     {
       icon: Info,
-      title: '5. Non-Diagnostic Wellness Advisory',
+      title: t('privacy.sec5Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            MigraineGuardian is a predictive lifestyle and wellness companion designed to recognize empirical patterns and encourage calming self-care routines. It does not provide medical diagnosis, clinical treatment plans, or emergency health intervention. Always consult a qualified neurologist or healthcare provider for medical diagnosis and prescription guidance.
+            {t('privacy.sec5P1')}
           </p>
         </div>
       ),
@@ -100,13 +103,13 @@ export function PrivacyPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 md:py-12 space-y-10 animate-in fade-in duration-200 text-left">
       <PageHeader
-        title="Privacy Policy & Data Protection"
-        subtitle="How MigraineGuardian safeguards your personal wellness data, maintains strict user isolation, and respects your privacy."
-        badge="Confidential & Protected"
+        title={t('privacy.title', 'Privacy Policy & Data Protection')}
+        subtitle={t('privacy.subtitle', 'How MigraineGuardian safeguards your personal wellness data, maintains strict user isolation, and respects your privacy.')}
+        badge={t('privacy.badge', 'Confidential & Protected')}
         actions={
           <Link to={ROUTES.HOME}>
             <Button variant="secondary" size="md">
-              Back to Overview
+              {t('auth.backToOverview', 'Back to Overview')}
             </Button>
           </Link>
         }
@@ -119,10 +122,10 @@ export function PrivacyPage() {
         </div>
         <div className="space-y-1">
           <h2 className="text-section-md font-bold text-brand-dark">
-            Our Core Privacy Commitment
+            {t('auth.confidentialPromiseTitle', 'Our Core Privacy Commitment')}
           </h2>
           <p className="text-meta-md text-[#555B55] leading-relaxed">
-            Your migraine patterns, stress ratings, and daily check-ins belong exclusively to you. We enforce verified Firebase UID ownership on every request and never monetize your health records.
+            {t('auth.confidentialPromiseDesc', 'Your migraine patterns, stress ratings, and daily check-ins belong exclusively to you. We enforce verified Firebase UID ownership on every request and never monetize your health records.')}
           </p>
         </div>
       </div>
@@ -150,17 +153,17 @@ export function PrivacyPage() {
       {/* Bottom Navigation CTA */}
       <div className="pt-4 border-t border-muted-border/60 flex flex-col sm:flex-row items-center justify-between gap-4">
         <span className="text-meta-sm text-muted-text">
-          Last updated: September 2026 • MigraineGuardian Privacy Architecture
+          {t('common.appName')} • {t('auth.confidentialPromiseTitle')}
         </span>
         <div className="flex items-center gap-3">
           <Link to={ROUTES.TERMS}>
             <Button variant="ghost" size="sm">
-              Terms of Service
+              {t('footer.terms', 'Terms of Service')}
             </Button>
           </Link>
           <Link to={ROUTES.ONBOARDING}>
             <Button variant="primary" size="sm" iconRight={ArrowRight}>
-              Begin Journey
+              {t('nav.beginJourney', 'Begin Journey')}
             </Button>
           </Link>
         </div>

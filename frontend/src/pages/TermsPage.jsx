@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ROUTES } from '../utils/constants';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   FileText,
   AlertTriangle,
@@ -16,62 +17,64 @@ import {
 } from 'lucide-react';
 
 export function TermsPage() {
+  const { t } = useTranslation();
+
   const sections = [
     {
       icon: HeartHandshake,
-      title: '1. Wellness & Educational Purpose (Not Medical Advice)',
+      title: t('terms.sec1Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            MigraineGuardian is designed strictly as an empirical lifestyle tracking, pattern recognition, and educational support tool.
+            {t('terms.sec1P1')}
           </p>
           <div className="p-4 rounded-xl bg-alert-muted/10 border border-alert-muted/30 text-brand-dark text-meta-md">
-            <strong>Important Medical Disclaimer:</strong> MigraineGuardian does NOT provide medical diagnoses, clinical treatment plans, or emergency health intervention. The risk probabilities, SHAP feature attributions, and AI suggestions provided are statistical wellness estimations and must never replace direct evaluation by a licensed neurologist or physician.
+            <strong>{t('common.appName')}:</strong> {t('terms.sec1Disclaimer')}
           </div>
           <p>
-            If you experience sudden, unusually severe headache symptoms ("thunderclap" headache), neurological deficits, vision loss, or high fever accompanied by stiff neck, seek emergency medical care immediately.
+            {t('terms.sec1P2')}
           </p>
         </div>
       ),
     },
     {
       icon: UserCheck,
-      title: '2. User Accounts & Responsibilities',
+      title: t('terms.sec2Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            When creating an account or using guest features, you agree to:
+            {t('terms.sec2P1')}
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-meta-md">
-            <li>Provide accurate lifestyle tracking inputs (sleep hours, hydration, stress level) to ensure meaningful personal pattern correlation.</li>
-            <li>Maintain the confidentiality of your authentication credentials and notify us immediately if you suspect unauthorized account access.</li>
-            <li>Use the application solely for personal, non-commercial health self-management.</li>
+            <li>{t('terms.sec2Li1')}</li>
+            <li>{t('terms.sec2Li2')}</li>
+            <li>{t('terms.sec2Li3')}</li>
           </ul>
         </div>
       ),
     },
     {
       icon: Scale,
-      title: '3. Machine Learning & Predictive Output',
+      title: t('terms.sec3Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            MigraineGuardian utilizes trained machine learning models (gradient boosted decision trees and TreeSHAP explainability) to estimate compound sensitivity likelihoods from your daily logs and environmental data:
+            {t('terms.sec3P1')}
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-meta-md">
-            <li>Forecasts represent empirical risk estimations, not deterministic guarantees that a migraine attack will or will not occur.</li>
-            <li>Individual physiological variations, unlogged triggers, medication changes, and external factors can influence actual migraine onset.</li>
+            <li>{t('terms.sec3Li1')}</li>
+            <li>{t('terms.sec3Li2')}</li>
           </ul>
         </div>
       ),
     },
     {
       icon: Shield,
-      title: '4. Service Availability & Modifications',
+      title: t('terms.sec4Title'),
       content: (
         <div className="space-y-3 text-body-md text-[#555B55] leading-relaxed">
           <p>
-            We strive to provide continuous, reliable service for your daily wellness tracking. We may periodically update features, refine machine learning algorithms, or enhance data security protocols. We will provide notice of significant service changes where feasible.
+            {t('terms.sec4P1')}
           </p>
         </div>
       ),
@@ -81,13 +84,13 @@ export function TermsPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 md:py-12 space-y-10 animate-in fade-in duration-200 text-left">
       <PageHeader
-        title="Terms of Service"
-        subtitle="The terms governing your use of MigraineGuardian for daily wellness tracking, pattern insights, and risk forecasting."
-        badge="Terms of Use"
+        title={t('terms.title', 'Terms of Service')}
+        subtitle={t('terms.subtitle', 'The terms governing your use of MigraineGuardian for daily wellness tracking, pattern insights, and risk forecasting.')}
+        badge={t('terms.badge', 'Terms of Use')}
         actions={
           <Link to={ROUTES.HOME}>
             <Button variant="secondary" size="md">
-              Back to Overview
+              {t('auth.backToOverview', 'Back to Overview')}
             </Button>
           </Link>
         }
@@ -100,10 +103,10 @@ export function TermsPage() {
         </div>
         <div className="space-y-1">
           <h2 className="text-section-md font-bold text-brand-dark">
-            Summary of Key Terms
+            {t('terms.title', 'Terms of Service')}
           </h2>
           <p className="text-meta-md text-[#555B55] leading-relaxed">
-            MigraineGuardian is a gentle, evidence-based wellness tool. By using the platform, you acknowledge that our forecasts and AI companion provide lifestyle support, not professional medical diagnoses.
+            {t('auth.privacyNote', 'MigraineGuardian is designed for peaceful, privacy-preserving wellness.')}
           </p>
         </div>
       </div>
@@ -131,17 +134,17 @@ export function TermsPage() {
       {/* Footer Navigation */}
       <div className="pt-4 border-t border-muted-border/60 flex flex-col sm:flex-row items-center justify-between gap-4">
         <span className="text-meta-sm text-muted-text">
-          Effective date: September 2026 • MigraineGuardian
+          {t('common.appName')} • {t('terms.title')}
         </span>
         <div className="flex items-center gap-3">
           <Link to={ROUTES.PRIVACY}>
             <Button variant="ghost" size="sm">
-              Privacy Policy
+              {t('footer.privacy', 'Privacy Policy')}
             </Button>
           </Link>
           <Link to={ROUTES.ONBOARDING}>
             <Button variant="primary" size="sm" iconRight={ArrowRight}>
-              Begin Journey
+              {t('nav.beginJourney', 'Begin Journey')}
             </Button>
           </Link>
         </div>
