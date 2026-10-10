@@ -84,6 +84,7 @@ export function clearUserScopedData() {
   storageService.removeItem('migraineguardian_today_forecast');
   storageService.removeItem('pss_score_latest');
   storageService.removeItem('migraineguardian_read_notifications');
+  storageService.removeItem('migraineguardian_preferences');
 
   localStorage.removeItem('migraineguardian_token');
   localStorage.removeItem('migraineguardian_user');
@@ -92,6 +93,7 @@ export function clearUserScopedData() {
   localStorage.removeItem('daily_checkin_today');
   localStorage.removeItem('migraineguardian_today_forecast');
   localStorage.removeItem('pss_score_latest');
+  localStorage.removeItem('migraineguardian_preferences');
 }
 
 export const authService = {

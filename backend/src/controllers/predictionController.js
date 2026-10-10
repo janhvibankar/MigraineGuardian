@@ -5,7 +5,7 @@ import { weatherApiService } from '../services/weatherApiService.js';
 export async function getTodayPredictionController(req, res, next) {
   try {
     const userId = req.user.uid;
-    const targetDate = req.query.date || new Date().toISOString().split('T')[0];
+    const targetDate = req.query.date || new Date().toLocaleDateString('en-CA');
 
     console.log(`[PREDICTION] Starting forecast`);
     console.log(`[PREDICTION] Current UID: ${userId}`);
@@ -190,7 +190,7 @@ export async function submitMorningPredictionController(req, res, next) {
       date,
     } = req.body;
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || new Date().toLocaleDateString('en-CA');
 
     // 1. Duplicate Prediction Protection
     const existingInput = await firestoreService.getMorningPredictionInput(userId, targetDate);

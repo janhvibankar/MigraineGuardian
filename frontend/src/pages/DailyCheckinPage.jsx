@@ -151,7 +151,11 @@ export function DailyCheckinPage() {
     };
   }, []);
 
-  const handleUseUsualLocation = async () => {
+  const handleUseUsualLocation = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setWeatherMode('usual');
     setWeatherNotice(null);
 
@@ -287,7 +291,11 @@ export function DailyCheckinPage() {
     }
   };
 
-  const handleSkipWeather = () => {
+  const handleSkipWeather = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setWeatherMode('skip');
     setWeatherData(null);
     setHistoricalSummary(null);
@@ -379,7 +387,7 @@ export function DailyCheckinPage() {
 
     // Auto-detect location & weather context if not fetched yet
     let currentWeatherData = weatherData;
-    if (!currentWeatherData) {
+    if (!currentWeatherData && weatherMode !== 'skip') {
       try {
         const locRes = await weatherService.requestBrowserLocation();
         if (locRes.success && locRes.coords) {
@@ -423,8 +431,7 @@ export function DailyCheckinPage() {
       setServerError(errMsg);
     } else {
       storageService.removeItem('daily_checkin_draft');
-      setIsSaved(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      navigate(ROUTES.RISK_ANALYSIS);
     }
   };
 
@@ -1098,7 +1105,9 @@ export function DailyCheckinPage() {
                   variant="secondary"
                   size="sm"
                   isLoading={isFetchingWeather && weatherMode === 'travel'}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     setSettingUsualTarget(false);
                     setShowLocationModal(true);
                   }}

@@ -29,7 +29,8 @@ export const trackingService = {
    * Asynchronously fetches today's check-in record from Express API Gateway for authenticated user.
    */
   fetchTodayLog: async () => {
-    const res = await apiClient.get('/checkins/today');
+    const targetDate = new Date().toLocaleDateString('en-CA');
+    const res = await apiClient.get(`/checkins/today?date=${targetDate}`);
     if (res.ok) {
       if (res.data) {
         storageService.setItem('daily_checkin_today', res.data);
@@ -48,7 +49,7 @@ export const trackingService = {
   saveDailyCheckin: async (logData) => {
     const newEntry = {
       ...logData,
-      date: logData.date || new Date().toISOString().split('T')[0],
+      date: logData.date || new Date().toLocaleDateString('en-CA'),
       timestamp: new Date().toISOString(),
     };
 
@@ -57,7 +58,7 @@ export const trackingService = {
     const res = await apiClient.post('/checkins/today', newEntry);
 
     if (!res.ok) {
-      console.warn('[trackingService] Backend error submitting checkin:', res.error);
+      console.warn('[trackingService] Backend error submitting checkin:', JSON.stringify(res.error, null, 2));
       return {
         success: false,
         error: res.error,

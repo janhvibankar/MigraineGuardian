@@ -4,6 +4,7 @@ import { MarkdownMessage } from '../components/ui/MarkdownMessage';
 import { Badge } from '../components/ui/Badge';
 import { chatService } from '../services/chatService';
 import { useTranslation } from '../hooks/useTranslation';
+import { detectMessageLanguage } from '../utils/detectMessageLanguage';
 import {
   Send,
   ShieldCheck,
@@ -67,6 +68,14 @@ export function ChatPage() {
 
     setLastUserQuery(query.trim());
 
+    // Detect the language of the current message so the RAG API responds
+    // in the language the user is actually writing in, not the UI language.
+    const chatLanguage = detectMessageLanguage(query.trim(), language);
+    console.debug(
+      '[ChatPage] UI language:', language,
+      '| message language:', chatLanguage
+    );
+
     const userMessage = {
       id: `usr-${Date.now()}`,
       sender: 'user',
@@ -79,7 +88,7 @@ export function ChatPage() {
     setIsTyping(true);
 
     try {
-      const assistantReply = await chatService.sendMessage(query.trim());
+      const assistantReply = await chatService.sendMessage(query.trim(), { language: chatLanguage });
       setMessages((prev) => [...prev, assistantReply]);
     } catch (err) {
       console.error('[ChatPage] Exception sending message:', err);

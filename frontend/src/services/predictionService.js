@@ -39,7 +39,8 @@ export const predictionService = {
    * Returns `null` if no forecast exists for the current user today.
    */
   getTodayPrediction: async (targetDate = null) => {
-    const query = targetDate ? `?date=${encodeURIComponent(targetDate)}` : '';
+    const dateQuery = targetDate || new Date().toLocaleDateString('en-CA');
+    const query = `?date=${encodeURIComponent(dateQuery)}`;
     const res = await apiClient.get(`/predictions/today${query}`);
     if (res.ok) {
       if (res.data) {

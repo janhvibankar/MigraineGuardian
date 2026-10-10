@@ -1,6 +1,6 @@
 import { auth } from '../config/firebase.js';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5001/api' : '/api');
 
 async function getAuthToken() {
   try {
@@ -28,10 +28,19 @@ async function getAuthToken() {
 async function request(endpoint, options = {}) {
   // Absolute URLs (http/https) → use as-is.
   // Root-relative paths (/rag-api/...) → pass through; handled by Vite proxy in dev.
-  // Bare paths → prefix with API_BASE_URL.
-  const url = endpoint.startsWith('http') || endpoint.startsWith('/')
-    ? endpoint
-    : `${API_BASE_URL}/${endpoint}`;
+
+  const isAbsolute = endpoint.startsWith('http://') || endpoint.startsWith('https://');
+  const isRagProxy = endpoint.startsWith('/rag-api');
+  
+  let url;
+  if (isAbsolute || isRagProxy) {
+    url = endpoint;
+  } else {
+    // Strip leading slash from endpoint so we don't get /api//checkins
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+    const cleanBase = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    url = `${cleanBase}/${cleanEndpoint}`;
+  }
   
   const token = await getAuthToken();
   

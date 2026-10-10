@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../utils/constants';
 import { chatService } from '../../services/chatService';
 import { useTranslation } from '../../hooks/useTranslation';
+import { detectMessageLanguage } from '../../utils/detectMessageLanguage';
 import {
   Bot,
   Send,
@@ -74,6 +75,14 @@ export function FloatingChatBot() {
 
     setLastUserQuery(query.trim());
 
+    // Detect the language of the current message so the RAG API responds
+    // in the language the user is actually writing in, not the UI language.
+    const chatLanguage = detectMessageLanguage(query.trim(), language);
+    console.debug(
+      '[FloatingChatBot] UI language:', language,
+      '| message language:', chatLanguage
+    );
+
     const userMsg = {
       id: `usr-${Date.now()}`,
       sender: 'user',
@@ -86,7 +95,7 @@ export function FloatingChatBot() {
     setIsTyping(true);
 
     try {
-      const reply = await chatService.sendMessage(query.trim());
+      const reply = await chatService.sendMessage(query.trim(), { language: chatLanguage });
       setMessages((prev) => [...prev, reply]);
     } catch (err) {
       console.error('[FloatingChatBot] Exception sending message:', err);

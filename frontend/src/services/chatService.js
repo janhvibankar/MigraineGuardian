@@ -12,7 +12,10 @@ import { translate } from '../i18n';
 const SESSION_STORAGE_KEY = 'mg_rag_chat_session_id';
 
 const getRagApiBaseUrl = () => {
-  const url = import.meta.env.VITE_RAG_API_URL || 'http://localhost:5000';
+  const url = import.meta.env.VITE_CHATBOT_API_URL || import.meta.env.VITE_RAG_API_URL || '';
+  if (url.endsWith('/api/chat')) {
+    return url.substring(0, url.length - 9);
+  }
   return url.replace(/\/+$/, '');
 };
 
@@ -83,25 +86,33 @@ export const chatService = {
   },
 
   sendMessage: async (query, options = {}) => {
-    // Send language='auto' so the RAG backend detects the message language itself.
-    // The UI display language (en/hi/mr) is deliberately NOT forwarded — it controls
-    // the app interface only, not the chatbot response language.
-    // Callers may still pass an explicit language via options.language if needed.
-    let language = 'auto';
+    // The RAG backend only accepts explicit language codes: 'en', 'hi', 'mr'.
+    // Callers should always pass options.language resolved by detectMessageLanguage.
+    // Default to 'en' (never 'auto') so the backend never falls back to its own
+    // unreliable auto-detection, which can return English for Marathi/Hindi input.
+    let language = 'en';
     let sessionId = getOrCreateSessionId();
 
     if (typeof options === 'string') {
-      language = options;
+      // Legacy: caller passed language code directly as a string
+      if (['en', 'hi', 'mr'].includes(options)) {
+        language = options;
+      }
     } else if (options && typeof options === 'object') {
-      // Only accept an explicit language if it is a supported code.
-      // 'auto' is passed through unchanged; UI locale values are ignored.
-      if (options.language && ['en', 'hi', 'mr', 'auto'].includes(options.language)) {
+      // Accept only explicit supported codes — 'auto' is NOT forwarded to the RAG API.
+      if (options.language && ['en', 'hi', 'mr'].includes(options.language)) {
         language = options.language;
       }
       if (options.sessionId) {
         sessionId = options.sessionId;
       }
     }
+
+    console.debug(
+      '[chatService] Resolved language for RAG API:',
+      language,
+      '| sessionId:', sessionId
+    );
 
     const baseUrl = getRagApiBaseUrl();
     const endpoint = `${baseUrl}/api/chat`;

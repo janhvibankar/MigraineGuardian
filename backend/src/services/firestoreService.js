@@ -102,7 +102,7 @@ export const firestoreService = {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
-    const date = logData.date || new Date().toISOString().split('T')[0];
+    const date = logData.date || new Date().toLocaleDateString('en-CA');
     const checkinRef = db.collection('users').doc(userId).collection('daily_checkins').doc(date);
 
     const isMigraine = Boolean(logData.migraine_occurrence);
@@ -188,7 +188,7 @@ export const firestoreService = {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
-    const date = targetDate || new Date().toISOString().split('T')[0];
+    const date = targetDate || new Date().toLocaleDateString('en-CA');
     const checkinRef = db.collection('users').doc(userId).collection('daily_checkins').doc(date);
     const doc = await checkinRef.get();
 
@@ -401,7 +401,7 @@ export const firestoreService = {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || new Date().toLocaleDateString('en-CA');
     const forecastRef = db.collection('users').doc(userId).collection('risk_forecasts').doc(targetDate);
 
     const score = Number(forecastData.score);
@@ -487,7 +487,7 @@ export const firestoreService = {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
-    const date = targetDate || new Date().toISOString().split('T')[0];
+    const date = targetDate || new Date().toLocaleDateString('en-CA');
     const isForecast = weatherData.data_type === 'forecast';
     const docId = isForecast ? `${date}_forecast` : date;
     const firestorePath = `users/${userId}/weather_records/${docId}`;
@@ -533,7 +533,7 @@ export const firestoreService = {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
-    const date = targetDate || new Date().toISOString().split('T')[0];
+    const date = targetDate || new Date().toLocaleDateString('en-CA');
     const docId = dataType === 'forecast' ? `${date}_forecast` : date;
     const weatherRef = db.collection('users').doc(userId).collection('weather_records').doc(docId);
     const doc = await weatherRef.get();
@@ -552,7 +552,7 @@ export const firestoreService = {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || new Date().toLocaleDateString('en-CA');
     const inputRef = db.collection('users').doc(userId).collection('prediction_inputs').doc(targetDate);
 
     const inputDoc = {
@@ -584,7 +584,7 @@ export const firestoreService = {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || new Date().toLocaleDateString('en-CA');
     const inputRef = db.collection('users').doc(userId).collection('prediction_inputs').doc(targetDate);
     const doc = await inputRef.get();
 
@@ -632,7 +632,7 @@ export const firestoreService = {
     const savedRecords = [];
 
     for (const record of recordsArray) {
-      const date = record.date || new Date().toISOString().split('T')[0];
+      const date = record.date || new Date().toLocaleDateString('en-CA');
       const ref = db.collection('users').doc(userId).collection('weather_records').doc(date);
 
       const recordDoc = {

@@ -32,7 +32,7 @@ export async function getCurrentWeatherController(req, res, next) {
       });
     }
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || new Date().toLocaleDateString('en-CA');
 
     console.log('[Weather Debug] controller UID:', userId);
     console.log('[Weather] authenticated UID:', userId);
@@ -78,7 +78,7 @@ export async function getCurrentWeatherController(req, res, next) {
 export async function getTodayWeatherController(req, res, next) {
   try {
     const userId = req.user.uid;
-    const targetDate = req.query.date || new Date().toISOString().split('T')[0];
+    const targetDate = req.query.date || new Date().toLocaleDateString('en-CA');
 
     const record = await firestoreService.getTodayWeatherRecord(userId, targetDate);
 

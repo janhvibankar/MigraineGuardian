@@ -94,7 +94,7 @@ export async function submitDailyCheckinController(req, res, next) {
 
     // 1. Save check-in document to Firestore
     const result = await firestoreService.saveDailyCheckin(userId, req.body);
-    const date = result.entry.date || new Date().toISOString().split('T')[0];
+    const date = result.entry.date || new Date().toLocaleDateString('en-CA');
     console.log(`[PREDICTION] CheckIn saved for user ${userId} on date ${date}`);
 
     // 2. Fetch baseline stats & recent 7-day episode count from Firestore

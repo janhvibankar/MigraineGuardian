@@ -35,7 +35,10 @@ app.get('/api/health', (req, res) => {
 // ML Service Health Proxy (Public) — proxies FastAPI /health, no auth required
 // Single source of truth for ML URL: process.env.FASTAPI_BASE_URL (see backend .env)
 app.get('/api/ml-health', async (req, res) => {
-  const mlBase = process.env.FASTAPI_BASE_URL || 'http://127.0.0.1:8000';
+  const mlBase = process.env.ML_SERVICE_URL || process.env.FASTAPI_BASE_URL;
+  if (!mlBase) {
+    return res.status(503).json({ status: 'unavailable', message: 'ML_SERVICE_URL not configured.' });
+  }
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 5000);

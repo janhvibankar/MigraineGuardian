@@ -13,7 +13,12 @@
  *  - Separate error codes: FASTAPI_UNAVAILABLE / FASTAPI_TIMEOUT / FASTAPI_HTTP_ERROR / INVALID_ML_RESPONSE
  */
 
-const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://127.0.0.1:8000';
+const FASTAPI_BASE_URL = process.env.ML_SERVICE_URL || process.env.FASTAPI_BASE_URL;
+
+if (!FASTAPI_BASE_URL) {
+  console.warn('[PREDICTION] WARNING: ML_SERVICE_URL is not set. ML prediction will fail.');
+}
+
 const DEFAULT_TIMEOUT_MS = 15000;
 
 const RETRY_MAX = 3;
@@ -101,7 +106,14 @@ async function callMlService(url, mlPayload) {
     }
 
     // Connection refused / network unreachable
-    console.error(`[PREDICTION] ML service UNREACHABLE — ${url}: ${err.name}: ${err.message}`);
+    const detailedError = err.cause ? err.cause.message : err.message;
+    console.error(`[PREDICTION] ML service UNREACHABLE — ${url}: ${err.name}: ${detailedError}`);
+    if (err.cause) {
+      console.error(`[ML] ${err.cause.code || 'ERROR'} ${url}`);
+    } else {
+      console.error(`[ML] ${err.code || 'ERROR'} ${url}`);
+    }
+    
     return {
       success: false,
       unavailable: true,
@@ -126,7 +138,7 @@ export const mlInferenceService = {
    * @returns {Promise<{success, data?, error?, unavailable?, timeout?}>}
    */
   predictMigraineRisk: async (mlPayload, overrideUrl = null) => {
-    const baseUrl = overrideUrl || process.env.FASTAPI_BASE_URL || 'http://127.0.0.1:8000';
+    const baseUrl = overrideUrl || FASTAPI_BASE_URL;
     const url = `${baseUrl}/predict`;
 
     for (let attempt = 1; attempt <= RETRY_MAX; attempt++) {
