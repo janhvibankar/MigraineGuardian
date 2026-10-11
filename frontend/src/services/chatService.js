@@ -75,6 +75,47 @@ export const chatService = {
     }
   },
 
+  fetchPersistedHistory: async (sessionId = null) => {
+    try {
+      const endpoint = sessionId ? `/chat/history?sessionId=${encodeURIComponent(sessionId)}` : '/chat/history';
+      const response = await apiClient.get(endpoint);
+      if (response.ok && response.data) {
+        return {
+          success: true,
+          sessionId: response.data.sessionId || sessionId,
+          messages: Array.isArray(response.data.messages) ? response.data.messages : [],
+        };
+      }
+      return { success: false, messages: [] };
+    } catch (err) {
+      console.warn('[chatService] Error fetching persisted history:', err.message);
+      return { success: false, messages: [] };
+    }
+  },
+
+  savePersistedHistory: async (sessionId, messages) => {
+    try {
+      const response = await apiClient.post('/chat/history', {
+        sessionId,
+        messages,
+      });
+      return response.ok;
+    } catch (err) {
+      console.warn('[chatService] Error saving persisted history:', err.message);
+      return false;
+    }
+  },
+
+  clearPersistedHistory: async (sessionId = null) => {
+    try {
+      const response = await apiClient.post('/chat/clear', { sessionId });
+      return response.ok;
+    } catch (err) {
+      console.warn('[chatService] Error clearing persisted history:', err.message);
+      return false;
+    }
+  },
+
   checkHealth: async () => {
     try {
       const baseUrl = getRagApiBaseUrl();
@@ -84,6 +125,7 @@ export const chatService = {
       return false;
     }
   },
+
 
   sendMessage: async (query, options = {}) => {
     // The RAG backend only accepts explicit language codes: 'en', 'hi', 'mr'.

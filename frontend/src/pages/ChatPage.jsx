@@ -4,7 +4,7 @@ import { MarkdownMessage } from '../components/ui/MarkdownMessage';
 import { Badge } from '../components/ui/Badge';
 import { chatService } from '../services/chatService';
 import { useTranslation } from '../hooks/useTranslation';
-import { detectMessageLanguage } from '../utils/detectMessageLanguage';
+import { useChat } from '../context/ChatContext';
 import {
   Send,
   ShieldCheck,
@@ -20,34 +20,19 @@ import { cn } from '../utils/cn';
 
 export function ChatPage() {
   const messagesEndRef = useRef(null);
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
 
   const conversationHistory = chatService.getConversationHistory();
 
-  // Create initial localized welcome message
-  const createWelcomeMessage = (lang) => ({
-    id: 'welcome',
-    sender: 'assistant',
-    text: t('chat.welcomeMessage'),
-    sources: [],
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  });
+  const {
+    messages,
+    isTyping,
+    sendMessage,
+    retryLast,
+    clearConversation,
+  } = useChat();
 
-  // Message Thread State
-  const [messages, setMessages] = useState([createWelcomeMessage(language)]);
   const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [lastUserQuery, setLastUserQuery] = useState('');
-
-  // Update welcome message on language change if user hasn't started chatting
-  useEffect(() => {
-    setMessages((prev) => {
-      if (prev.length === 1 && prev[0].id === 'welcome') {
-        return [createWelcomeMessage(language)];
-      }
-      return prev;
-    });
-  }, [language, t]);
 
   // Suggested Questions localized
   const suggestedQuestions = [
@@ -62,52 +47,19 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSendMessage = async (textToSend) => {
+  const handleSendMessage = (textToSend) => {
     const query = textToSend || inputValue;
     if (!query.trim() || isTyping) return;
-
-    setLastUserQuery(query.trim());
-
-    // Detect the language of the current message so the RAG API responds
-    // in the language the user is actually writing in, not the UI language.
-    const chatLanguage = detectMessageLanguage(query.trim(), language);
-    console.debug(
-      '[ChatPage] UI language:', language,
-      '| message language:', chatLanguage
-    );
-
-    const userMessage = {
-      id: `usr-${Date.now()}`,
-      sender: 'user',
-      text: query.trim(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    sendMessage(query.trim());
     setInputValue('');
-    setIsTyping(true);
-
-    try {
-      const assistantReply = await chatService.sendMessage(query.trim(), { language: chatLanguage });
-      setMessages((prev) => [...prev, assistantReply]);
-    } catch (err) {
-      console.error('[ChatPage] Exception sending message:', err);
-    } finally {
-      setIsTyping(false);
-    }
   };
 
   const handleRetry = (textToRetry) => {
-    const text = textToRetry || lastUserQuery;
-    if (text) {
-      handleSendMessage(text);
+    if (textToRetry) {
+      handleSendMessage(textToRetry);
+    } else {
+      retryLast();
     }
-  };
-
-  const handleClearConversation = () => {
-    chatService.resetSession();
-    setMessages([createWelcomeMessage(language)]);
-    setLastUserQuery('');
   };
 
   const handleFormSubmit = (e) => {
@@ -146,7 +98,7 @@ export function ChatPage() {
 
           <button
             type="button"
-            onClick={handleClearConversation}
+            onClick={clearConversation}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-card-warm border border-muted-border text-meta-sm font-medium text-brand-dark transition-colors shadow-soft cursor-pointer"
             title={t('chat.clearChat')}
           >
@@ -155,6 +107,7 @@ export function ChatPage() {
           </button>
         </div>
       </div>
+
 
       {/* =========================================================================
           MAIN CHAT WORKSPACE (DESKTOP 2-COLUMN / MOBILE FULL-SCREEN)

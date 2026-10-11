@@ -58,17 +58,43 @@ app.get('/api/ml-health', async (req, res) => {
 
 import predictionRoutes from './routes/predictionRoutes.js';
 import weatherRoutes from './routes/weatherRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
 
-// Protected API Domain Routes
+// Protected API Domain Routes (Canonical /api prefix)
 app.use('/api/user', userRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/pss', pssRoutes);
 app.use('/api/predictions', predictionRoutes);
 app.use('/api/weather', weatherRoutes);
+app.use('/api/chat', chatRoutes);
 
+// Compatibility aliases without /api prefix (prevents 404s if client calls relative paths)
+app.use('/user', userRoutes);
+app.use('/checkins', checkinRoutes);
+app.use('/pss', pssRoutes);
+app.use('/predictions', predictionRoutes);
+app.use('/weather', weatherRoutes);
+app.use('/chat', chatRoutes);
 
+// Legacy/Compatibility direct aliases for routes reported in network audits:
+// 1. /today & /api/today -> checkin/prediction daily endpoints
+app.use(['/today', '/api/today'], (req, res, next) => {
+  // If requesting with prediction query or header, forward to predictions, else checkins
+  req.url = '/today' + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '');
+  checkinRoutes(req, res, next);
+});
 
+// 2. /latest & /api/latest -> PSS latest assessment
+app.use(['/latest', '/api/latest'], (req, res, next) => {
+  req.url = '/latest';
+  pssRoutes(req, res, next);
+});
 
+// 3. /usual-location & /api/usual-location -> Weather usual location
+app.use(['/usual-location', '/api/usual-location'], (req, res, next) => {
+  req.url = '/usual-location';
+  weatherRoutes(req, res, next);
+});
 
 // 404 & Global Error Handling
 app.use(notFoundHandler);

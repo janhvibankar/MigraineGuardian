@@ -131,6 +131,11 @@ export function RiskAnalysisPage() {
   const hasForecast = Boolean(prediction && prediction.score !== undefined && prediction.score !== null);
   const currentScore = hasForecast ? prediction.score : null;
   const currentLevel = hasForecast ? prediction.level : null;
+  const formattedScore = hasForecast
+    ? typeof currentScore === 'number'
+      ? `${Number(currentScore.toFixed(1))}%`
+      : `${currentScore}%`
+    : null;
 
   // Extract SHAP features from prediction.xai.features
   const xaiData = prediction?.xai || null;
@@ -197,7 +202,7 @@ export function RiskAnalysisPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-200 text-left pb-12">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-200 text-left pb-28 sm:pb-20">
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-muted-border/60">
         <div>
@@ -286,26 +291,28 @@ export function RiskAnalysisPage() {
       ) : (
         <>
           {/* HERO FORECAST SCORE */}
-          <Card variant="warm" className="p-7 sm:p-9 border-2 border-brand-sage/60 rounded-[26px] shadow-soft space-y-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-brand-sage/35">
-              <div className="flex items-center gap-5">
+          <Card variant="warm" className="p-6 sm:p-8 md:p-9 border-2 border-brand-sage/60 rounded-[26px] shadow-soft space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 pb-5 border-b border-brand-sage/35">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-5 w-full">
                 <div className={cn(
-                  "w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 flex flex-col items-center justify-center flex-shrink-0 shadow-sm",
+                  "min-w-[124px] sm:min-w-[144px] px-5 py-4 rounded-2xl border-2 flex flex-col items-center justify-center flex-shrink-0 shadow-sm transition-all",
                   currentLevel === 'High' ? "bg-alert-muted/15 border-alert-muted/40 text-[#8F443B]" : "bg-brand-teal/15 border-brand-teal/40 text-brand-dark"
                 )}>
-                  <span className="text-[34px] sm:text-[40px] font-black leading-none">
-                    {currentScore}%
+                  <span className="text-[32px] sm:text-[38px] font-black leading-none tracking-tight">
+                    {formattedScore}
                   </span>
-                  <span className="text-[10px] uppercase font-extrabold tracking-wider mt-1">
+                  <span className="text-[11px] uppercase font-bold tracking-wider mt-1.5 text-center whitespace-nowrap">
                     {t('risk.levelRisk', { level: currentLevel || 'Moderate' })}
                   </span>
                 </div>
 
-                <div className="space-y-1">
-                  <Badge variant={currentLevel === 'High' ? 'alert' : currentLevel === 'Moderate' ? 'warning' : 'teal'} size="md">
-                    {t('risk.sensitivityWindow', { level: currentLevel || 'Moderate' })}
-                  </Badge>
-                  <h2 className="text-section-lg font-bold text-brand-dark">
+                <div className="space-y-2 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant={currentLevel === 'High' ? 'alert' : currentLevel === 'Moderate' ? 'warning' : 'teal'} size="md">
+                      {t('risk.sensitivityWindow', { level: currentLevel || 'Moderate' })}
+                    </Badge>
+                  </div>
+                  <h2 className="text-section-lg sm:text-[26px] font-bold text-brand-dark leading-snug break-words">
                     {currentLevel === 'High'
                       ? t('risk.headlineHigh')
                       : currentLevel === 'Low'
@@ -317,7 +324,7 @@ export function RiskAnalysisPage() {
             </div>
 
             {/* Dynamic Overview Sentence */}
-            <div className="p-4 rounded-[18px] bg-white border border-brand-sage/40 text-body-md text-[#333833] leading-relaxed shadow-sm">
+            <div className="p-5 rounded-[20px] bg-white border border-brand-sage/40 text-body-md text-[#333833] leading-relaxed shadow-sm">
               <p>{userXai.overviewText}</p>
             </div>
           </Card>
@@ -327,7 +334,7 @@ export function RiskAnalysisPage() {
           {/* ========================================================================= */}
 
           {/* 1. WHY DOES MY RISK LOOK LIKE THIS? */}
-          <Card className="p-7 sm:p-8 border-2 border-brand-sage/50 rounded-[26px] bg-white shadow-soft space-y-6">
+          <Card className="p-6 sm:p-8 border-2 border-brand-sage/50 rounded-[26px] bg-white shadow-soft space-y-6">
             <div className="space-y-1 pb-3 border-b border-brand-sage/30">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-brand-sage/25 border border-brand-sage/40 flex items-center justify-center text-brand-dark">
@@ -349,83 +356,88 @@ export function RiskAnalysisPage() {
                 <p className="text-meta-sm">{t('risk.completeCheckinForXai')}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
                 {/* HIGHER-RISK CONTRIBUTORS */}
-                <div className="p-5 rounded-[22px] bg-[#FFFDF9] border-2 border-alert-muted/30 space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-alert-muted/20">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-[#8F443B]" />
-                      <h3 className="text-section-md font-bold text-brand-dark">
-                        {t('risk.factorsHigherRisk')}
-                      </h3>
+                <div className="p-5 rounded-[22px] bg-[#FFFDF9] border-2 border-alert-muted/30 flex flex-col justify-between space-y-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-alert-muted/20">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-[#8F443B]" />
+                        <h3 className="text-section-md font-bold text-brand-dark">
+                          {t('risk.factorsHigherRisk')}
+                        </h3>
+                      </div>
                     </div>
-                  </div>
 
-                  {userXai.topIncreasing.length === 0 ? (
-                    <p className="text-meta-md text-muted-text py-3 text-center">
-                      {t('risk.noHigherRiskFactors')}
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {userXai.topIncreasing.map((item, idx) => (
-                        <div key={idx} className="p-4 bg-white rounded-[16px] border border-alert-muted/25 shadow-sm space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-brand-dark text-body-md flex items-center gap-2">
-                              {getFeatureIcon(item.category)}
-                              {item.title}
-                            </span>
-                            <Badge variant="alert" size="sm">
-                              {t('risk.higherRiskFactorBadge')}
-                            </Badge>
+                    {userXai.topIncreasing.length === 0 ? (
+                      <p className="text-meta-md text-muted-text py-3 text-center">
+                        {t('risk.noHigherRiskFactors')}
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {userXai.topIncreasing.map((item, idx) => (
+                          <div key={idx} className="p-4 bg-white rounded-[16px] border border-alert-muted/25 shadow-sm space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-brand-dark text-body-md flex items-center gap-2 min-w-0 truncate">
+                                {getFeatureIcon(item.category)}
+                                <span className="truncate">{item.title}</span>
+                              </span>
+                              <Badge variant="alert" size="sm" className="flex-shrink-0">
+                                {t('risk.higherRiskFactorBadge')}
+                              </Badge>
+                            </div>
+                            <p className="text-meta-md text-muted-text leading-relaxed">
+                              {item.description}
+                            </p>
                           </div>
-                          <p className="text-meta-md text-muted-text leading-relaxed">
-                            {item.description}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* LOWER-RISK (PROTECTIVE) CONTRIBUTORS */}
-                <div className="p-5 rounded-[22px] bg-[#F7FAF8] border-2 border-brand-sage/40 space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-brand-sage/30">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown className="w-5 h-5 text-brand-teal" />
-                      <h3 className="text-section-md font-bold text-brand-dark">
-                        {t('risk.factorsLowerRisk')}
-                      </h3>
+                <div className="p-5 rounded-[22px] bg-[#F7FAF8] border-2 border-brand-sage/40 flex flex-col justify-between space-y-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-brand-sage/30">
+                      <div className="flex items-center gap-2">
+                        <TrendingDown className="w-5 h-5 text-brand-teal" />
+                        <h3 className="text-section-md font-bold text-brand-dark">
+                          {t('risk.factorsLowerRisk')}
+                        </h3>
+                      </div>
                     </div>
-                  </div>
 
-                  {userXai.topDecreasing.length === 0 ? (
-                    <p className="text-meta-md text-muted-text py-3 text-center">
-                      {t('risk.noLowerRiskFactors')}
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {userXai.topDecreasing.map((item, idx) => (
-                        <div key={idx} className="p-4 bg-white rounded-[16px] border border-brand-sage/35 shadow-sm space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-brand-dark text-body-md flex items-center gap-2">
-                              {getFeatureIcon(item.category)}
-                              {item.title}
-                            </span>
-                            <Badge variant="teal" size="sm">
-                              {t('risk.protectiveSignalBadge')}
-                            </Badge>
+                    {userXai.topDecreasing.length === 0 ? (
+                      <p className="text-meta-md text-muted-text py-3 text-center">
+                        {t('risk.noLowerRiskFactors')}
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {userXai.topDecreasing.map((item, idx) => (
+                          <div key={idx} className="p-4 bg-white rounded-[16px] border border-brand-sage/35 shadow-sm space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-brand-dark text-body-md flex items-center gap-2 min-w-0 truncate">
+                                {getFeatureIcon(item.category)}
+                                <span className="truncate">{item.title}</span>
+                              </span>
+                              <Badge variant="teal" size="sm" className="flex-shrink-0">
+                                {t('risk.protectiveSignalBadge')}
+                              </Badge>
+                            </div>
+                            <p className="text-meta-md text-muted-text leading-relaxed">
+                              {item.description}
+                            </p>
                           </div>
-                          <p className="text-meta-md text-muted-text leading-relaxed">
-                            {item.description}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
           </Card>
+
 
           {/* 2. THINGS YOU CAN FOCUS ON */}
           {userXai.focusSuggestions.length > 0 && (

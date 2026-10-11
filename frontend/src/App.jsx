@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { I18nProvider } from './context/I18nContext';
+import { ChatProvider } from './context/ChatContext';
 
 // Layouts & Route Guards
 import { PublicLayout } from './layouts/PublicLayout';
@@ -40,42 +41,44 @@ export function App() {
   return (
     <ErrorBoundary>
       <I18nProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Public Informational Routes */}
-            <Route element={<PublicLayout />}>
-              <Route path={ROUTES.HOME} element={<LandingPage />} />
-              <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
-              <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
-              <Route path={ROUTES.TERMS} element={<TermsPage />} />
-              <Route path={ROUTES.CONTACT} element={<ContactPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Route>
-
-            {/* Auth & Guest Onboarding Flow */}
-            <Route element={<AuthLayout />}>
-              <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-              <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
-              <Route path={ROUTES.ONBOARDING} element={<OnboardingPage />} />
-            </Route>
-
-            {/* Protected App Workspace Routes */}
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppLayout />}>
-                <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-                <Route path={ROUTES.DAILY_CHECKIN} element={<DailyCheckinPage />} />
-                <Route path={ROUTES.RISK_ANALYSIS} element={<RiskAnalysisPage />} />
-                <Route path={ROUTES.INSIGHTS} element={<InsightsPage />} />
-                <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
-                <Route path={ROUTES.REPORTS} element={<ReportsPage />} />
-                <Route path={ROUTES.CHAT} element={<ChatPage />} />
-                <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
-                <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
-                <Route path={ROUTES.PSS_ASSESSMENT} element={<PssAssessmentPage />} />
+        <ChatProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Public Informational Routes */}
+              <Route element={<PublicLayout />}>
+                <Route path={ROUTES.HOME} element={<LandingPage />} />
+                <Route path={ROUTES.HOW_IT_WORKS} element={<HowItWorksPage />} />
+                <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
+                <Route path={ROUTES.TERMS} element={<TermsPage />} />
+                <Route path={ROUTES.CONTACT} element={<ContactPage />} />
+                <Route path="*" element={<NotFoundPage />} />
               </Route>
-            </Route>
-          </Routes>
-        </BrowserRouter>
+
+              {/* Auth & Guest Onboarding Flow */}
+              <Route element={<AuthLayout />}>
+                <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+                <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
+                <Route path={ROUTES.ONBOARDING} element={<OnboardingPage />} />
+              </Route>
+
+              {/* Protected App Workspace Routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppLayout />}>
+                  <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+                  <Route path={ROUTES.DAILY_CHECKIN} element={<DailyCheckinPage />} />
+                  <Route path={ROUTES.RISK_ANALYSIS} element={<RiskAnalysisPage />} />
+                  <Route path={ROUTES.INSIGHTS} element={<InsightsPage />} />
+                  <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
+                  <Route path={ROUTES.REPORTS} element={<ReportsPage />} />
+                  <Route path={ROUTES.CHAT} element={<ChatPage />} />
+                  <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+                  <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+                  <Route path={ROUTES.PSS_ASSESSMENT} element={<PssAssessmentPage />} />
+                </Route>
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </ChatProvider>
       </I18nProvider>
     </ErrorBoundary>
   );

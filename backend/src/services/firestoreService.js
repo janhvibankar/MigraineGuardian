@@ -695,7 +695,84 @@ export const firestoreService = {
     }
     return null;
   },
+
+  /**
+   * Retrieves chat history for a session from `users/{userId}/chat_sessions/{sessionId}`.
+   * If sessionId is not provided, retrieves the latest updated session.
+   */
+  getChatSession: async (userId, sessionId = null) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const sessionsCol = db.collection('users').doc(userId).collection('chat_sessions');
+
+    if (sessionId) {
+      const doc = await sessionsCol.doc(sessionId).get();
+      if (doc.exists) {
+        return { sessionId: doc.id, ...doc.data() };
+      }
+      // If requested sessionId has no records yet (e.g. new browser tab), load latest session
+      const snapshot = await sessionsCol.orderBy('updatedAt', 'desc').limit(1).get();
+      if (!snapshot.empty) {
+        const firstDoc = snapshot.docs[0];
+        return { sessionId: firstDoc.id, ...firstDoc.data() };
+      }
+      return { sessionId, messages: [] };
+    }
+
+    // If no sessionId, get the latest updated session
+    const snapshot = await sessionsCol.orderBy('updatedAt', 'desc').limit(1).get();
+    if (!snapshot.empty) {
+      const firstDoc = snapshot.docs[0];
+      return { sessionId: firstDoc.id, ...firstDoc.data() };
+    }
+
+    return null;
+  },
+
+  /**
+   * Saves or updates messages for a session under `users/{userId}/chat_sessions/{sessionId}`.
+   */
+  saveChatSession: async (userId, sessionId, messages) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const targetSessionId = sessionId || `sess_${Date.now()}`;
+    const sessionRef = db.collection('users').doc(userId).collection('chat_sessions').doc(targetSessionId);
+    const payload = {
+      sessionId: targetSessionId,
+      messages: Array.isArray(messages) ? messages : [],
+      updatedAt: new Date().toISOString(),
+    };
+
+    await sessionRef.set(payload, { merge: true });
+    return { success: true, sessionId: targetSessionId, messages: payload.messages };
+  },
+
+  /**
+   * Clears a chat session or all chat sessions for the authenticated user.
+   */
+  clearChatSession: async (userId, sessionId = null) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    if (sessionId) {
+      const sessionRef = db.collection('users').doc(userId).collection('chat_sessions').doc(sessionId);
+      await sessionRef.delete();
+    } else {
+      const snapshot = await db.collection('users').doc(userId).collection('chat_sessions').get();
+      const batch = db.batch();
+      snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }
+
+    return { success: true };
+  },
 };
+
 
 
 

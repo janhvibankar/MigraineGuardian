@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../utils/constants';
-import { chatService } from '../../services/chatService';
 import { useTranslation } from '../../hooks/useTranslation';
-import { detectMessageLanguage } from '../../utils/detectMessageLanguage';
+import { useChat } from '../../context/ChatContext';
 import {
   Bot,
   Send,
@@ -20,34 +19,21 @@ import { MarkdownMessage } from '../ui/MarkdownMessage';
 export function FloatingChatBot() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
 
-  const [isOpen, setIsOpen] = useState(false);
+  const {
+    messages,
+    isTyping,
+    sendMessage,
+    retryLast,
+    clearConversation,
+    isWidgetOpen: isOpen,
+    setIsWidgetOpen: setIsOpen,
+  } = useChat();
 
-  const createWelcomeMessage = (lang) => ({
-    id: 'welcome',
-    sender: 'assistant',
-    text: t('chat.welcomeMessage'),
-    time: t('common.justNow', 'Just now'),
-  });
-
-  const [messages, setMessages] = useState([createWelcomeMessage(language)]);
   const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [lastUserQuery, setLastUserQuery] = useState('');
-
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-
-  // Update welcome message on language switch if user hasn't sent any messages
-  useEffect(() => {
-    setMessages((prev) => {
-      if (prev.length === 1 && prev[0].id === 'welcome') {
-        return [createWelcomeMessage(language)];
-      }
-      return prev;
-    });
-  }, [language, t]);
 
   // Suggested prompt chips for fast interaction
   const quickPrompts = [
@@ -69,52 +55,19 @@ export function FloatingChatBot() {
     return null;
   }
 
-  const handleSendMessage = async (textToSend) => {
+  const handleSendMessage = (textToSend) => {
     const query = textToSend || inputValue;
     if (!query.trim() || isTyping) return;
-
-    setLastUserQuery(query.trim());
-
-    // Detect the language of the current message so the RAG API responds
-    // in the language the user is actually writing in, not the UI language.
-    const chatLanguage = detectMessageLanguage(query.trim(), language);
-    console.debug(
-      '[FloatingChatBot] UI language:', language,
-      '| message language:', chatLanguage
-    );
-
-    const userMsg = {
-      id: `usr-${Date.now()}`,
-      sender: 'user',
-      text: query.trim(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
+    sendMessage(query.trim());
     setInputValue('');
-    setIsTyping(true);
-
-    try {
-      const reply = await chatService.sendMessage(query.trim(), { language: chatLanguage });
-      setMessages((prev) => [...prev, reply]);
-    } catch (err) {
-      console.error('[FloatingChatBot] Exception sending message:', err);
-    } finally {
-      setIsTyping(false);
-    }
   };
 
   const handleRetry = (textToRetry) => {
-    const text = textToRetry || lastUserQuery;
-    if (text) {
-      handleSendMessage(text);
+    if (textToRetry) {
+      handleSendMessage(textToRetry);
+    } else {
+      retryLast();
     }
-  };
-
-  const handleClearConversation = () => {
-    chatService.resetSession();
-    setMessages([createWelcomeMessage(language)]);
-    setLastUserQuery('');
   };
 
   const handleFormSubmit = (e) => {
@@ -126,6 +79,7 @@ export function FloatingChatBot() {
     setIsOpen(false);
     navigate(ROUTES.CHAT);
   };
+
 
   return (
     <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end pointer-events-none select-none">
@@ -164,7 +118,7 @@ export function FloatingChatBot() {
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
                 type="button"
-                onClick={handleClearConversation}
+                onClick={clearConversation}
                 title={t('chat.clearChat')}
                 className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
               >

@@ -94,16 +94,22 @@ export function Sidebar({ className }) {
           <Logo linkTo={ROUTES.DASHBOARD} />
 
           {/* Minimal Status Pill */}
-          <div className="mt-4 px-3 py-2 rounded-card-sm bg-card-warm border border-card-warm-border flex items-center justify-between shadow-soft">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-brand-sage animate-pulse" />
-              <span className="text-meta-sm font-medium text-brand-dark">
+          <div className="mt-4 px-3 py-2.5 rounded-card-sm bg-card-warm border border-card-warm-border flex items-center justify-between gap-2 shadow-soft">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-brand-sage animate-pulse flex-shrink-0" />
+              <span className="text-meta-sm font-medium text-brand-dark truncate">
                 {t('nav.activeMonitoring')}
               </span>
             </div>
-            <span className="text-[11px] text-brand-teal-dark uppercase font-semibold">
-              {hasActiveRisk ? `${activeRiskScore}% ${t('dashboard.riskIndex')}` : t('common.noData')}
-            </span>
+            {hasActiveRisk ? (
+              <span className="text-[11px] font-bold text-brand-teal-dark bg-brand-teal/15 px-2 py-0.5 rounded-full flex-shrink-0">
+                {Math.round(activeRiskScore)}% {t('dashboard.riskIndex')}
+              </span>
+            ) : (
+              <span className="text-[11px] text-muted-text flex-shrink-0">
+                {t('common.noData')}
+              </span>
+            )}
           </div>
         </div>
 
