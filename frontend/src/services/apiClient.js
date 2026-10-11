@@ -1,6 +1,9 @@
 import { auth } from '../config/firebase.js';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5001/api' : '/api');
+// IMPORTANT: In production, VITE_API_BASE_URL must be set as a Render build environment variable
+// (e.g. https://migraineguardian-backend.onrender.com/api) — Vite bakes it into the bundle at build time.
+// In dev, falls back to http://localhost:5000/api; in prod without the env var, falls back to /api (will 404).
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api');
 
 async function getAuthToken() {
   try {
