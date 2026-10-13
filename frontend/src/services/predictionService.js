@@ -36,11 +36,13 @@ export function syncRiskForecastState(forecast) {
 export const predictionService = {
   /**
    * Fetches today's AI risk forecast from Node.js Express API gateway (`GET /api/predictions/today`).
+   * Pass `recalculate = true` to force an on-demand recalculation even if an older forecast exists.
    * Returns `null` if no forecast exists for the current user today.
    */
-  getTodayPrediction: async (targetDate = null) => {
+  getTodayPrediction: async (targetDate = null, recalculate = false) => {
     const dateQuery = targetDate || new Date().toLocaleDateString('en-CA');
-    const query = `?date=${encodeURIComponent(dateQuery)}`;
+    const recalcQuery = recalculate ? '&recalculate=true' : '';
+    const query = `?date=${encodeURIComponent(dateQuery)}${recalcQuery}`;
     const res = await apiClient.get(`/predictions/today${query}`);
     if (res.ok) {
       if (res.data) {
@@ -53,6 +55,8 @@ export const predictionService = {
         return {
           score: null,
           mlError: res.raw.mlError || res.raw.message,
+          errorCategory: res.raw.errorCategory,
+          checkinExists: Boolean(res.raw.checkinExists),
         };
       }
       return null;
@@ -60,6 +64,13 @@ export const predictionService = {
 
     const cachedForecast = storageService.getItem('migraineguardian_today_forecast', null);
     return cachedForecast;
+  },
+
+  /**
+   * Forces on-demand recalculation of today's risk forecast from saved check-in.
+   */
+  recalculateTodayPrediction: async (targetDate = null) => {
+    return predictionService.getTodayPrediction(targetDate, true);
   },
 
   submitMorningPrediction: async (predictionData) => {

@@ -12,6 +12,7 @@ import {
   RotateCcw,
   BookOpen,
   AlertCircle,
+  Plus,
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { MarkdownMessage } from '../ui/MarkdownMessage';
@@ -26,6 +27,7 @@ export function FloatingChatBot() {
     isTyping,
     sendMessage,
     retryLast,
+    startNewChat,
     clearConversation,
     isWidgetOpen: isOpen,
     setIsWidgetOpen: setIsOpen,
@@ -116,6 +118,14 @@ export function FloatingChatBot() {
             </div>
 
             <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                type="button"
+                onClick={startNewChat}
+                title="New Chat"
+                className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
               <button
                 type="button"
                 onClick={clearConversation}

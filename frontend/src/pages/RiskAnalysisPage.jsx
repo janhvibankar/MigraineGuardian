@@ -61,7 +61,7 @@ export function RiskAnalysisPage() {
 
     try {
       const [forecastData, checkinData, summaryData] = await Promise.all([
-        predictionService.getTodayPrediction(),
+        isRetry ? predictionService.recalculateTodayPrediction() : predictionService.getTodayPrediction(),
         trackingService.fetchTodayLog(),
         reportService.getReportSummary('weekly'),
       ]);

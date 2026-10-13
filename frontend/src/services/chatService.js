@@ -1,8 +1,9 @@
 /**
- * Chat Service (Connected to External RAG Chatbot Backend)
+ * Chat Service (Connected to External RAG Chatbot Backend via Express API Gateway)
  *
  * Connects to the real Migraine RAG backend API with multilingual support (en, hi, mr).
- * Target API URL configured via VITE_RAG_API_URL environment variable.
+ * Uses the backend gateway /chat/message endpoint to eliminate browser CORS restrictions
+ * and ensure seamless token handling across local and cloud environments.
  */
 
 import { apiClient } from './apiClient';
@@ -41,6 +42,7 @@ function getErrorKeyForStatus(status) {
     case 500:
       return 'chat.errorServerError';
     case 503:
+    case 504:
     case 0:
       return 'chat.errorServerUnavailable';
     default:
@@ -75,6 +77,33 @@ export const chatService = {
     }
   },
 
+  setSessionId: (newSid) => {
+    try {
+      if (newSid) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, newSid);
+      }
+    } catch (_) {}
+  },
+
+  /**
+   * Retrieves list of all persisted conversation sessions for current authenticated user.
+   */
+  listSessions: async () => {
+    try {
+      const response = await apiClient.get('/chat/sessions');
+      if (response.ok && Array.isArray(response.data)) {
+        return response.data;
+      }
+      return [];
+    } catch (err) {
+      console.warn('[chatService] Error listing chat sessions:', err.message);
+      return [];
+    }
+  },
+
+  /**
+   * Retrieves messages for a specific conversation session.
+   */
   fetchPersistedHistory: async (sessionId = null) => {
     try {
       const endpoint = sessionId ? `/chat/history?sessionId=${encodeURIComponent(sessionId)}` : '/chat/history';
@@ -83,6 +112,7 @@ export const chatService = {
         return {
           success: true,
           sessionId: response.data.sessionId || sessionId,
+          title: response.data.title || 'Conversation',
           messages: Array.isArray(response.data.messages) ? response.data.messages : [],
         };
       }
@@ -93,15 +123,33 @@ export const chatService = {
     }
   },
 
-  savePersistedHistory: async (sessionId, messages) => {
+  /**
+   * Saves or updates messages in a specific conversation session.
+   */
+  savePersistedHistory: async (sessionId, messages, title = null) => {
     try {
       const response = await apiClient.post('/chat/history', {
         sessionId,
         messages,
+        title,
       });
       return response.ok;
     } catch (err) {
       console.warn('[chatService] Error saving persisted history:', err.message);
+      return false;
+    }
+  },
+
+  /**
+   * Deletes a specific conversation session.
+   */
+  deleteSession: async (sessionId) => {
+    try {
+      if (!sessionId) return false;
+      const response = await apiClient.delete(`/chat/sessions/${encodeURIComponent(sessionId)}`);
+      return response.ok;
+    } catch (err) {
+      console.warn('[chatService] Error deleting session:', err.message);
       return false;
     }
   },
@@ -119,29 +167,31 @@ export const chatService = {
   checkHealth: async () => {
     try {
       const baseUrl = getRagApiBaseUrl();
-      const response = await apiClient.get(`${baseUrl}/health`);
-      return response.ok && response.data?.status === 'ok';
+      if (baseUrl) {
+        const response = await apiClient.get(`${baseUrl}/health`);
+        if (response.ok && response.data?.status === 'ok') return true;
+      }
+      const gwRes = await apiClient.get('/health');
+      return gwRes.ok;
     } catch {
       return false;
     }
   },
 
-
+  /**
+   * Sends user query to the RAG Assistant.
+   * Routes via backend gateway /chat/message to completely prevent browser CORS errors
+   * and avoid leaking sensitive user tokens or API secrets.
+   */
   sendMessage: async (query, options = {}) => {
-    // The RAG backend only accepts explicit language codes: 'en', 'hi', 'mr'.
-    // Callers should always pass options.language resolved by detectMessageLanguage.
-    // Default to 'en' (never 'auto') so the backend never falls back to its own
-    // unreliable auto-detection, which can return English for Marathi/Hindi input.
     let language = 'en';
     let sessionId = getOrCreateSessionId();
 
     if (typeof options === 'string') {
-      // Legacy: caller passed language code directly as a string
       if (['en', 'hi', 'mr'].includes(options)) {
         language = options;
       }
     } else if (options && typeof options === 'object') {
-      // Accept only explicit supported codes — 'auto' is NOT forwarded to the RAG API.
       if (options.language && ['en', 'hi', 'mr'].includes(options.language)) {
         language = options.language;
       }
@@ -156,11 +206,11 @@ export const chatService = {
       '| sessionId:', sessionId
     );
 
-    const baseUrl = getRagApiBaseUrl();
-    const endpoint = `${baseUrl}/api/chat`;
+    // Primary route: Express gateway proxy (immune to CORS restrictions)
+    const primaryEndpoint = '/chat/message';
 
     try {
-      const response = await apiClient.post(endpoint, {
+      const response = await apiClient.post(primaryEndpoint, {
         message: query,
         sessionId,
         language,
@@ -178,7 +228,7 @@ export const chatService = {
         };
       }
 
-      // If backend returned non-ok status or malformed response
+      // If gateway returns non-ok status or malformed response
       const status = response.status || 0;
       const isMalformed = response.ok && (!response.data || typeof response.data.answer !== 'string');
       const errorKey = isMalformed ? 'chat.errorMalformedResponse' : getErrorKeyForStatus(status);

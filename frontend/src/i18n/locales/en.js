@@ -443,6 +443,9 @@ export const en = {
     "errorServerUnavailable": "The assistant service is currently unavailable. Please try again later.",
     "errorRateLimit": "Too many requests. Please wait a moment before sending another message.",
     "errorBadRequest": "Unable to process message. Please rephrase your question and try again.",
+    "newChatBtn": "New Chat",
+    "historyTitle": "Chat History",
+    "noHistory": "No prior conversations yet.",
     "errorServerError": "The assistant encountered an internal error. Please try again later.",
     "errorMalformedResponse": "Received an invalid response from the assistant. Please try again."
   },

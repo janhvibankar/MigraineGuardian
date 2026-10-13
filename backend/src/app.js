@@ -32,26 +32,85 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+import { getMlServiceUrl, sanitizeUrl } from './services/mlInferenceService.js';
+
 // ML Service Health Proxy (Public) — proxies FastAPI /health, no auth required
-// Single source of truth for ML URL: process.env.FASTAPI_BASE_URL (see backend .env)
+// Dynamically resolves ML URL via getMlServiceUrl() and handles cold starts / verification
 app.get('/api/ml-health', async (req, res) => {
-  const mlBase = process.env.ML_SERVICE_URL || process.env.FASTAPI_BASE_URL;
+  const mlBase = getMlServiceUrl();
+  const safeHost = sanitizeUrl(mlBase);
+
   if (!mlBase) {
-    return res.status(503).json({ status: 'unavailable', message: 'ML_SERVICE_URL not configured.' });
+    return res.status(503).json({
+      status: 'unavailable',
+      ml_host: safeHost,
+      ml_error: 'config_missing',
+      message: 'ML_SERVICE_URL is not configured.',
+    });
   }
+
+  const requestedTimeout = parseInt(req.query.timeout, 10);
+  const timeoutMs = (!isNaN(requestedTimeout) && requestedTimeout >= 1000 && requestedTimeout <= 60000)
+    ? requestedTimeout
+    : 10000;
+
+  const checkInference = req.query.check_inference === 'true';
+  const targetUrl = `${mlBase}/health${checkInference ? '?check_inference=true' : ''}`;
+
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5000);
-    const r = await fetch(`${mlBase}/health`, { signal: ctrl.signal });
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(targetUrl, { signal: ctrl.signal });
     clearTimeout(timer);
-    const body = await r.json();
-    res.status(r.ok ? 200 : 503).json({ ...body, gateway: 'ok' });
+
+    let body = {};
+    try {
+      body = await r.json();
+    } catch {
+      body = { raw_status: r.status };
+    }
+
+    // Check if cloud gateway warming (502/503/504/524)
+    if ([502, 503, 504, 408, 520, 521, 522, 523, 524].includes(r.status)) {
+      return res.status(503).json({
+        status: 'warming',
+        gateway: 'ok',
+        ml_host: safeHost,
+        ml_error: 'cold_start_warming',
+        http_status: r.status,
+        message: 'FastAPI ML microservice is waking up from idle state. Please retry shortly.',
+      });
+    }
+
+    // Check if model failed to load or inference verification failed
+    if (!r.ok || body.model_loaded === false || body.status === 'degraded') {
+      return res.status(503).json({
+        status: 'degraded',
+        gateway: 'ok',
+        ml_host: safeHost,
+        ml_error: body.inference_verified === false ? 'inference_failure' : 'model_load_failure',
+        model_loaded: Boolean(body.model_loaded),
+        model_load_error: body.model_load_error || body.inference_error || 'ML pipeline degraded',
+        message: body.model_load_error || body.inference_error || 'Model is not ready for predictions',
+      });
+    }
+
+    return res.status(200).json({
+      ...body,
+      gateway: 'ok',
+      ml_host: safeHost,
+      status: 'ok',
+    });
   } catch (err) {
-    res.status(503).json({
+    const isTimeout = err.name === 'AbortError';
+    return res.status(503).json({
       status: 'unavailable',
       gateway: 'ok',
-      ml_error: err.name === 'AbortError' ? 'timeout' : 'connection_refused',
-      message: `FastAPI ML service unreachable at ${mlBase}`,
+      ml_host: safeHost,
+      ml_error: isTimeout ? 'timeout' : 'connection_refused',
+      message: isTimeout
+        ? `FastAPI ML service request timed out after ${timeoutMs}ms.`
+        : `FastAPI ML service unreachable at ${safeHost}. Service may be stopped.`,
     });
   }
 });

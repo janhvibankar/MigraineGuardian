@@ -394,6 +394,25 @@ export const firestoreService = {
   },
 
   /**
+   * Recursively strips undefined fields from an object so Firestore set() never fails.
+   */
+  _sanitizeForFirestore: (obj) => {
+    if (obj === null || obj === undefined || typeof obj !== 'object') {
+      return obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map((item) => firestoreService._sanitizeForFirestore(item));
+    }
+    const clean = {};
+    for (const [key, val] of Object.entries(obj)) {
+      if (val !== undefined) {
+        clean[key] = firestoreService._sanitizeForFirestore(val);
+      }
+    }
+    return clean;
+  },
+
+  /**
    * Saves risk forecast document to `users/{userId}/risk_forecasts/{date}`.
    */
   saveRiskForecast: async (userId, date, forecastData) => {
@@ -407,7 +426,7 @@ export const firestoreService = {
     const score = Number(forecastData.score);
     const level = String(forecastData.level);
 
-    const forecastDoc = {
+    const rawForecastDoc = {
       forecastId: targetDate,
       forecastDate: targetDate,
       score,
@@ -415,12 +434,14 @@ export const firestoreService = {
       model_used: forecastData.model_used || 'MODEL_A_LIFESTYLE_BASELINE',
       headline: forecastData.headline || `${level} Migraine Risk Forecast`,
       summary: forecastData.summary || `Model estimates a ${score}% probability of migraine risk based on latest log signals.`,
-      elevatedFactors: forecastData.elevatedFactors || [],
-      focusAreas: forecastData.focusAreas || [],
+      elevatedFactors: Array.isArray(forecastData.elevatedFactors) ? forecastData.elevatedFactors : [],
+      focusAreas: Array.isArray(forecastData.focusAreas) ? forecastData.focusAreas : [],
       xai: forecastData.xai || null,
       disclaimer: "MigraineGuardian provides wellness risk estimates and is not a substitute for professional medical diagnosis or clinical advice.",
       updatedAt: new Date().toISOString(),
     };
+
+    const forecastDoc = firestoreService._sanitizeForFirestore(rawForecastDoc);
 
     const existingDoc = await forecastRef.get();
     if (!existingDoc.exists) {
@@ -697,8 +718,43 @@ export const firestoreService = {
   },
 
   /**
+   * Retrieves summary list of all chat sessions for authenticated user.
+   * Sorted by latest update timestamp desc.
+   */
+  listChatSessions: async (userId, limit = 50) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+
+    const sessionsCol = db.collection('users').doc(userId).collection('chat_sessions');
+    const snapshot = await sessionsCol.orderBy('updatedAt', 'desc').limit(limit).get();
+
+    if (snapshot.empty) {
+      return [];
+    }
+
+    const sessions = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      sessions.push({
+        sessionId: doc.id,
+        title: data.title || 'Conversation',
+        messageCount: messages.length,
+        createdAt: data.createdAt || data.updatedAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || new Date().toISOString(),
+        lastMessage: messages.length > 0 ? messages[messages.length - 1].text?.substring(0, 60) : '',
+      });
+    });
+
+    return sessions;
+  },
+
+  /**
    * Retrieves chat history for a session from `users/{userId}/chat_sessions/{sessionId}`.
-   * If sessionId is not provided, retrieves the latest updated session.
+   * If sessionId is provided and does not exist yet, returns a fresh empty conversation
+   * without loading an older conversation (preventing cross-thread pollution).
+   * If sessionId is omitted, retrieves the latest updated session.
    */
   getChatSession: async (userId, sessionId = null) => {
     if (!db) {
@@ -712,13 +768,8 @@ export const firestoreService = {
       if (doc.exists) {
         return { sessionId: doc.id, ...doc.data() };
       }
-      // If requested sessionId has no records yet (e.g. new browser tab), load latest session
-      const snapshot = await sessionsCol.orderBy('updatedAt', 'desc').limit(1).get();
-      if (!snapshot.empty) {
-        const firstDoc = snapshot.docs[0];
-        return { sessionId: firstDoc.id, ...firstDoc.data() };
-      }
-      return { sessionId, messages: [] };
+      // If requested sessionId has no records yet (fresh new chat), return clean empty state
+      return { sessionId, title: 'New Conversation', messages: [] };
     }
 
     // If no sessionId, get the latest updated session
@@ -733,22 +784,66 @@ export const firestoreService = {
 
   /**
    * Saves or updates messages for a session under `users/{userId}/chat_sessions/{sessionId}`.
+   * Automatically generates a concise non-medical summary title from the first query if not present.
    */
-  saveChatSession: async (userId, sessionId, messages) => {
+  saveChatSession: async (userId, sessionId, messages, title = null) => {
     if (!db) {
       throw new Error('Cloud Firestore is not initialized.');
     }
 
     const targetSessionId = sessionId || `sess_${Date.now()}`;
     const sessionRef = db.collection('users').doc(userId).collection('chat_sessions').doc(targetSessionId);
+    const existingDoc = await sessionRef.get();
+
+    let sessionTitle = title;
+    if (!sessionTitle && existingDoc.exists && existingDoc.data()?.title) {
+      sessionTitle = existingDoc.data().title;
+    }
+
+    if (!sessionTitle && Array.isArray(messages)) {
+      const firstUserMsg = messages.find(
+        (m) => (m.sender === 'user' || m.role === 'user') && (m.text || m.content) && (m.text?.trim() || m.content?.trim())
+      );
+      if (firstUserMsg) {
+        const rawText = (firstUserMsg.text || firstUserMsg.content).trim().replace(/[\r\n]+/g, ' ');
+        sessionTitle = rawText.length > 40 ? `${rawText.substring(0, 38)}...` : rawText;
+      }
+    }
+
     const payload = {
       sessionId: targetSessionId,
+      title: sessionTitle || 'Conversation',
       messages: Array.isArray(messages) ? messages : [],
       updatedAt: new Date().toISOString(),
     };
 
+    if (!existingDoc.exists) {
+      payload.createdAt = new Date().toISOString();
+    }
+
     await sessionRef.set(payload, { merge: true });
-    return { success: true, sessionId: targetSessionId, messages: payload.messages };
+    return {
+      success: true,
+      sessionId: targetSessionId,
+      title: payload.title,
+      messages: payload.messages,
+    };
+  },
+
+  /**
+   * Deletes a specific chat session for the authenticated user.
+   */
+  deleteChatSession: async (userId, sessionId) => {
+    if (!db) {
+      throw new Error('Cloud Firestore is not initialized.');
+    }
+    if (!sessionId) {
+      throw new Error('sessionId is required to delete a chat session.');
+    }
+
+    const sessionRef = db.collection('users').doc(userId).collection('chat_sessions').doc(sessionId);
+    await sessionRef.delete();
+    return { success: true, sessionId };
   },
 
   /**

@@ -172,18 +172,31 @@ export function DailyCheckinPage() {
     }
 
     setIsFetchingWeather(true);
-    const histRes = await weatherService.fetchHistoricalWeather(loc.latitude, loc.longitude, 3, loc.name);
-    setIsFetchingWeather(false);
+    try {
+      const [currentRes, histRes] = await Promise.all([
+        weatherService.fetchCurrentWeather(loc.latitude, loc.longitude),
+        weatherService.fetchHistoricalWeather(loc.latitude, loc.longitude, 3, loc.name),
+      ]);
+      setIsFetchingWeather(false);
 
-    if (histRes.success) {
-      setHistoricalSummary(histRes.summary);
-      setHistoricalRecords(histRes.records);
-      if (histRes.records && histRes.records.length > 0) {
+      if (currentRes.success && currentRes.data) {
+        setWeatherData(currentRes.data);
+        if (histRes.success) {
+          setHistoricalSummary(histRes.summary);
+          setHistoricalRecords(histRes.records);
+        }
+        setWeatherNotice(null);
+      } else if (histRes.success && histRes.records && histRes.records.length > 0) {
+        setHistoricalSummary(histRes.summary);
+        setHistoricalRecords(histRes.records);
         setWeatherData(histRes.records[histRes.records.length - 1]);
+        setWeatherNotice(null);
+      } else {
+        setWeatherNotice(currentRes.message || histRes.message || 'Weather data was unavailable.');
       }
-      setWeatherNotice(null);
-    } else {
-      setWeatherNotice(histRes.message || 'Historical weather data was unavailable.');
+    } catch (wErr) {
+      setIsFetchingWeather(false);
+      setWeatherNotice('Weather service temporarily unavailable.');
     }
   };
 
@@ -220,15 +233,28 @@ export function DailyCheckinPage() {
       setSearchResults([]);
 
       setIsFetchingWeather(true);
-      const histRes = await weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name);
-      setIsFetchingWeather(false);
-      if (histRes.success) {
-        setHistoricalSummary(histRes.summary);
-        setHistoricalRecords(histRes.records);
-        if (histRes.records && histRes.records.length > 0) {
+      try {
+        const [currentRes, histRes] = await Promise.all([
+          weatherService.fetchCurrentWeather(locObj.latitude, locObj.longitude),
+          weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name),
+        ]);
+        setIsFetchingWeather(false);
+
+        if (currentRes.success && currentRes.data) {
+          setWeatherData(currentRes.data);
+          if (histRes.success) {
+            setHistoricalSummary(histRes.summary);
+            setHistoricalRecords(histRes.records);
+          }
+          setWeatherNotice(null);
+        } else if (histRes.success && histRes.records && histRes.records.length > 0) {
+          setHistoricalSummary(histRes.summary);
+          setHistoricalRecords(histRes.records);
           setWeatherData(histRes.records[histRes.records.length - 1]);
+          setWeatherNotice(null);
         }
-        setWeatherNotice(null);
+      } catch (err) {
+        setIsFetchingWeather(false);
       }
       return;
     }
@@ -239,18 +265,31 @@ export function DailyCheckinPage() {
     setWeatherMode('travel');
     setIsFetchingWeather(true);
 
-    const histRes = await weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name);
-    setIsFetchingWeather(false);
+    try {
+      const [currentRes, histRes] = await Promise.all([
+        weatherService.fetchCurrentWeather(locObj.latitude, locObj.longitude),
+        weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name),
+      ]);
+      setIsFetchingWeather(false);
 
-    if (histRes.success) {
-      setHistoricalSummary(histRes.summary);
-      setHistoricalRecords(histRes.records);
-      if (histRes.records && histRes.records.length > 0) {
+      if (currentRes.success && currentRes.data) {
+        setWeatherData(currentRes.data);
+        if (histRes.success) {
+          setHistoricalSummary(histRes.summary);
+          setHistoricalRecords(histRes.records);
+        }
+        setWeatherNotice(null);
+      } else if (histRes.success && histRes.records && histRes.records.length > 0) {
+        setHistoricalSummary(histRes.summary);
+        setHistoricalRecords(histRes.records);
         setWeatherData(histRes.records[histRes.records.length - 1]);
+        setWeatherNotice(null);
+      } else {
+        setWeatherNotice(currentRes.message || histRes.message || 'Weather data was unavailable.');
       }
-      setWeatherNotice(null);
-    } else {
-      setWeatherNotice(histRes.message || 'Historical weather data was unavailable.');
+    } catch (err) {
+      setIsFetchingWeather(false);
+      setWeatherNotice('Weather service temporarily unavailable.');
     }
   };
 
@@ -263,6 +302,7 @@ export function DailyCheckinPage() {
     const locRes = await weatherService.requestBrowserLocation();
     if (!locRes.success) {
       setIsFetchingWeather(false);
+      setShowLocationModal(false);
       setWeatherNotice(locRes.message || "Location access was not provided. Today's risk assessment can continue without local weather data.");
       return;
     }
@@ -278,16 +318,28 @@ export function DailyCheckinPage() {
     setSettingUsualTarget(false);
     setShowLocationModal(false);
 
-    const histRes = await weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name);
-    setIsFetchingWeather(false);
+    try {
+      const [currentRes, histRes] = await Promise.all([
+        weatherService.fetchCurrentWeather(locObj.latitude, locObj.longitude),
+        weatherService.fetchHistoricalWeather(locObj.latitude, locObj.longitude, 3, locObj.name),
+      ]);
+      setIsFetchingWeather(false);
 
-    if (histRes.success) {
-      setHistoricalSummary(histRes.summary);
-      setHistoricalRecords(histRes.records);
-      if (histRes.records && histRes.records.length > 0) {
+      if (currentRes.success && currentRes.data) {
+        setWeatherData(currentRes.data);
+        if (histRes.success) {
+          setHistoricalSummary(histRes.summary);
+          setHistoricalRecords(histRes.records);
+        }
+        setWeatherNotice(null);
+      } else if (histRes.success && histRes.records && histRes.records.length > 0) {
+        setHistoricalSummary(histRes.summary);
+        setHistoricalRecords(histRes.records);
         setWeatherData(histRes.records[histRes.records.length - 1]);
+        setWeatherNotice(null);
       }
-      setWeatherNotice(null);
+    } catch (err) {
+      setIsFetchingWeather(false);
     }
   };
 

@@ -1,29 +1,68 @@
 import { firestoreService } from '../services/firestoreService.js';
-import { mlInferenceService } from '../services/mlInferenceService.js';
+import { mlInferenceService, sanitizeUrl, getMlServiceUrl } from '../services/mlInferenceService.js';
 import { weatherApiService } from '../services/weatherApiService.js';
 
+/**
+ * Builds a strictly normalized payload conforming to FastAPI's Pydantic schema.
+ */
+export function buildNormalizedMlPayload(userId, checkinData, baselineStats, recentEpisodesCount, weatherToday = null, weatherYesterday = null) {
+  const safeNum = (val, fallback) => {
+    if (val === undefined || val === null) return fallback;
+    const n = Number(val);
+    return isNaN(n) || !isFinite(n) ? fallback : n;
+  };
+
+  const payload = {
+    user_id: String(userId),
+    latest_log: {
+      sleep_hours: Number(safeNum(checkinData.sleep_hours ?? checkinData.sleepHours, 7.5).toFixed(1)),
+      sleep_quality: Math.min(5, Math.max(1, Math.round(safeNum(checkinData.sleep_quality ?? checkinData.sleepQuality, 3)))),
+      daily_stress: Math.min(10, Math.max(0, Math.round(safeNum(checkinData.daily_stress ?? checkinData.dailyStress, 4)))),
+      mood: Math.min(5, Math.max(1, Math.round(safeNum(checkinData.mood, 3)))),
+      screen_time: Number(safeNum(checkinData.screen_time ?? checkinData.screenHours, 6.0).toFixed(1)),
+      hydration: Number(safeNum(checkinData.hydration ?? checkinData.hydrationLiters, 2.0).toFixed(1)),
+    },
+    baseline_stats: {
+      avg_sleep: Number(safeNum(baselineStats?.avg_sleep, 7.5).toFixed(1)),
+      avg_stress: Number(safeNum(baselineStats?.avg_stress, 4.0).toFixed(1)),
+      pss_score: Number(safeNum(baselineStats?.pss_score, 14).toFixed(0)),
+    },
+    recent_episodes_count_7d: Math.max(0, Math.round(safeNum(recentEpisodesCount, 0))),
+  };
+
+  if (weatherToday && weatherYesterday) {
+    payload.weather_today = weatherToday;
+    payload.weather_yesterday = weatherYesterday;
+  }
+
+  return payload;
+}
+
 export async function getTodayPredictionController(req, res, next) {
+  const startTime = Date.now();
   try {
     const userId = req.user.uid;
     const targetDate = req.query.date || new Date().toLocaleDateString('en-CA');
+    const forceRecalculate = req.query.recalculate === 'true' || req.query.force === 'true';
+    const userPrefix = String(userId).slice(0, 8);
 
-    console.log(`[PREDICTION] Starting forecast`);
-    console.log(`[PREDICTION] Current UID: ${userId}`);
+    console.log(`[PREDICTION-GET] User: ${userPrefix}... | Date: ${targetDate} | ForceRecalc: ${forceRecalculate}`);
 
-    let forecast = await firestoreService.getLatestRiskForecast(userId, targetDate);
+    let forecast = forceRecalculate ? null : await firestoreService.getLatestRiskForecast(userId, targetDate);
 
-    // If no forecast exists yet for targetDate, check if a daily check-in exists for today
+    // If no forecast exists yet for targetDate (or recalculate requested), check if daily check-in exists
     if (!forecast) {
-      console.log(`[PREDICTION] Checking if check-in exists for UID: ${userId} on date ${targetDate}...`);
       const todayCheckin = await firestoreService.getTodayCheckin(userId, targetDate);
-      console.log(`[PREDICTION] Check-in loaded: ${Boolean(todayCheckin)}`);
+      console.log(`[PREDICTION-GET] User: ${userPrefix}... | Check-in found: ${Boolean(todayCheckin)}`);
 
       if (todayCheckin) {
-        console.log(`[PREDICTION] Check-in loaded for ${targetDate}. Running ML prediction pipeline...`);
+        console.log(`[PREDICTION-GET] Running on-demand ML pipeline for ${targetDate}...`);
         try {
           // 1. Fetch baseline stats & recent 7-day episode count
-          const baselineStats = await firestoreService.getUserBaselineStats(userId);
-          const recentEpisodesCount = await firestoreService.getRecentEpisodesCount(userId, 7);
+          const [baselineStats, recentEpisodesCount] = await Promise.all([
+            firestoreService.getUserBaselineStats(userId),
+            firestoreService.getRecentEpisodesCount(userId, 7),
+          ]);
 
           // 2. Attempt weather records retrieval for target date and previous date
           let weatherTodayBlock = null;
@@ -34,20 +73,24 @@ export async function getTodayPredictionController(req, res, next) {
             checkinDateObj.setDate(checkinDateObj.getDate() - 1);
             const previousDate = checkinDateObj.toISOString().split('T')[0];
 
-            let todayRec = await firestoreService.getTodayWeatherRecord(userId, targetDate, 'observed');
-            if (!todayRec) {
-              todayRec = await firestoreService.getTodayWeatherRecord(userId, targetDate, 'forecast');
-            }
-            let yesterdayRec = await firestoreService.getTodayWeatherRecord(userId, previousDate, 'observed');
-            if (!yesterdayRec) {
-              yesterdayRec = await firestoreService.getTodayWeatherRecord(userId, previousDate, 'forecast');
-            }
+            let [todayRec, yesterdayRec] = await Promise.all([
+              firestoreService.getTodayWeatherRecord(userId, targetDate, 'observed')
+                .then((r) => r || firestoreService.getTodayWeatherRecord(userId, targetDate, 'forecast')),
+              firestoreService.getTodayWeatherRecord(userId, previousDate, 'observed')
+                .then((r) => r || firestoreService.getTodayWeatherRecord(userId, previousDate, 'forecast')),
+            ]);
 
             const isValidNum = (v) => v !== undefined && v !== null && !isNaN(Number(v)) && isFinite(Number(v));
 
-            if (todayRec && yesterdayRec &&
-                isValidNum(todayRec.temperature) && isValidNum(todayRec.humidity) && isValidNum(todayRec.pressure) &&
-                isValidNum(yesterdayRec.pressure) && isValidNum(yesterdayRec.temperature)) {
+            if (
+              todayRec &&
+              yesterdayRec &&
+              isValidNum(todayRec.temperature) &&
+              isValidNum(todayRec.humidity) &&
+              isValidNum(todayRec.pressure) &&
+              isValidNum(yesterdayRec.pressure) &&
+              isValidNum(yesterdayRec.temperature)
+            ) {
               weatherTodayBlock = {
                 temperature: Number(todayRec.temperature),
                 humidity: Number(todayRec.humidity),
@@ -61,42 +104,18 @@ export async function getTodayPredictionController(req, res, next) {
               };
             }
           } catch (wErr) {
-            console.warn('[PREDICTION] Weather retrieval for on-demand ML payload skipped:', wErr.message);
+            console.warn('[PREDICTION-GET] Weather retrieval skipped:', wErr.message);
           }
 
-          console.log(`[PREDICTION] Weather loaded: ${weatherTodayBlock ? 'YES' : 'NO'}`);
-
-          const safeNum = (val, fallback) => {
-            if (val === undefined || val === null) return fallback;
-            const n = Number(val);
-            return isNaN(n) || !isFinite(n) ? fallback : n;
-          };
-
-          // 3. Construct FastAPI ML payload from check-in with safe normalization
-          const mlPayload = {
-            user_id: userId,
-            latest_log: {
-              sleep_hours: safeNum(todayCheckin.sleep_hours ?? todayCheckin.sleepHours, 7.5),
-              sleep_quality: safeNum(todayCheckin.sleep_quality ?? todayCheckin.sleepQuality, 3),
-              daily_stress: safeNum(todayCheckin.daily_stress ?? todayCheckin.dailyStress, 4),
-              mood: safeNum(todayCheckin.mood, 3),
-              screen_time: safeNum(todayCheckin.screen_time ?? todayCheckin.screenHours, 6.0),
-              hydration: safeNum(todayCheckin.hydration ?? todayCheckin.hydrationLiters, 2.0),
-            },
-            baseline_stats: {
-              avg_sleep: safeNum(baselineStats.avg_sleep, 7.5),
-              avg_stress: safeNum(baselineStats.avg_stress, 4.0),
-              pss_score: safeNum(baselineStats.pss_score, 14),
-            },
-            recent_episodes_count_7d: safeNum(recentEpisodesCount, 0),
-          };
-
-          if (weatherTodayBlock && weatherYesterdayBlock) {
-            mlPayload.weather_today = weatherTodayBlock;
-            mlPayload.weather_yesterday = weatherYesterdayBlock;
-          }
-
-          console.log(`[PREDICTION] Request payload:`, JSON.stringify(mlPayload));
+          // 3. Construct normalized FastAPI ML payload
+          const mlPayload = buildNormalizedMlPayload(
+            userId,
+            todayCheckin,
+            baselineStats,
+            recentEpisodesCount,
+            weatherTodayBlock,
+            weatherYesterdayBlock
+          );
 
           // 4. Send request to FastAPI ML service (/predict)
           const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
@@ -105,10 +124,12 @@ export async function getTodayPredictionController(req, res, next) {
             try {
               const forecastSaveResult = await firestoreService.saveRiskForecast(userId, targetDate, mlResult.data);
               forecast = forecastSaveResult.forecast;
-              console.log(`[PREDICTION] Final prediction result: score=${forecast.score}%, level=${forecast.level}`);
-              console.log(`[PREDICTION] Firestore persistence succeeded for date ${targetDate}`);
+              const totalElapsed = Date.now() - startTime;
+              console.log(
+                `[PREDICTION-GET] Success: score=${forecast.score}%, level=${forecast.level} | Saved: true | Elapsed: ${totalElapsed}ms`
+              );
             } catch (persistErr) {
-              console.error(`[PREDICTION] Firestore persistence failure:`, persistErr.message);
+              console.error(`[PREDICTION-GET] Firestore persistence failure:`, persistErr.message);
               return res.status(200).json({
                 success: true,
                 data: null,
@@ -118,16 +139,19 @@ export async function getTodayPredictionController(req, res, next) {
               });
             }
           } else {
-            console.warn(`[PREDICTION] ML request failed:`, mlResult.error);
+            console.warn(`[PREDICTION-GET] ML request failed:`, mlResult.error);
             let errCategory = 'Prediction service error. Please try again.';
             let errorCode = mlResult.error?.code || 'ML_PREDICTION_FAILED';
 
             if (mlResult.timeout) {
-              errCategory = 'ML prediction service request timed out. Please try again.';
+              errCategory = 'The AI prediction service timed out. Please click Calculate Forecast to retry.';
               errorCode = 'FASTAPI_TIMEOUT';
             } else if (mlResult.unavailable) {
               errCategory = 'ML prediction service is currently unavailable. Please ensure the service is running.';
               errorCode = 'FASTAPI_UNAVAILABLE';
+            } else if (mlResult.error?.code === 'FASTAPI_SERVICE_WARMING') {
+              errCategory = 'The AI model service is warming up. Please click Calculate Forecast in a moment.';
+              errorCode = 'FASTAPI_SERVICE_WARMING';
             } else if (mlResult.error?.code === 'FASTAPI_HTTP_ERROR') {
               errCategory = 'The check-in data could not be processed.';
               errorCode = 'FASTAPI_HTTP_ERROR';
@@ -145,7 +169,7 @@ export async function getTodayPredictionController(req, res, next) {
             });
           }
         } catch (genErr) {
-          console.warn('[PREDICTION] Error executing on-demand prediction:', genErr.message);
+          console.error('[PREDICTION-GET] Error executing on-demand prediction:', genErr.message);
           return res.status(200).json({
             success: true,
             data: null,
@@ -156,7 +180,7 @@ export async function getTodayPredictionController(req, res, next) {
         }
       }
     } else {
-      console.log(`[PREDICTION] Final prediction result (existing): score=${forecast.score}%, level=${forecast.level}`);
+      console.log(`[PREDICTION-GET] Existing forecast found: score=${forecast.score}%, level=${forecast.level}`);
     }
 
     if (!forecast) {
@@ -167,7 +191,6 @@ export async function getTodayPredictionController(req, res, next) {
       });
     }
 
-    console.log(`[PREDICTION] Returning risk forecast for date ${targetDate}`);
     return res.status(200).json({
       success: true,
       data: forecast,

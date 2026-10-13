@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '../components/ui/Button';
 import { MarkdownMessage } from '../components/ui/MarkdownMessage';
 import { Badge } from '../components/ui/Badge';
-import { chatService } from '../services/chatService';
 import { useTranslation } from '../hooks/useTranslation';
 import { useChat } from '../context/ChatContext';
 import {
@@ -15,6 +14,9 @@ import {
   Bot,
   RotateCcw,
   AlertCircle,
+  Plus,
+  Trash2,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
@@ -22,13 +24,17 @@ export function ChatPage() {
   const messagesEndRef = useRef(null);
   const { t } = useTranslation();
 
-  const conversationHistory = chatService.getConversationHistory();
-
   const {
     messages,
+    sessionId,
+    activeSessionTitle,
+    sessionsList,
     isTyping,
     sendMessage,
     retryLast,
+    startNewChat,
+    switchSession,
+    deleteSession,
     clearConversation,
   } = useChat();
 
@@ -67,6 +73,20 @@ export function ChatPage() {
     handleSendMessage();
   };
 
+  const formatSessionDate = (isoString) => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      const today = new Date();
+      if (d.toDateString() === today.toDateString()) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } catch {
+      return '';
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-200">
       {/* =========================================================================
@@ -89,8 +109,18 @@ export function ChatPage() {
           </div>
         </div>
 
-        {/* Right Header Actions: Trust Indicator & Clear Chat */}
+        {/* Right Header Actions: Trust Indicator, New Chat, & Clear Chat */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-brand-dark hover:bg-[#1C2822] text-white text-meta-sm font-semibold transition-colors shadow-soft cursor-pointer"
+            title="Start a new separate conversation"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>{t('chat.newChatBtn', 'New Chat')}</span>
+          </button>
+
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-card-warm border border-card-warm-border text-meta-sm text-brand-dark font-medium shadow-soft">
             <ShieldCheck className="w-4 h-4 text-brand-teal flex-shrink-0" />
             <span>{t('chat.trustIndicator')}</span>
@@ -108,43 +138,84 @@ export function ChatPage() {
         </div>
       </div>
 
-
       {/* =========================================================================
           MAIN CHAT WORKSPACE (DESKTOP 2-COLUMN / MOBILE FULL-SCREEN)
          ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[580px]">
-        {/* DESKTOP SIDEBAR: CONVERSATION TOPICS (hidden on mobile) */}
+        {/* DESKTOP SIDEBAR: PERSISTENT CONVERSATION HISTORY */}
         <aside className="hidden lg:flex lg:col-span-4 flex-col justify-between p-4 rounded-card bg-card-warm/70 border border-card-warm-border space-y-4 shadow-soft">
           <div className="space-y-3">
-            <div className="flex items-center justify-between px-2 text-meta-sm font-semibold uppercase tracking-wider text-muted-text">
-              <span>{t('chat.quickQuestionsTitle')}</span>
+            {/* New Chat Primary Action Button */}
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              icon={Plus}
+              onClick={startNewChat}
+              className="w-full justify-center shadow-soft cursor-pointer"
+            >
+              {t('chat.newChatBtn', 'New Chat')}
+            </Button>
+
+            <div className="flex items-center justify-between px-2 pt-1 text-meta-sm font-semibold uppercase tracking-wider text-muted-text">
+              <span>{t('chat.historyTitle', 'Chat History')}</span>
               <Badge variant="neutral" size="sm">
-                {conversationHistory.length} Topics
+                {sessionsList.length}
               </Badge>
             </div>
 
-            <div className="space-y-1.5">
-              {conversationHistory.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleSendMessage(item.title)}
-                  className={cn(
-                    'w-full text-left p-3 rounded-card-sm border transition-all flex flex-col space-y-1 cursor-pointer',
-                    item.active
-                      ? 'bg-white border-brand-sage/60 font-semibold text-brand-dark shadow-soft'
-                      : 'bg-white/40 border-muted-border/60 hover:bg-white text-muted-text hover:text-brand-dark'
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-meta-md font-medium text-brand-dark truncate">
-                      {item.title}
-                    </span>
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-text" />
-                  </div>
-                  <span className="text-[11px] text-muted-text">{item.date}</span>
-                </button>
-              ))}
+            {/* Conversation History List */}
+            <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+              {sessionsList.length === 0 ? (
+                <div className="p-4 rounded-card-sm bg-white/50 border border-dashed border-muted-border/80 text-center text-meta-sm text-muted-text">
+                  <MessageSquare className="w-5 h-5 mx-auto text-brand-teal mb-1 opacity-70" />
+                  <span>{t('chat.noHistory', 'No prior conversations yet.')}</span>
+                </div>
+              ) : (
+                sessionsList.map((item) => {
+                  const isActive = item.sessionId === sessionId;
+                  return (
+                    <div
+                      key={item.sessionId}
+                      onClick={() => switchSession(item.sessionId)}
+                      className={cn(
+                        'w-full text-left p-3 rounded-card-sm border transition-all flex items-center justify-between gap-2 cursor-pointer group',
+                        isActive
+                          ? 'bg-white border-brand-sage font-semibold text-brand-dark shadow-soft'
+                          : 'bg-white/40 border-muted-border/60 hover:bg-white text-muted-text hover:text-brand-dark'
+                      )}
+                    >
+                      <div className="flex flex-col space-y-0.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <MessageSquare className={cn("w-3.5 h-3.5 flex-shrink-0", isActive ? "text-brand-teal" : "text-muted-text")} />
+                          <span className="text-meta-md font-medium text-brand-dark truncate">
+                            {item.title || 'Conversation'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-muted-text">
+                          {formatSessionDate(item.updatedAt)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {/* Delete Session Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteSession(item.sessionId);
+                          }}
+                          title="Delete this conversation"
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:text-alert-muted hover:bg-alert-muted/10 rounded transition-all cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <ChevronRight className="w-3.5 h-3.5 text-muted-text" />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -162,12 +233,28 @@ export function ChatPage() {
 
         {/* MAIN CONVERSATION VIEWPORT */}
         <main className="lg:col-span-8 flex flex-col justify-between bg-white border border-muted-border rounded-card p-4 sm:p-6 shadow-soft-lg min-h-[580px]">
-          {/* Top Quick Suggestions Carousel */}
+          {/* Top Active Conversation Header & Suggestions Carousel */}
           <div className="space-y-2 pb-4 border-b border-muted-border/60">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-text-light block">
-              {t('chat.quickQuestionsTitle')}:
-            </span>
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-meta-md font-bold text-brand-dark truncate max-w-md">
+                  {activeSessionTitle || 'Conversation'}
+                </span>
+                <span className="text-[11px] font-mono text-muted-text">
+                  ({sessionId.slice(0, 14)}...)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={startNewChat}
+                className="text-[11px] font-semibold text-brand-teal hover:underline flex items-center gap-1 cursor-pointer lg:hidden"
+              >
+                <Plus className="w-3 h-3" />
+                <span>{t('chat.newChatBtn', 'New Chat')}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar pt-1">
               {suggestedQuestions.map((q, idx) => (
                 <button
                   key={idx}
@@ -256,7 +343,7 @@ export function ChatPage() {
                       <div className="pt-2 border-t border-muted-border/50 text-[11px] text-muted-text flex items-start gap-1.5 flex-wrap">
                         <BookOpen className="w-3.5 h-3.5 text-brand-teal flex-shrink-0 mt-0.5" />
                         <span className="font-medium text-brand-dark">{t('chat.sourcesLabel')}</span>
-                        <span>{msg.sources.join(' \u00B7 ')}</span>
+                        <span>{msg.sources.join(' · ')}</span>
                       </div>
                     )}
 

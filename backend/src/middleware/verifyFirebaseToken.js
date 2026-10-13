@@ -69,3 +69,32 @@ export async function verifyFirebaseToken(req, res, next) {
     });
   }
 }
+
+export async function optionalFirebaseToken(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      req.user = null;
+      return next();
+    }
+
+    const idToken = authHeader.split('Bearer ')[1]?.trim();
+    if (!idToken || !auth) {
+      req.user = null;
+      return next();
+    }
+
+    const decodedToken = await auth.verifyIdToken(idToken);
+    req.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email || null,
+      name: decodedToken.name || null,
+      ...decodedToken,
+    };
+    return next();
+  } catch (error) {
+    req.user = null;
+    return next();
+  }
+}
+
