@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -45,78 +45,108 @@ export function RiskAnalysisPage() {
   const [prediction, setPrediction] = useState(null);
   const [todayCheckin, setTodayCheckin] = useState(null);
   const [reportSummary, setReportSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [initialCheckinLoading, setInitialCheckinLoading] = useState(true);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [forecastStatus, setForecastStatus] = useState('idle'); // 'idle' | 'ready' | 'warming' | 'timeout' | 'error' | 'no_checkin'
   const [calculationError, setCalculationError] = useState(null);
+  const [canRetry, setCanRetry] = useState(true);
   const [showTechnicalShap, setShowTechnicalShap] = useState(false);
   const [showFullMatrix, setShowFullMatrix] = useState(false);
 
-  const loadData = async (isRetry = false) => {
-    if (isRetry) {
+  const inFlightRef = useRef(false);
+
+  const evaluatePrediction = async (isManualRetry = false, retryAttempt = 0) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    if (isManualRetry) {
       setIsRetrying(true);
       setCalculationError(null);
-    } else {
-      setLoading(true);
     }
+    setIsEvaluating(true);
 
     try {
-      const [forecastData, checkinData, summaryData] = await Promise.all([
-        isRetry ? predictionService.recalculateTodayPrediction() : predictionService.getTodayPrediction(),
-        trackingService.fetchTodayLog(),
-        reportService.getReportSummary('weekly'),
-      ]);
+      const forecastData = isManualRetry
+        ? await predictionService.recalculateTodayPrediction()
+        : await predictionService.getTodayPrediction();
 
-      const validForecast = forecastData && forecastData.score !== undefined && forecastData.score !== null ? forecastData : null;
-      setPrediction(validForecast);
-      setTodayCheckin(checkinData);
-      setReportSummary(summaryData);
+      const validForecast =
+        forecastData && forecastData.score !== undefined && forecastData.score !== null ? forecastData : null;
 
-      if (isRetry && !validForecast) {
+      if (validForecast) {
+        setPrediction(validForecast);
+        setForecastStatus('ready');
+        setCalculationError(null);
+      } else {
+        const status = forecastData?.forecastStatus || (forecastData?.mlError?.includes('warming') ? 'warming' : 'error');
+        setForecastStatus(status);
+        setCanRetry(forecastData?.canRetry !== false);
         setCalculationError(forecastData?.mlError || t('risk.serviceUnavailable'));
+
+        // Bounded transient backoff: If initial request returned warming, auto-check once after 8 seconds
+        if (!isManualRetry && status === 'warming' && retryAttempt < 1) {
+          setTimeout(() => {
+            inFlightRef.current = false;
+            evaluatePrediction(false, retryAttempt + 1);
+          }, 8000);
+          return;
+        }
       }
     } catch (err) {
-      console.warn('[RiskAnalysisPage] Error loading data:', err.message);
-      if (isRetry) {
-        setCalculationError(t('risk.serviceUnavailable'));
-      }
+      console.warn('[RiskAnalysisPage] Prediction evaluation error:', err.message);
+      setForecastStatus('error');
+      setCalculationError(t('risk.serviceUnavailable'));
     } finally {
-      setLoading(false);
+      setIsEvaluating(false);
       setIsRetrying(false);
+      inFlightRef.current = false;
     }
   };
 
   useEffect(() => {
     let isMounted = true;
+
     async function init() {
       try {
-        const [forecastData, checkinData, summaryData] = await Promise.all([
-          predictionService.getTodayPrediction(),
+        // Fast path: load basic check-in record and weekly summary first (sub-second)
+        const [checkinData, summaryData] = await Promise.all([
           trackingService.fetchTodayLog(),
           reportService.getReportSummary('weekly'),
         ]);
 
         if (isMounted) {
-          const validForecast = forecastData && forecastData.score !== undefined && forecastData.score !== null ? forecastData : null;
-          setPrediction(validForecast);
           setTodayCheckin(checkinData);
           setReportSummary(summaryData);
-          if (!validForecast && forecastData?.mlError) {
-            setCalculationError(forecastData.mlError);
+          setInitialCheckinLoading(false);
+
+          if (!checkinData) {
+            setForecastStatus('no_checkin');
+            return;
           }
-          setLoading(false);
         }
       } catch (err) {
-        console.warn('[RiskAnalysisPage] Error loading data:', err.message);
-        if (isMounted) setLoading(false);
+        console.warn('[RiskAnalysisPage] Error loading check-in data:', err.message);
+        if (isMounted) setInitialCheckinLoading(false);
+      }
+
+      // Asynchronous ML prediction pipeline (does not block initial render)
+      if (isMounted) {
+        evaluatePrediction(false);
       }
     }
+
     init();
 
     const handleForecastUpdated = (e) => {
       if (isMounted) {
         const updated = e.detail;
         const valid = updated && updated.score !== undefined && updated.score !== null ? updated : null;
-        setPrediction(valid);
+        if (valid) {
+          setPrediction(valid);
+          setForecastStatus('ready');
+          setIsEvaluating(false);
+        }
       }
     };
 
@@ -221,52 +251,121 @@ export function RiskAnalysisPage() {
         </Link>
       </div>
 
-      {loading ? (
-        <div className="min-h-[300px] flex flex-col items-center justify-center space-y-3 py-12">
+      {/* TODAY'S RECORDED CHECK-IN BANNER (Rendered immediately without waiting for ML) */}
+      {todayCheckin && (
+        <div className="p-4 sm:p-5 rounded-[20px] bg-[#FAF9F5] border border-brand-sage/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-brand-sage/30 border border-brand-sage/50 flex items-center justify-center flex-shrink-0 text-brand-teal">
+              <CheckCircle2 className="w-5 h-5 text-brand-teal" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-body-md font-bold text-brand-dark">
+                  {t('risk.checkinRecordedTitle')}
+                </span>
+                <Badge variant="teal" size="sm">Saved in Firestore</Badge>
+              </div>
+              <p className="text-meta-sm text-muted-text">
+                Your daily clinical inputs are recorded and baseline triggers are active.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            {todayCheckin.sleep_hours !== undefined && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-brand-sage/30 text-meta-sm text-brand-dark font-medium shadow-xs">
+                <Moon className="w-3.5 h-3.5 text-[#8F443B]" />
+                {todayCheckin.sleep_hours}h sleep
+              </span>
+            )}
+            {todayCheckin.daily_stress !== undefined && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-brand-sage/30 text-meta-sm text-brand-dark font-medium shadow-xs">
+                <Brain className="w-3.5 h-3.5 text-[#8F443B]" />
+                {todayCheckin.daily_stress}/10 stress
+              </span>
+            )}
+            {todayCheckin.hydration !== undefined && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-brand-sage/30 text-meta-sm text-brand-dark font-medium shadow-xs">
+                <Droplets className="w-3.5 h-3.5 text-brand-teal" />
+                {todayCheckin.hydration}L water
+              </span>
+            )}
+            {todayCheckin.screen_time !== undefined && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-brand-sage/30 text-meta-sm text-brand-dark font-medium shadow-xs">
+                <SunMedium className="w-3.5 h-3.5 text-[#8F443B]" />
+                {todayCheckin.screen_time}h screen
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {initialCheckinLoading ? (
+        <div className="min-h-[220px] flex flex-col items-center justify-center space-y-3 py-12">
           <Loader2 className="w-8 h-8 text-brand-teal animate-spin" />
           <span className="text-body-md font-semibold text-brand-dark">
-            {t('risk.runningEvaluation')}
+            Loading your health data...
           </span>
         </div>
       ) : !hasForecast ? (
         todayCheckin ? (
-          /* CHECK-IN COMPLETED BUT PREDICTION PENDING/FAILED */
-          <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-5">
-            <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
-              <Sparkles className="w-7 h-7 text-brand-teal" />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-section-lg font-bold text-brand-dark">
-                {t('risk.checkinRecordedTitle')}
-              </h2>
-              <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
-                {t('risk.checkinRecordedDesc')}
-              </p>
-            </div>
-            {calculationError && (
-              <div className="p-4 rounded-xl bg-[#8F443B]/10 border border-[#8F443B]/30 text-[#8F443B] flex items-center justify-center gap-2 max-w-md mx-auto text-body-sm font-medium">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 text-[#8F443B]" />
-                <span>{calculationError}</span>
+          isEvaluating ? (
+            /* ACTIVE EVALUATION IN PROGRESS (NON-BLOCKING) */
+            <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-5 animate-in fade-in duration-200">
+              <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
+                <Loader2 className="w-7 h-7 text-brand-teal animate-spin" />
               </div>
-            )}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => loadData(true)}
-                disabled={isRetrying}
-                icon={isRetrying ? Loader2 : RotateCcw}
-                className={cn(isRetrying && "opacity-80")}
-              >
-                {isRetrying ? t('risk.calculatingForecast') : t('risk.calculateForecastBtn')}
-              </Button>
-              <Link to={ROUTES.DASHBOARD}>
-                <Button variant="outline" size="lg">
-                  {t('risk.goToDashboardBtn')}
+              <div className="space-y-2">
+                <h2 className="text-section-lg font-bold text-brand-dark">
+                  {t('risk.runningEvaluation')}
+                </h2>
+                <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
+                  {t('risk.loadingForecast')}
+                </p>
+              </div>
+              <div className="max-w-xs mx-auto h-1.5 bg-brand-sage/30 rounded-full overflow-hidden">
+                <div className="h-full bg-brand-teal animate-pulse rounded-full w-3/4" />
+              </div>
+            </Card>
+          ) : (
+            /* CHECK-IN COMPLETED: FORECAST PENDING, WARMING, OR TIMED OUT */
+            <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-5 animate-in fade-in duration-200">
+              <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
+                <Sparkles className="w-7 h-7 text-brand-teal" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-section-lg font-bold text-brand-dark">
+                  {t('risk.checkinRecordedTitle')}
+                </h2>
+                <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
+                  {t('risk.checkinRecordedDesc')}
+                </p>
+              </div>
+              {calculationError && (
+                <div className="p-4 rounded-xl bg-[#8F443B]/10 border border-[#8F443B]/30 text-[#8F443B] flex items-center justify-center gap-2 max-w-md mx-auto text-body-sm font-medium">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-[#8F443B]" />
+                  <span>{calculationError}</span>
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => evaluatePrediction(true)}
+                  disabled={isRetrying || isEvaluating}
+                  icon={isRetrying ? Loader2 : RotateCcw}
+                  className={cn((isRetrying || isEvaluating) && "opacity-80")}
+                >
+                  {isRetrying ? t('risk.calculatingForecast') : t('risk.calculateForecastBtn')}
                 </Button>
-              </Link>
-            </div>
-          </Card>
+                <Link to={ROUTES.DASHBOARD}>
+                  <Button variant="outline" size="lg">
+                    {t('risk.goToDashboardBtn')}
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          )
         ) : (
           /* EMPTY STATE FOR USERS WITHOUT CHECK-IN */
           <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-4">

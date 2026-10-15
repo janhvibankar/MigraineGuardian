@@ -93,123 +93,118 @@ export async function submitDailyCheckinController(req, res, next) {
       });
     }
 
-    // 1. Save check-in document to Firestore
+    // 1. Save check-in document to Firestore (must succeed before reporting success)
     const startTime = Date.now();
     const result = await firestoreService.saveDailyCheckin(userId, req.body);
     const date = result.entry.date || new Date().toLocaleDateString('en-CA');
     const userPrefix = String(userId).slice(0, 8);
     console.log(`[CHECKIN] User: ${userPrefix}... | Date: ${date} | Check-in saved to Firestore`);
 
-    // 2. Fetch baseline stats & recent 7-day episode count from Firestore
-    const [baselineStats, recentEpisodesCount] = await Promise.all([
-      firestoreService.getUserBaselineStats(userId),
-      firestoreService.getRecentEpisodesCount(userId, 7),
-    ]);
-
-    // 3. Attempt weather records retrieval for target date (date) and previous date (date - 1)
-    let weatherTodayBlock = null;
-    let weatherYesterdayBlock = null;
-
-    try {
-      const checkinDateObj = new Date(`${date}T12:00:00Z`);
-      checkinDateObj.setDate(checkinDateObj.getDate() - 1);
-      const previousDate = checkinDateObj.toISOString().split('T')[0];
-
-      let [todayRec, yesterdayRec] = await Promise.all([
-        firestoreService.getTodayWeatherRecord(userId, date, 'observed')
-          .then((r) => r || firestoreService.getTodayWeatherRecord(userId, date, 'forecast'))
-          .then((r) => r || req.body.weather || req.body.weatherData || null),
-        firestoreService.getTodayWeatherRecord(userId, previousDate, 'observed')
-          .then((r) => r || firestoreService.getTodayWeatherRecord(userId, previousDate, 'forecast')),
-      ]);
-
-      const isValidNum = (v) => v !== undefined && v !== null && !isNaN(Number(v)) && isFinite(Number(v));
-
-      if (
-        todayRec &&
-        yesterdayRec &&
-        isValidNum(todayRec.temperature) &&
-        isValidNum(todayRec.humidity) &&
-        isValidNum(todayRec.pressure) &&
-        isValidNum(yesterdayRec.pressure) &&
-        isValidNum(yesterdayRec.temperature)
-      ) {
-        weatherTodayBlock = {
-          temperature: Number(todayRec.temperature),
-          humidity: Number(todayRec.humidity),
-          pressure: Number(todayRec.pressure),
-          precipitation: Number(todayRec.precipitation || 0),
-          wind_speed: Number(todayRec.windSpeed || todayRec.wind_speed || 0),
-        };
-        weatherYesterdayBlock = {
-          pressure: Number(yesterdayRec.pressure),
-          temperature: Number(yesterdayRec.temperature),
-        };
-      }
-    } catch (wErr) {
-      console.warn('[CHECKIN] Weather retrieval skipped:', wErr.message);
-    }
-
-    // 4. Construct normalized FastAPI ML payload
-    const mlPayload = buildNormalizedMlPayload(
-      userId,
-      result.entry,
-      baselineStats,
-      recentEpisodesCount,
-      weatherTodayBlock,
-      weatherYesterdayBlock
-    );
-
-    // 5. Send request to FastAPI ML service (/predict) with activeInferenceMap lock
+    // 2. Trigger asynchronous background ML risk prediction with activeInferenceMap lock
+    //    Does NOT block the HTTP response; allows immediate client-side navigation.
     const lockKey = `${userId}_${date}`;
-    let pipelineResolver;
-    const pipelinePromise = new Promise((resolve) => {
-      pipelineResolver = resolve;
-    });
-    activeInferenceMap.set(lockKey, pipelinePromise);
-
-    let forecastDoc = null;
-    let forecastSaved = false;
-    let mlResult = null;
-
-    try {
-      console.log(`[CHECKIN] Running ML inference for User: ${userPrefix}... | Date: ${date}`);
-      mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, { deadlineMs: 25000 });
-
-      if (mlResult.success && mlResult.data) {
+    if (!activeInferenceMap.has(lockKey)) {
+      const asyncPipelinePromise = (async () => {
         try {
-          const forecastSaveResult = await firestoreService.saveRiskForecast(userId, date, mlResult.data);
-          forecastDoc = forecastSaveResult.forecast;
-          forecastSaved = true;
-          const totalElapsed = Date.now() - startTime;
-          console.log(
-            `[CHECKIN] Success: score=${forecastDoc.score}%, level=${forecastDoc.level} | ForecastSaved: true | Elapsed: ${totalElapsed}ms`
+          // A. Fetch baseline stats & recent 7-day episode count from Firestore
+          const [baselineStats, recentEpisodesCount] = await Promise.all([
+            firestoreService.getUserBaselineStats(userId),
+            firestoreService.getRecentEpisodesCount(userId, 7),
+          ]);
+
+          // B. Attempt weather records retrieval for target date (date) and previous date (date - 1)
+          let weatherTodayBlock = null;
+          let weatherYesterdayBlock = null;
+
+          try {
+            const checkinDateObj = new Date(`${date}T12:00:00Z`);
+            checkinDateObj.setDate(checkinDateObj.getDate() - 1);
+            const previousDate = checkinDateObj.toISOString().split('T')[0];
+
+            let [todayRec, yesterdayRec] = await Promise.all([
+              firestoreService.getTodayWeatherRecord(userId, date, 'observed')
+                .then((r) => r || firestoreService.getTodayWeatherRecord(userId, date, 'forecast'))
+                .then((r) => r || req.body.weather || req.body.weatherData || null),
+              firestoreService.getTodayWeatherRecord(userId, previousDate, 'observed')
+                .then((r) => r || firestoreService.getTodayWeatherRecord(userId, previousDate, 'forecast')),
+            ]);
+
+            const isValidNum = (v) => v !== undefined && v !== null && !isNaN(Number(v)) && isFinite(Number(v));
+
+            if (
+              todayRec &&
+              yesterdayRec &&
+              isValidNum(todayRec.temperature) &&
+              isValidNum(todayRec.humidity) &&
+              isValidNum(todayRec.pressure) &&
+              isValidNum(yesterdayRec.pressure) &&
+              isValidNum(yesterdayRec.temperature)
+            ) {
+              weatherTodayBlock = {
+                temperature: Number(todayRec.temperature),
+                humidity: Number(todayRec.humidity),
+                pressure: Number(todayRec.pressure),
+                precipitation: Number(todayRec.precipitation || 0),
+                wind_speed: Number(todayRec.windSpeed || todayRec.wind_speed || 0),
+              };
+              weatherYesterdayBlock = {
+                pressure: Number(yesterdayRec.pressure),
+                temperature: Number(yesterdayRec.temperature),
+              };
+            }
+          } catch (wErr) {
+            console.warn('[CHECKIN-ASYNC] Weather retrieval skipped:', wErr.message);
+          }
+
+          const mlPayload = buildNormalizedMlPayload(
+            userId,
+            result.entry,
+            baselineStats,
+            recentEpisodesCount,
+            weatherTodayBlock,
+            weatherYesterdayBlock
           );
-        } catch (persistErr) {
-          console.error(`[CHECKIN] Firestore forecast persistence failure:`, persistErr.message);
+
+          console.log(`[CHECKIN-ASYNC] Running background ML inference for User: ${userPrefix}... | Date: ${date}`);
+          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+
+          if (mlResult.success && mlResult.data) {
+            // Guard: ensure delayed background prediction does not overwrite a newer forecast
+            const existingForecast = await firestoreService.getLatestRiskForecast(userId, date);
+            const isStale = existingForecast?.updatedAt && new Date(existingForecast.updatedAt).getTime() > startTime;
+
+            if (!isStale) {
+              await firestoreService.saveRiskForecast(userId, date, mlResult.data);
+              const elapsed = Date.now() - startTime;
+              console.log(
+                `[CHECKIN-ASYNC] Success: score=${mlResult.data.score}%, level=${mlResult.data.level} | Saved: true | Elapsed: ${elapsed}ms`
+              );
+            } else {
+              console.log(`[CHECKIN-ASYNC] Skipping save; newer forecast already recorded for ${date}`);
+            }
+          } else {
+            console.warn(`[CHECKIN-ASYNC] ML prediction deferred or unavailable:`, mlResult.error?.message || 'ML service unavailable');
+          }
+        } catch (err) {
+          console.error(`[CHECKIN-ASYNC] Error executing background ML pipeline:`, err.message);
+        } finally {
+          activeInferenceMap.delete(lockKey);
         }
-      } else {
-        console.warn(`[CHECKIN] ML prediction deferred or unavailable:`, mlResult.error?.message || 'ML service unavailable');
-      }
-    } finally {
-      activeInferenceMap.delete(lockKey);
-      if (typeof pipelineResolver === 'function') {
-        pipelineResolver();
-      }
+      })();
+
+      activeInferenceMap.set(lockKey, asyncPipelinePromise);
     }
 
+    // 3. Respond immediately to frontend so navigation to Risk Forecast is instantaneous
     return res.status(200).json({
       success: true,
       timestamp: new Date().toISOString(),
-      message: forecastSaved
-        ? 'Check-in and risk forecast recorded.'
-        : 'Daily check-in saved. AI risk prediction is deferred; click Calculate Forecast on the next screen to generate your estimate.',
+      message: 'Daily check-in saved successfully.',
       entry: result.entry,
       checkinSaved: true,
-      forecastAvailable: forecastSaved,
-      forecast: forecastDoc,
-      mlWarning: !forecastSaved ? (mlResult?.error?.message || 'ML prediction service is warming up') : null,
-      canRetryForecast: !forecastSaved,
+      forecastAvailable: false,
+      forecastPending: true,
+      canRetryForecast: true,
     });
   } catch (error) {
     next(error);

@@ -1,4 +1,5 @@
 import sys
+import time
 import types
 import __main__
 import joblib
@@ -84,10 +85,12 @@ class ModelManager:
             if not path.exists():
                 raise FileNotFoundError(f"Model file not found at path: {path}")
 
+            t0 = time.perf_counter()
             self.model = joblib.load(path)
             self.is_loaded = True
             self.load_error = None
-            print(f"[ML Service] Model A (Production Baseline) successfully loaded from {path}")
+            duration = time.perf_counter() - t0
+            print(f"[ML Service] Model A (Production Baseline) loaded in {duration:.3f}s from {path}")
         except Exception as e:
             self.is_loaded = False
             self.load_error = str(e)
@@ -97,10 +100,12 @@ class ModelManager:
         # 2. Load Experimental Model B if artifact exists
         try:
             if exp_path.exists():
+                t0_exp = time.perf_counter()
                 self.experimental_model = joblib.load(exp_path)
                 self.is_experimental_loaded = True
                 self.experimental_load_error = None
-                print(f"[ML Service] Model B (Experimental Weather-Aware) successfully loaded from {exp_path}")
+                duration_exp = time.perf_counter() - t0_exp
+                print(f"[ML Service] Model B (Experimental Weather-Aware) loaded in {duration_exp:.3f}s from {exp_path}")
             else:
                 self.is_experimental_loaded = False
                 self.experimental_load_error = f"Experimental model artifact not found at {exp_path}"

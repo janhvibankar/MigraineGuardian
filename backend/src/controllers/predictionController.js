@@ -62,6 +62,16 @@ export async function getTodayPredictionController(req, res, next) {
 
     let forecast = forceRecalculate ? null : await firestoreService.getLatestRiskForecast(userId, targetDate);
 
+    // Verify existing forecast belongs strictly to authenticated user and targetDate
+    if (forecast) {
+      const forecastDateMatches = !forecast.forecastDate || forecast.forecastDate === targetDate || forecast.id === targetDate;
+      const forecastScoreValid = typeof forecast.score === 'number' && !isNaN(forecast.score);
+      if (!forecastDateMatches || !forecastScoreValid) {
+        console.warn(`[PREDICTION-GET] Stale or invalid forecast rejected for targetDate: ${targetDate}`);
+        forecast = null;
+      }
+    }
+
     // If no forecast exists yet for targetDate (or recalculate requested), check if daily check-in exists
     if (!forecast) {
       const todayCheckin = await firestoreService.getTodayCheckin(userId, targetDate);
@@ -135,8 +145,9 @@ export async function getTodayPredictionController(req, res, next) {
             weatherYesterdayBlock
           );
 
-          // 4. Send request to FastAPI ML service (/predict)
-          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+          // 4. Send request to FastAPI ML service (/predict) with bounded 50s deadline
+          //    Guarantees backend returns before frontend 75s timeout to prevent browser aborts
+          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, { deadlineMs: 50000 });
 
           if (mlResult.success && mlResult.data) {
             try {
@@ -152,14 +163,17 @@ export async function getTodayPredictionController(req, res, next) {
                 success: true,
                 data: null,
                 checkinExists: true,
+                forecastStatus: 'error',
                 mlError: 'Failed to save risk forecast to database.',
                 errorCategory: 'FIRESTORE_PERSISTENCE_ERROR',
+                canRetry: true,
               });
             }
           } else {
             console.warn(`[PREDICTION-GET] ML request failed:`, mlResult.error);
             let errCategory = 'Prediction service error. Please try again.';
             let errorCode = mlResult.error?.code || 'ML_PREDICTION_FAILED';
+            let isWarming = false;
 
             if (mlResult.timeout) {
               errCategory = 'The AI prediction service timed out. Please click Calculate Forecast to retry.';
@@ -167,9 +181,10 @@ export async function getTodayPredictionController(req, res, next) {
             } else if (mlResult.unavailable) {
               errCategory = 'ML prediction service is currently unavailable. Please ensure the service is running.';
               errorCode = 'FASTAPI_UNAVAILABLE';
-            } else if (mlResult.error?.code === 'FASTAPI_SERVICE_WARMING') {
+            } else if (mlResult.error?.code === 'FASTAPI_SERVICE_WARMING' || mlResult.transient) {
               errCategory = 'The AI model service is warming up. Please click Calculate Forecast in a moment.';
               errorCode = 'FASTAPI_SERVICE_WARMING';
+              isWarming = true;
             } else if (mlResult.error?.code === 'FASTAPI_HTTP_ERROR') {
               errCategory = 'The check-in data could not be processed.';
               errorCode = 'FASTAPI_HTTP_ERROR';
@@ -182,8 +197,10 @@ export async function getTodayPredictionController(req, res, next) {
               success: true,
               data: null,
               checkinExists: true,
+              forecastStatus: isWarming ? 'warming' : 'error',
               mlError: errCategory,
               errorCategory: errorCode,
+              canRetry: isWarming || errorCode === 'FASTAPI_TIMEOUT' || errorCode === 'FASTAPI_UNAVAILABLE',
             });
           }
         } catch (genErr) {
@@ -192,8 +209,10 @@ export async function getTodayPredictionController(req, res, next) {
             success: true,
             data: null,
             checkinExists: true,
+            forecastStatus: 'error',
             mlError: 'Error executing risk prediction pipeline.',
             errorCategory: 'PREDICTION_EXECUTION_ERROR',
+            canRetry: true,
           });
         } finally {
           activeInferenceMap.delete(lockKey);
@@ -211,12 +230,15 @@ export async function getTodayPredictionController(req, res, next) {
         success: true,
         data: null,
         checkinExists: false,
+        forecastStatus: 'no_checkin',
       });
     }
 
     return res.status(200).json({
       success: true,
       data: forecast,
+      checkinExists: true,
+      forecastStatus: 'ready',
     });
   } catch (error) {
     next(error);

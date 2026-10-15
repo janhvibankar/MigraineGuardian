@@ -46,24 +46,43 @@ export const predictionService = {
     const res = await apiClient.get(`/predictions/today${query}`);
     if (res.ok) {
       if (res.data) {
-        syncRiskForecastState(res.data);
-        return res.data;
+        const forecastDate = res.data.forecastDate || res.data.date || res.data.id;
+        const isValidDate = !forecastDate || forecastDate === dateQuery;
+        const isValidScore = typeof res.data.score === 'number' && !isNaN(res.data.score);
+
+        if (isValidDate && isValidScore) {
+          syncRiskForecastState(res.data);
+          return res.data;
+        }
       }
+
       // Explicitly clear stale cached forecast if backend returned null for user
       syncRiskForecastState(null);
-      if (res.raw && (res.raw.mlError || res.raw.message)) {
+      if (res.raw && (res.raw.mlError || res.raw.message || res.raw.forecastStatus)) {
         return {
           score: null,
           mlError: res.raw.mlError || res.raw.message,
           errorCategory: res.raw.errorCategory,
+          forecastStatus: res.raw.forecastStatus,
+          canRetry: Boolean(res.raw.canRetry),
           checkinExists: Boolean(res.raw.checkinExists),
         };
       }
       return null;
     }
 
+    // Only return cached forecast if it strictly matches dateQuery and has a valid score
     const cachedForecast = storageService.getItem('migraineguardian_today_forecast', null);
-    return cachedForecast;
+    if (cachedForecast) {
+      const forecastDate = cachedForecast.forecastDate || cachedForecast.date || cachedForecast.id;
+      const isValidDate = !forecastDate || forecastDate === dateQuery;
+      const isValidScore = typeof cachedForecast.score === 'number' && !isNaN(cachedForecast.score);
+      if (isValidDate && isValidScore) {
+        return cachedForecast;
+      }
+      storageService.removeItem('migraineguardian_today_forecast');
+    }
+    return null;
   },
 
   /**

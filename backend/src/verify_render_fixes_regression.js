@@ -372,12 +372,66 @@ async function runRegressionSuite() {
       assert(content.includes('isAiOperation ? 75000 : 30000'), 'apiClient.js must allocate 75000ms for isAiOperation');
     });
 
-    test('checkinController response returns canRetryForecast: true and truthful message when ML is unavailable', () => {
+    test('checkinController persists to Firestore first and returns immediately with forecastPending: true', () => {
       const checkinControllerPath = path.resolve(__dirname, './controllers/checkinController.js');
       const content = fs.readFileSync(checkinControllerPath, 'utf8');
       assert(content.includes('checkinSaved: true'), 'checkinController must confirm checkinSaved: true');
-      assert(content.includes('canRetryForecast: !forecastSaved'), 'checkinController must provide canRetryForecast: !forecastSaved');
-      assert(content.includes('forecastAvailable: forecastSaved'), 'checkinController must truthfully state forecastAvailable: forecastSaved');
+      assert(content.includes('canRetryForecast: true'), 'checkinController must provide canRetryForecast: true');
+      assert(content.includes('forecastPending: true'), 'checkinController must provide forecastPending: true');
+      assert(content.includes('forecastAvailable: false'), 'checkinController must specify forecastAvailable: false on immediate response');
+      assert(content.includes('activeInferenceMap.set(lockKey, asyncPipelinePromise)'), 'checkinController must trigger async prediction in background');
+    });
+
+    test('DailyCheckinPage.jsx prevents duplicate submission and navigates immediately upon save', () => {
+      const pagePath = path.resolve(__dirname, '../../frontend/src/pages/DailyCheckinPage.jsx');
+      const content = fs.readFileSync(pagePath, 'utf8');
+      assert(content.includes('if (isSubmitting) return;'), 'DailyCheckinPage must prevent duplicate submissions');
+      assert(content.includes('setIsSubmitting(true)'), 'DailyCheckinPage must set isSubmitting state');
+      assert(content.includes('navigate(ROUTES.RISK_ANALYSIS)'), 'DailyCheckinPage must navigate to risk analysis on save');
+      assert(content.includes('storageService.removeItem'), 'DailyCheckinPage must clean draft storage on success');
+      assert(content.includes('setServerError(errMsg)'), 'DailyCheckinPage must report error and not claim success if save fails');
+    });
+
+    test('RiskAnalysisPage.jsx decouples check-in loading from prediction evaluation and displays states', () => {
+      const pagePath = path.resolve(__dirname, '../../frontend/src/pages/RiskAnalysisPage.jsx');
+      const content = fs.readFileSync(pagePath, 'utf8');
+      assert(content.includes('initialCheckinLoading'), 'RiskAnalysisPage must track initialCheckinLoading separately');
+      assert(content.includes('isEvaluating'), 'RiskAnalysisPage must track isEvaluating state');
+      assert(content.includes('evaluatePrediction'), 'RiskAnalysisPage must run evaluatePrediction asynchronously');
+      assert(content.includes('inFlightRef'), 'RiskAnalysisPage must prevent concurrent duplicate prediction evaluations');
+      assert(content.includes('checkinRecordedTitle'), 'RiskAnalysisPage must render recorded checkin status banner');
+      assert(content.includes('evaluatePrediction(true)'), 'RiskAnalysisPage must provide working manual retry action');
+    });
+
+    test('predictionController enforces 50s bounded deadline and strict user/date validation', () => {
+      const controllerPath = path.resolve(__dirname, './controllers/predictionController.js');
+      const content = fs.readFileSync(controllerPath, 'utf8');
+      assert(content.includes('deadlineMs: 50000'), 'predictionController must bound on-demand ML deadline to 50000ms');
+      assert(content.includes('forecastDateMatches'), 'predictionController must verify forecastDate matches targetDate');
+      assert(content.includes('forecastScoreValid'), 'predictionController must verify forecast score is a valid number');
+      assert(content.includes("forecastStatus: 'ready'"), 'predictionController must return forecastStatus: ready when valid');
+      assert(content.includes("forecastStatus: isWarming ? 'warming' : 'error'"), 'predictionController must return accurate forecastStatus');
+    });
+
+    test('predictionService.js validates targetDate and numeric score, rejecting stale cross-date forecasts', () => {
+      const servicePath = path.resolve(__dirname, '../../frontend/src/services/predictionService.js');
+      const content = fs.readFileSync(servicePath, 'utf8');
+      assert(content.includes('forecastDate === dateQuery'), 'predictionService must check forecastDate against dateQuery');
+      assert(content.includes("typeof res.data.score === 'number'"), 'predictionService must verify numeric score');
+      assert(content.includes('forecastStatus: res.raw.forecastStatus'), 'predictionService must pass forecastStatus to caller');
+      assert(content.includes('storageService.removeItem'), 'predictionService must evict stale or invalid cached forecasts');
+    });
+
+    test('FastAPI ML service defines /live and /ready endpoints and instruments startup and inference durations', () => {
+      const mainPath = path.resolve(__dirname, '../../ml-service/app/main.py');
+      const predictPath = path.resolve(__dirname, '../../ml-service/app/api/predict.py');
+      const mainContent = fs.readFileSync(mainPath, 'utf8');
+      const predictContent = fs.readFileSync(predictPath, 'utf8');
+
+      assert(mainContent.includes('@app.get("/live")'), 'ml-service main.py must define /live endpoint');
+      assert(mainContent.includes('@app.get("/ready")'), 'ml-service main.py must define /ready endpoint');
+      assert(mainContent.includes('Model loading completed in'), 'ml-service main.py must log model loading duration');
+      assert(predictContent.includes('Risk calculation complete in'), 'ml-service predict.py must log inference duration');
     });
 
     // --- SUITE F: PRODUCTION CORS PREFLIGHT & ORIGIN SECURITY ---

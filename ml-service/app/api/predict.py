@@ -1,3 +1,4 @@
+import time
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
@@ -89,6 +90,7 @@ async def predict_migraine_risk(request: PredictRequest):
             detail=f"ML Model is not loaded. Error: {model_manager.load_error}"
         )
 
+    t_inf_start = time.perf_counter()
     try:
         raw_features = {
             "sleep_hours": float(request.latest_log.sleep_hours),
@@ -107,6 +109,8 @@ async def predict_migraine_risk(request: PredictRequest):
             weather_yesterday=weather_yesterday_dict,
             return_meta=True,
         )
+        inf_duration = time.perf_counter() - t_inf_start
+        print(f"[ML Service] Risk calculation complete in {inf_duration:.3f}s | model={model_used} | score={score:.1f}% | level={level}")
 
         baseline_dict = request.baseline_stats.model_dump() if request.baseline_stats else None
         latest_dict = request.latest_log.model_dump()

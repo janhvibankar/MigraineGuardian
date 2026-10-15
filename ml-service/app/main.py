@@ -1,4 +1,6 @@
+import time
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.services.risk_calculator import model_manager
@@ -8,10 +10,14 @@ from app.api.explain import router as explain_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Load trained scikit-learn model pipeline once into memory
+    t0 = time.perf_counter()
     try:
         model_manager.load_model()
+        duration = time.perf_counter() - t0
+        print(f"[ML Service Startup] Model loading completed in {duration:.3f}s. Service ready.")
     except Exception as e:
-        print(f"[ML Service Startup Warning] Model loading failed: {e}")
+        duration = time.perf_counter() - t0
+        print(f"[ML Service Startup Warning] Model loading failed after {duration:.3f}s: {e}")
     yield
     # Shutdown cleanup if any
     print("[ML Service] Application shutdown complete.")
@@ -28,8 +34,30 @@ app.include_router(predict_router)
 app.include_router(explain_router)
 
 
+@app.get("/live")
+async def liveness_check():
+    """
+    Liveness check: returns HTTP 200 indicating the FastAPI process is running.
+    """
+    return JSONResponse(status_code=200, content={"status": "alive", "service": "migraine-ml-service"})
 
-from fastapi.responses import JSONResponse
+
+@app.get("/ready")
+async def readiness_check():
+    """
+    Readiness check: distinguishes process availability from model readiness.
+    Returns HTTP 200 only when models are loaded and ready to accept inference requests.
+    """
+    is_ready = bool(model_manager.is_loaded)
+    return JSONResponse(
+        status_code=200 if is_ready else 503,
+        content={
+            "status": "ready" if is_ready else "not_ready",
+            "model_loaded": is_ready,
+            "load_error": model_manager.load_error if not is_ready else None,
+        }
+    )
+
 
 @app.get("/health")
 async def health_check(check_inference: bool = False):

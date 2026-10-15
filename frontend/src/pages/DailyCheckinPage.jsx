@@ -437,6 +437,7 @@ export function DailyCheckinPage() {
 
   const handleSave = async (e) => {
     e?.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setServerError(null);
 
@@ -484,17 +485,22 @@ export function DailyCheckinPage() {
       historical_summary: historicalSummary || null,
     };
 
-    const res = await trackingService.saveDailyCheckin(logData);
-    setIsSubmitting(false);
+    try {
+      const res = await trackingService.saveDailyCheckin(logData);
+      setIsSubmitting(false);
 
-    if (res && res.error) {
-      const errMsg = Array.isArray(res.error.details)
-        ? res.error.details.join(' ')
-        : res.error.message || 'Error saving check-in.';
-      setServerError(errMsg);
-    } else {
-      storageService.removeItem('daily_checkin_draft');
-      navigate(ROUTES.RISK_ANALYSIS);
+      if (res && res.error) {
+        const errMsg = Array.isArray(res.error.details)
+          ? res.error.details.join(' ')
+          : res.error.message || 'Error saving check-in.';
+        setServerError(errMsg);
+      } else {
+        storageService.removeItem('daily_checkin_draft');
+        navigate(ROUTES.RISK_ANALYSIS);
+      }
+    } catch (saveErr) {
+      setIsSubmitting(false);
+      setServerError(saveErr.message || 'Error submitting check-in.');
     }
   };
 
