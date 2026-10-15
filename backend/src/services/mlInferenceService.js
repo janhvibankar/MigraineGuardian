@@ -247,24 +247,33 @@ export const mlInferenceService = {
    * Sends prediction & XAI request to FastAPI POST /predict.
    *
    * Features:
-   *  - Total bounded deadline (75s default)
-   *  - Automatic retry for cold-start 502/503/504/524 and connection refused
-   *  - Immediate return on success or non-retryable client error (e.g. 400, 422)
+   *  - Total bounded deadline (75s default or shorter request-specific deadline)
+   *  - Automatic bounded exponential backoff for cold-start 502/503/504 and connection refused
+   *  - Immediate return on success or non-retryable client error (e.g. 400, 422, invalid schema)
    *  - Structured logging with safe host and elapsed timings
    *
    * @param {Object} mlPayload  { user_id, latest_log, baseline_stats, recent_episodes_count_7d, ... }
    * @param {string} [overrideUrl]  Optional override for testing
+   * @param {Object} [options]  Optional parameters { deadlineMs?: number }
    * @returns {Promise<{success, data?, error?, unavailable?, timeout?, transient?, elapsedMs?}>}
    */
-  predictMigraineRisk: async (mlPayload, overrideUrl = null) => {
+  predictMigraineRisk: async (mlPayload, overrideUrl = null, options = {}) => {
     const baseUrl = getMlServiceUrl(overrideUrl);
     const safeHost = sanitizeUrl(baseUrl);
     const fullUrl = `${baseUrl}/predict`;
     const pipelineStartTime = Date.now();
+    const effectiveDeadlineMs = Math.min(
+      TOTAL_DEADLINE_MS,
+      (options && options.deadlineMs) || TOTAL_DEADLINE_MS
+    );
 
-    for (let attempt = 1; attempt <= RETRY_MAX; attempt++) {
+    let lastResult = null;
+    let attempt = 0;
+
+    while (true) {
+      attempt++;
       const elapsedSoFar = Date.now() - pipelineStartTime;
-      const remainingTime = TOTAL_DEADLINE_MS - elapsedSoFar;
+      const remainingTime = effectiveDeadlineMs - elapsedSoFar;
 
       if (remainingTime <= 2000) {
         logMlEvent({
@@ -272,16 +281,23 @@ export const mlInferenceService = {
           safeHost,
           elapsedMs: elapsedSoFar,
           attempt,
-          maxAttempts: RETRY_MAX,
-          error: `Total operation deadline of ${TOTAL_DEADLINE_MS}ms reached`,
+          maxAttempts: attempt,
+          error: `Total operation deadline of ${effectiveDeadlineMs}ms reached`,
         });
 
+        const wasWarming = lastResult?.transient || lastResult?.error?.code === 'FASTAPI_SERVICE_WARMING';
         return {
           success: false,
-          timeout: true,
+          timeout: !wasWarming,
+          unavailable: false,
+          transient: wasWarming,
+          elapsedMs: elapsedSoFar,
           error: {
-            code: 'FASTAPI_TIMEOUT',
-            message: `ML service request exceeded total deadline of ${TOTAL_DEADLINE_MS}ms.`,
+            code: wasWarming ? 'FASTAPI_SERVICE_WARMING' : 'FASTAPI_TIMEOUT',
+            message: wasWarming
+              ? 'The AI model service is warming up. Please click Calculate Forecast in a moment.'
+              : `ML service request exceeded total deadline of ${effectiveDeadlineMs}ms.`,
+            details: lastResult?.error?.details || null,
           },
         };
       }
@@ -295,49 +311,62 @@ export const mlInferenceService = {
         mlPayload,
         attemptTimeoutMs,
         attempt,
-        RETRY_MAX
+        'adaptive'
       );
+      lastResult = result;
 
       // If successful, return immediately
       if (result.success) {
         return result;
       }
 
-      // Non-retryable errors (400, 422 validation, 404, 401, 403) fail immediately
+      // Non-retryable errors (400, 422 validation, 404, 401, 403, invalid schema) fail immediately
       const isRetryable =
         result.unavailable ||
         result.transient ||
-        (result.timeout && attempt < RETRY_MAX && (Date.now() - pipelineStartTime) < TOTAL_DEADLINE_MS - 5000);
+        (result.timeout && (Date.now() - pipelineStartTime) < effectiveDeadlineMs - 5000);
 
       if (!isRetryable) {
         return result;
       }
 
-      // If attempts remain, compute exponential backoff delay and wait
-      if (attempt < RETRY_MAX) {
-        const delay = Math.min(
-          INITIAL_RETRY_DELAY_MS * Math.pow(1.5, attempt - 1),
-          5000
-        );
+      const currentElapsed = Date.now() - pipelineStartTime;
 
-        const currentElapsed = Date.now() - pipelineStartTime;
-        if (currentElapsed + delay >= TOTAL_DEADLINE_MS - 2000) {
-          // Not enough budget to wait and retry
-          break;
-        }
-
+      // Connection refused (port completely closed/offline) fails fast after 3 attempts;
+      // Transient 502/503/504 (Render container spinning up) retries across the full deadline
+      if (result.unavailable && !result.transient && attempt >= 3) {
         logMlEvent({
-          stage: 'RETRYING',
+          stage: 'CONN_REFUSED_EXHAUSTED',
           safeHost,
-          status: result.status,
           elapsedMs: currentElapsed,
           attempt,
-          maxAttempts: RETRY_MAX,
-          error: `Retrying after ${Math.round(delay)}ms (${result.error?.code || 'transient error'})...`,
+          maxAttempts: attempt,
+          error: 'Connection refused after 3 attempts; service is not running on target port.',
         });
-
-        await sleep(delay);
+        break;
       }
+
+      // Compute bounded exponential backoff delay (2s, 3s, 4.5s, max 5s)
+      const delay = Math.min(
+        INITIAL_RETRY_DELAY_MS * Math.pow(1.5, attempt - 1),
+        5000
+      );
+      if (currentElapsed + delay >= effectiveDeadlineMs - 2000) {
+        // Not enough budget to wait and retry
+        break;
+      }
+
+      logMlEvent({
+        stage: 'RETRYING',
+        safeHost,
+        status: result.status,
+        elapsedMs: currentElapsed,
+        attempt,
+        maxAttempts: 'adaptive',
+        error: `Retrying after ${Math.round(delay)}ms (${result.error?.code || 'transient error'})...`,
+      });
+
+      await sleep(delay);
     }
 
     const totalElapsedMs = Date.now() - pipelineStartTime;
@@ -345,17 +374,24 @@ export const mlInferenceService = {
       stage: 'ALL_ATTEMPTS_EXHAUSTED',
       safeHost,
       elapsedMs: totalElapsedMs,
-      attempt: RETRY_MAX,
-      maxAttempts: RETRY_MAX,
-      error: `All ${RETRY_MAX} attempts exhausted or deadline exceeded`,
+      attempt,
+      maxAttempts: attempt,
+      error: `All attempts exhausted or deadline (${effectiveDeadlineMs}ms) exceeded`,
     });
+
+    const isWarming = lastResult?.transient || lastResult?.error?.code === 'FASTAPI_SERVICE_WARMING';
 
     return {
       success: false,
-      unavailable: true,
+      unavailable: !isWarming,
+      transient: isWarming,
+      elapsedMs: totalElapsedMs,
       error: {
-        code: 'FASTAPI_UNAVAILABLE',
-        message: 'Unable to connect to FastAPI ML microservice after retries. Ensure ML service is running.',
+        code: isWarming ? 'FASTAPI_SERVICE_WARMING' : (lastResult?.error?.code || 'FASTAPI_UNAVAILABLE'),
+        message: isWarming
+          ? 'The AI model service is warming up. Please click Calculate Forecast in a moment.'
+          : (lastResult?.error?.message || 'Unable to connect to FastAPI ML microservice. Ensure ML service is running.'),
+        details: lastResult?.error?.details || null,
       },
     };
   },

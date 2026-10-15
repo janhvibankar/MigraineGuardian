@@ -92,7 +92,7 @@ async function request(endpoint, options = {}) {
 
   const executeCall = async () => {
     const token = await getAuthToken();
-    const isAiOperation = url.includes('/predictions') || url.includes('/chat');
+    const isAiOperation = url.includes('/predictions') || url.includes('/chat') || url.includes('/checkins');
     const timeoutMs = options.timeoutMs || (isAiOperation ? 75000 : 30000);
     const controller = new AbortController();
     const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);

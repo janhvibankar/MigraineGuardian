@@ -174,7 +174,7 @@ export async function submitDailyCheckinController(req, res, next) {
 
     try {
       console.log(`[CHECKIN] Running ML inference for User: ${userPrefix}... | Date: ${date}`);
-      mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+      mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, { deadlineMs: 25000 });
 
       if (mlResult.success && mlResult.data) {
         try {
@@ -201,12 +201,15 @@ export async function submitDailyCheckinController(req, res, next) {
     return res.status(200).json({
       success: true,
       timestamp: new Date().toISOString(),
-      message: forecastSaved ? 'Check-in and risk forecast recorded.' : 'Check-in recorded; ML prediction service unavailable.',
+      message: forecastSaved
+        ? 'Check-in and risk forecast recorded.'
+        : 'Daily check-in saved. AI risk prediction is deferred; click Calculate Forecast on the next screen to generate your estimate.',
       entry: result.entry,
       checkinSaved: true,
       forecastAvailable: forecastSaved,
       forecast: forecastDoc,
-      mlWarning: !forecastSaved ? (mlResult.error?.message || 'ML prediction service unavailable') : null,
+      mlWarning: !forecastSaved ? (mlResult?.error?.message || 'ML prediction service is warming up') : null,
+      canRetryForecast: !forecastSaved,
     });
   } catch (error) {
     next(error);

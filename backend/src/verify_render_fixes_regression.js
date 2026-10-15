@@ -7,7 +7,7 @@ import app from './app.js';
 import { calculatePssScore, getScoreInterpretation } from './controllers/pssController.js';
 import { getRagServiceUrl } from './controllers/chatController.js';
 import { activeInferenceMap } from './controllers/predictionController.js';
-import { getMlServiceUrl } from './services/mlInferenceService.js';
+import { getMlServiceUrl, mlInferenceService } from './services/mlInferenceService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -269,6 +269,115 @@ async function runRegressionSuite() {
       assert.strictEqual(res.statusCode, 400);
       assert.strictEqual(res.body.success, false);
       assert(res.body.error.message.includes('required'));
+    });
+
+    // --- SUITE E: COLD-START RECOVERY, DEADLINE EXHAUSTION & CHECKIN RESILIENCE ---
+    console.log('\n--- SUITE E: Cold-Start Recovery & Check-in Resilience ---');
+
+    await testAsync('mlInferenceService recovers from cold-start 502/503 responses and returns prediction', async () => {
+      let attempts = 0;
+      const mockServer = http.createServer((req, res) => {
+        attempts++;
+        if (attempts <= 2) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Bad Gateway - Container starting' }));
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ score: 72.5, level: 'High' }));
+        }
+      });
+
+      await new Promise((resolve) => mockServer.listen(0, resolve));
+      const mockPort = mockServer.address().port;
+      const mockUrl = `http://127.0.0.1:${mockPort}`;
+
+      try {
+        const dummyPayload = {
+          user_id: 'test_recovery_user',
+          latest_log: { sleep_hours: 6.5, sleep_quality: 3, daily_stress: 5, mood: 3, screen_time: 4, hydration: 2 },
+          recent_episodes_count_7d: 0,
+        };
+
+        const result = await mlInferenceService.predictMigraineRisk(dummyPayload, mockUrl);
+        assert.strictEqual(result.success, true, 'Result should succeed after recovery');
+        assert.strictEqual(result.data.score, 72.5, 'Score should match recovered response');
+        assert.strictEqual(attempts, 3, 'Should have made 3 attempts (2 failures + 1 recovery)');
+      } finally {
+        mockServer.close();
+      }
+    });
+
+    await testAsync('mlInferenceService respects total deadline on persistent 502 and returns FASTAPI_SERVICE_WARMING', async () => {
+      const mockServer = http.createServer((req, res) => {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Bad Gateway - Container starting' }));
+      });
+
+      await new Promise((resolve) => mockServer.listen(0, resolve));
+      const mockPort = mockServer.address().port;
+      const mockUrl = `http://127.0.0.1:${mockPort}`;
+
+      try {
+        const dummyPayload = {
+          user_id: 'test_deadline_user',
+          latest_log: { sleep_hours: 6.5, sleep_quality: 3, daily_stress: 5, mood: 3, screen_time: 4, hydration: 2 },
+          recent_episodes_count_7d: 0,
+        };
+
+        const t0 = Date.now();
+        const result = await mlInferenceService.predictMigraineRisk(dummyPayload, mockUrl, { deadlineMs: 2500 });
+        const elapsed = Date.now() - t0;
+
+        assert.strictEqual(result.success, false, 'Should fail gracefully when deadline exceeded');
+        assert.strictEqual(result.transient, true, 'Should mark result as transient');
+        assert.strictEqual(result.error.code, 'FASTAPI_SERVICE_WARMING', 'Error code should be FASTAPI_SERVICE_WARMING');
+        assert(elapsed <= 4000, `Elapsed time (${elapsed}ms) should respect deadline budget`);
+      } finally {
+        mockServer.close();
+      }
+    });
+
+    await testAsync('mlInferenceService fails immediately on non-retryable 422 client error without retries', async () => {
+      let attempts = 0;
+      const mockServer = http.createServer((req, res) => {
+        attempts++;
+        res.writeHead(422, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ detail: 'Unprocessable Entity - invalid input' }));
+      });
+
+      await new Promise((resolve) => mockServer.listen(0, resolve));
+      const mockPort = mockServer.address().port;
+      const mockUrl = `http://127.0.0.1:${mockPort}`;
+
+      try {
+        const dummyPayload = {
+          user_id: 'test_422_user',
+          latest_log: { sleep_hours: 6.5, sleep_quality: 3, daily_stress: 5, mood: 3, screen_time: 4, hydration: 2 },
+          recent_episodes_count_7d: 0,
+        };
+
+        const result = await mlInferenceService.predictMigraineRisk(dummyPayload, mockUrl);
+        assert.strictEqual(result.success, false);
+        assert.strictEqual(result.status, 422);
+        assert.strictEqual(attempts, 1, 'Non-retryable 422 must not be retried');
+      } finally {
+        mockServer.close();
+      }
+    });
+
+    test('apiClient.js allocates 75s timeout for /checkins alongside /predictions and /chat', () => {
+      const apiClientPath = path.resolve(__dirname, '../../frontend/src/services/apiClient.js');
+      const content = fs.readFileSync(apiClientPath, 'utf8');
+      assert(content.includes("url.includes('/checkins')"), 'apiClient.js must include /checkins in longer timeout classification');
+      assert(content.includes('isAiOperation ? 75000 : 30000'), 'apiClient.js must allocate 75000ms for isAiOperation');
+    });
+
+    test('checkinController response returns canRetryForecast: true and truthful message when ML is unavailable', () => {
+      const checkinControllerPath = path.resolve(__dirname, './controllers/checkinController.js');
+      const content = fs.readFileSync(checkinControllerPath, 'utf8');
+      assert(content.includes('checkinSaved: true'), 'checkinController must confirm checkinSaved: true');
+      assert(content.includes('canRetryForecast: !forecastSaved'), 'checkinController must provide canRetryForecast: !forecastSaved');
+      assert(content.includes('forecastAvailable: forecastSaved'), 'checkinController must truthfully state forecastAvailable: forecastSaved');
     });
   } finally {
     if (server) {
