@@ -49,6 +49,7 @@ export const pssService = {
         success: false,
         score: calculatedScore,
         error: res.error,
+        localSaved: true,
       };
     }
 

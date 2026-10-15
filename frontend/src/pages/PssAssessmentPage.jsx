@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
@@ -26,6 +26,7 @@ import {
   Heart,
   UserPlus,
   LogIn,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 
@@ -77,6 +78,43 @@ export function PssAssessmentPage() {
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState(null);
+  const [isLoadingExisting, setIsLoadingExisting] = useState(false);
+
+  // Restore existing assessment on mount so score persists across page refreshes
+  useEffect(() => {
+    let isMounted = true;
+    async function loadExistingAssessment() {
+      if (!authService.isAuthenticated()) {
+        const guestData = authService.getGuestOnboarding();
+        if (guestData?.pssScore !== undefined && isMounted) {
+          if (guestData.pssAnswers) setAnswers(guestData.pssAnswers);
+          setIsCompleted(true);
+        }
+        return;
+      }
+
+      setIsLoadingExisting(true);
+      try {
+        const latest = await pssService.getLatestAssessment();
+        if (isMounted && latest && latest.score !== undefined && latest.score !== null) {
+          if (latest.answers && typeof latest.answers === 'object') {
+            setAnswers(latest.answers);
+          }
+          setIsCompleted(true);
+        }
+      } catch (err) {
+        console.warn('[PssAssessmentPage] Error restoring assessment record:', err.message);
+      } finally {
+        if (isMounted) setIsLoadingExisting(false);
+      }
+    }
+
+    loadExistingAssessment();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const currentQ = pssQuestions[currentQuestionIndex];
   const currentQNum = currentQ.id;
@@ -116,9 +154,16 @@ export function PssAssessmentPage() {
       if (res && res.error) {
         const errMsg = Array.isArray(res.error.details)
           ? res.error.details.join(' ')
-          : res.error.message || 'Error submitting assessment.';
-        setServerError(errMsg);
+          : res.error.message || 'Error submitting assessment to server.';
+        // If local score was saved despite backend error, show completion view with explicit notice
+        if (res.localSaved) {
+          setIsCompleted(true);
+          setServerError(`Assessment completed locally. Note: Could not sync to cloud database (${errMsg}).`);
+        } else {
+          setServerError(errMsg);
+        }
       } else {
+        setServerError(null);
         setIsCompleted(true);
       }
     } else {
@@ -136,6 +181,7 @@ export function PssAssessmentPage() {
   const handleRetake = () => {
     setCurrentQuestionIndex(0);
     setIsCompleted(false);
+    setServerError(null);
   };
 
   const calculatedScore = calculatePssScore(answers);
@@ -195,6 +241,13 @@ export function PssAssessmentPage() {
         badge={isAuthenticated ? t('pss.badgeValidated') : t('pss.badgePublic')}
         actions={renderTopActions()}
       />
+
+      {serverError && (
+        <div className="p-4 rounded-[16px] bg-alert-muted/15 border border-alert-muted/40 text-brand-dark flex items-center gap-3 animate-in fade-in duration-200">
+          <AlertCircle className="w-5 h-5 text-[#8F443B] flex-shrink-0" />
+          <span className="font-semibold text-meta-md">{serverError}</span>
+        </div>
+      )}
 
       {!isCompleted ? (
         /* =========================================================================

@@ -37,7 +37,8 @@ function sleep(ms) {
  */
 export function getMlServiceUrl(overrideUrl = null) {
   const rawUrl = overrideUrl || process.env.ML_SERVICE_URL || process.env.FASTAPI_BASE_URL || 'http://127.0.0.1:8000';
-  return rawUrl.trim().replace(/\/+$/, '');
+  const clean = rawUrl.trim().replace(/\/+$/, '');
+  return clean.replace(/\/predict\/?$/, '');
 }
 
 /**

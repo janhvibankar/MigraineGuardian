@@ -2,10 +2,19 @@ import { auth } from '../config/firebase.js';
 
 const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (process.env || {});
 
-// IMPORTANT: In production, VITE_API_BASE_URL must be set as a Render build environment variable
-// (e.g. https://migraineguardian-backend.onrender.com/api) — Vite bakes it into the bundle at build time.
-// In dev, falls back to http://localhost:5001/api; in prod without the env var, falls back to /api.
-const API_BASE_URL = env.VITE_API_BASE_URL || (env.DEV ? 'http://localhost:5001/api' : '/api');
+// Resolve and normalize API_BASE_URL
+// 1. In dev mode without env var -> http://localhost:5001/api
+// 2. In prod mode without env var -> https://migraineguardian-backend.onrender.com/api (never bare /api on static host)
+// 3. If env var is provided without /api (e.g. https://migraineguardian-backend.onrender.com), automatically append /api
+function resolveApiBaseUrl() {
+  const configured = env.VITE_API_BASE_URL ? env.VITE_API_BASE_URL.trim().replace(/\/+$/, '') : '';
+  if (configured) {
+    return configured.endsWith('/api') ? configured : `${configured}/api`;
+  }
+  return env.DEV ? 'http://localhost:5001/api' : 'https://migraineguardian-backend.onrender.com/api';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 // In-flight Promise deduplication map for GET requests (prevents thundering herd on mount)
 const inFlightGetRequests = new Map();
@@ -83,7 +92,8 @@ async function request(endpoint, options = {}) {
 
   const executeCall = async () => {
     const token = await getAuthToken();
-    const timeoutMs = options.timeoutMs || (url.includes('/predictions') ? 45000 : 30000);
+    const isAiOperation = url.includes('/predictions') || url.includes('/chat');
+    const timeoutMs = options.timeoutMs || (isAiOperation ? 75000 : 30000);
     const controller = new AbortController();
     const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
     

@@ -28,7 +28,9 @@ const corsOptions = {
       rawOrigins.includes('*') ||
       rawOrigins.includes(cleanOrigin) ||
       defaultDevOrigins.includes(cleanOrigin) ||
-      /^https:\/\/migraineguardian.*\.vercel\.app$/.test(cleanOrigin)
+      /^https:\/\/migraineguardian.*\.vercel\.app$/.test(cleanOrigin) ||
+      /^https:\/\/migraineguardian.*\.onrender\.com$/.test(cleanOrigin) ||
+      /^https:\/\/.*migraineguardian.*\.onrender\.com$/.test(cleanOrigin)
     ) {
       return callback(null, true);
     }
@@ -66,8 +68,8 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health Check Endpoint (Public & Readiness Aware)
-app.get('/api/health', (req, res) => {
+// Health Check Endpoint (Public & Readiness Aware) — supports both /health and /api/health
+app.get(['/health', '/api/health'], (req, res) => {
   const firebaseReady = Boolean(db);
   const isHealthy = firebaseReady;
   res.status(isHealthy ? 200 : 503).json({
@@ -86,7 +88,7 @@ import { getMlServiceUrl, sanitizeUrl } from './services/mlInferenceService.js';
 
 // ML Service Health Proxy (Public) — proxies FastAPI /health, no auth required
 // Dynamically resolves ML URL via getMlServiceUrl() and handles cold starts / verification
-app.get('/api/ml-health', async (req, res) => {
+app.get(['/ml-health', '/api/ml-health'], async (req, res) => {
   const mlBase = getMlServiceUrl();
   const safeHost = sanitizeUrl(mlBase);
 
@@ -166,7 +168,7 @@ app.get('/api/ml-health', async (req, res) => {
 });
 
 // RAG Chatbot Service Health Proxy (Public) — proxies external RAG /health without browser CORS issues
-app.get(['/api/chat-health', '/api/rag-health'], async (req, res) => {
+app.get(['/chat-health', '/rag-health', '/api/chat-health', '/api/rag-health'], async (req, res) => {
   const rawUrl = process.env.RAG_SERVICE_URL || 'https://migraine-rag-chatbot.onrender.com';
   const ragBase = rawUrl.replace(/\/api\/chat\/?$/, '').replace(/\/+$/, '');
   const safeHost = sanitizeUrl(ragBase);

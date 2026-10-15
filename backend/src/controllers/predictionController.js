@@ -39,7 +39,7 @@ export function buildNormalizedMlPayload(userId, checkinData, baselineStats, rec
 }
 
 // Per-user in-flight promise map to prevent race conditions and duplicate ML inference
-const activeInferenceMap = new Map();
+export const activeInferenceMap = new Map();
 
 export async function getTodayPredictionController(req, res, next) {
   const startTime = Date.now();

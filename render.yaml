@@ -1,0 +1,17 @@
+services:
+  # MigraineGuardian React + Vite SPA Frontend (Render Static Site)
+  - type: web
+    name: migraineguardian-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://migraineguardian-backend.onrender.com/api
+    routes:
+      # Single Page Application (SPA) rewrite rule:
+      # Serves index.html for all client-side routes (e.g. /chat, /dashboard, /checkin, /pss-assessment)
+      # Precedence: physical assets (like /assets/*, /favicon.svg) are automatically served first.
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -1,7 +1,18 @@
 import { firestoreService } from '../services/firestoreService.js';
 
-const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'https://migraine-rag-chatbot.onrender.com/api/chat';
-const RAG_TIMEOUT_MS = 45000;
+export function getRagServiceUrl() {
+  const rawUrl = process.env.RAG_SERVICE_URL || 'https://migraine-rag-chatbot.onrender.com/api/chat';
+  const clean = rawUrl.trim().replace(/\/+$/, '');
+  if (!clean.endsWith('/api/chat')) {
+    if (clean.endsWith('/api')) {
+      return `${clean}/chat`;
+    }
+    return `${clean}/api/chat`;
+  }
+  return clean;
+}
+
+const RAG_TIMEOUT_MS = 60000;
 
 export async function listChatSessionsController(req, res, next) {
   try {
@@ -125,8 +136,9 @@ export async function proxyChatMessageController(req, res, next) {
       const timer = setTimeout(() => controller.abort(), RAG_TIMEOUT_MS);
 
       try {
-        console.log(`[RAG Proxy] Calling external RAG service (attempt ${attempt}/${maxAttempts}): ${RAG_SERVICE_URL}`);
-        const ragRes = await fetch(RAG_SERVICE_URL, {
+        const ragUrl = getRagServiceUrl();
+        console.log(`[RAG Proxy] Calling external RAG service (attempt ${attempt}/${maxAttempts}): ${ragUrl}`);
+        const ragRes = await fetch(ragUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

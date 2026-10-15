@@ -1,6 +1,6 @@
 import { firestoreService } from '../services/firestoreService.js';
 import { mlInferenceService } from '../services/mlInferenceService.js';
-import { buildNormalizedMlPayload } from './predictionController.js';
+import { buildNormalizedMlPayload, activeInferenceMap } from './predictionController.js';
 
 export async function submitDailyCheckinController(req, res, next) {
   try {
@@ -160,27 +160,42 @@ export async function submitDailyCheckinController(req, res, next) {
       weatherYesterdayBlock
     );
 
-    // 5. Send request to FastAPI ML service (/predict)
-    console.log(`[CHECKIN] Running ML inference for User: ${userPrefix}... | Date: ${date}`);
-    const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+    // 5. Send request to FastAPI ML service (/predict) with activeInferenceMap lock
+    const lockKey = `${userId}_${date}`;
+    let pipelineResolver;
+    const pipelinePromise = new Promise((resolve) => {
+      pipelineResolver = resolve;
+    });
+    activeInferenceMap.set(lockKey, pipelinePromise);
 
     let forecastDoc = null;
     let forecastSaved = false;
+    let mlResult = null;
 
-    if (mlResult.success && mlResult.data) {
-      try {
-        const forecastSaveResult = await firestoreService.saveRiskForecast(userId, date, mlResult.data);
-        forecastDoc = forecastSaveResult.forecast;
-        forecastSaved = true;
-        const totalElapsed = Date.now() - startTime;
-        console.log(
-          `[CHECKIN] Success: score=${forecastDoc.score}%, level=${forecastDoc.level} | ForecastSaved: true | Elapsed: ${totalElapsed}ms`
-        );
-      } catch (persistErr) {
-        console.error(`[CHECKIN] Firestore forecast persistence failure:`, persistErr.message);
+    try {
+      console.log(`[CHECKIN] Running ML inference for User: ${userPrefix}... | Date: ${date}`);
+      mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+
+      if (mlResult.success && mlResult.data) {
+        try {
+          const forecastSaveResult = await firestoreService.saveRiskForecast(userId, date, mlResult.data);
+          forecastDoc = forecastSaveResult.forecast;
+          forecastSaved = true;
+          const totalElapsed = Date.now() - startTime;
+          console.log(
+            `[CHECKIN] Success: score=${forecastDoc.score}%, level=${forecastDoc.level} | ForecastSaved: true | Elapsed: ${totalElapsed}ms`
+          );
+        } catch (persistErr) {
+          console.error(`[CHECKIN] Firestore forecast persistence failure:`, persistErr.message);
+        }
+      } else {
+        console.warn(`[CHECKIN] ML prediction deferred or unavailable:`, mlResult.error?.message || 'ML service unavailable');
       }
-    } else {
-      console.warn(`[CHECKIN] ML prediction deferred or unavailable:`, mlResult.error?.message || 'ML service unavailable');
+    } finally {
+      activeInferenceMap.delete(lockKey);
+      if (typeof pipelineResolver === 'function') {
+        pipelineResolver();
+      }
     }
 
     return res.status(200).json({
