@@ -106,19 +106,28 @@ export function DashboardPage() {
 
     async function loadDashboardData() {
       try {
-        const [forecastData, logData, summaryData, insightsData] = await Promise.all([
+        // Priority 1: Fetch core daily checkin & forecast concurrently (critical path for rendering UI)
+        const [forecastData, logData] = await Promise.all([
           predictionService.getTodayPrediction(),
           trackingService.fetchTodayLog(),
-          reportService.getReportSummary('weekly'),
-          insightsService.getWeeklyInsights(),
         ]);
 
         if (isMounted) {
           setPrediction(forecastData);
           setTodayLog(logData);
+          setLoading(false); // Unblock main dashboard render immediately
+        }
+
+        // Priority 2: Fetch history once and compute background summary / insights without re-fetching
+        const logs = await trackingService.getDailyLogs(7);
+        const [summaryData, insightsData] = await Promise.all([
+          reportService.getReportSummary('weekly', { logs, todayLog: logData, prediction: forecastData }),
+          insightsService.getWeeklyInsights({ logs, prediction: forecastData }),
+        ]);
+
+        if (isMounted) {
           setReportSummary(summaryData);
           setWeeklyInsights(insightsData);
-          setLoading(false);
         }
       } catch (err) {
         console.warn('[DashboardPage] Error loading user dashboard data:', err.message);

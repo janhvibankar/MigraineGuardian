@@ -5,9 +5,11 @@ export const insightsService = {
   /**
    * Dynamically retrieves weekly pattern insights computed from current user's actual check-in records.
    */
-  getWeeklyInsights: async () => {
-    const logs = await trackingService.getDailyLogs(7);
-    const prediction = await predictionService.getTodayPrediction();
+  getWeeklyInsights: async (preloaded = null) => {
+    const logs = preloaded?.logs || (await trackingService.getDailyLogs(7));
+    const prediction = preloaded?.prediction !== undefined
+      ? preloaded.prediction
+      : (await predictionService.getTodayPrediction());
 
     if (!logs || logs.length === 0) {
       return {

@@ -21,15 +21,21 @@ export const reportService = {
    * Dynamically generates report summary metrics and historical risk trajectory
    * strictly from authenticated user's check-in logs and forecasts.
    */
-  getReportSummary: async (timeframe = 'weekly') => {
+  getReportSummary: async (timeframe = 'weekly', preloaded = null) => {
     const daysLimit = timeframe === 'monthly' ? 30 : 7;
     const periodLabel = formatPeriodLabel(daysLimit);
 
     // Fetch existing historical logs, today's log, forecast and latest PSS assessment
-    let logs = await trackingService.getDailyLogs(daysLimit);
-    const todayLog = (await trackingService.fetchTodayLog()) || trackingService.getTodayLog();
-    const prediction = await predictionService.getTodayPrediction();
-    const latestPss = await pssService.getLatestAssessment();
+    let logs = preloaded?.logs || (await trackingService.getDailyLogs(daysLimit));
+    const todayLog = preloaded?.todayLog !== undefined
+      ? preloaded.todayLog
+      : ((await trackingService.fetchTodayLog()) || trackingService.getTodayLog());
+    const prediction = preloaded?.prediction !== undefined
+      ? preloaded.prediction
+      : (await predictionService.getTodayPrediction());
+    const latestPss = preloaded?.latestPss !== undefined
+      ? preloaded.latestPss
+      : (await pssService.getLatestAssessment());
 
     // Ensure today's log is included in the reporting array if not already present
     if (todayLog && todayLog.date) {

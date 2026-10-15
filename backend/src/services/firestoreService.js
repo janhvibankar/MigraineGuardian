@@ -129,6 +129,10 @@ export const firestoreService = {
       migraine_severity: isMigraine ? safeNum(logData.migraine_severity ?? logData.migraineSeverity, 0) : null,
       migraine_duration: isMigraine ? String(logData.migraine_duration ?? logData.migraineDuration ?? '') : null,
       symptoms: isMigraine && Array.isArray(logData.symptoms ?? logData.migraineSymptoms) ? (logData.symptoms ?? logData.migraineSymptoms) : [],
+      location: logData.location || null,
+      weather: logData.weather || logData.weatherData || null,
+      weather_mode: logData.weather_mode || logData.weatherMode || null,
+      historical_summary: logData.historical_summary || logData.historicalSummary || null,
       updatedAt: new Date().toISOString(),
     };
 
@@ -138,6 +142,15 @@ export const firestoreService = {
     }
 
     await checkinRef.set(checkinDoc, { merge: true });
+
+    // Sync weather record under users/{userId}/weather_records/{date} if weather was provided
+    if (checkinDoc.weather && typeof checkinDoc.weather === 'object') {
+      try {
+        await firestoreService.saveWeatherRecord(userId, date, checkinDoc.weather);
+      } catch (wErr) {
+        console.warn('[firestoreService] Non-blocking weather record sync in checkin:', wErr.message);
+      }
+    }
 
     // Store migraine episode details in subcollection if migraine occurred
     if (isMigraine) {

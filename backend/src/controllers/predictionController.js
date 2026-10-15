@@ -38,6 +38,9 @@ export function buildNormalizedMlPayload(userId, checkinData, baselineStats, rec
   return payload;
 }
 
+// Per-user in-flight promise map to prevent race conditions and duplicate ML inference
+const activeInferenceMap = new Map();
+
 export async function getTodayPredictionController(req, res, next) {
   const startTime = Date.now();
   try {
@@ -45,8 +48,17 @@ export async function getTodayPredictionController(req, res, next) {
     const targetDate = req.query.date || new Date().toLocaleDateString('en-CA');
     const forceRecalculate = req.query.recalculate === 'true' || req.query.force === 'true';
     const userPrefix = String(userId).slice(0, 8);
+    const lockKey = `${userId}_${targetDate}`;
 
     console.log(`[PREDICTION-GET] User: ${userPrefix}... | Date: ${targetDate} | ForceRecalc: ${forceRecalculate}`);
+
+    // If an on-demand calculation is already in-flight for this user and date, await it to avoid thundering herd
+    if (!forceRecalculate && activeInferenceMap.has(lockKey)) {
+      console.log(`[PREDICTION-GET] User: ${userPrefix}... | Awaiting in-flight ML pipeline for ${targetDate}`);
+      try {
+        await activeInferenceMap.get(lockKey);
+      } catch (_) {}
+    }
 
     let forecast = forceRecalculate ? null : await firestoreService.getLatestRiskForecast(userId, targetDate);
 
@@ -57,6 +69,12 @@ export async function getTodayPredictionController(req, res, next) {
 
       if (todayCheckin) {
         console.log(`[PREDICTION-GET] Running on-demand ML pipeline for ${targetDate}...`);
+        let pipelineResolver;
+        const pipelinePromise = new Promise((resolve) => {
+          pipelineResolver = resolve;
+        });
+        activeInferenceMap.set(lockKey, pipelinePromise);
+
         try {
           // 1. Fetch baseline stats & recent 7-day episode count
           const [baselineStats, recentEpisodesCount] = await Promise.all([
@@ -177,6 +195,11 @@ export async function getTodayPredictionController(req, res, next) {
             mlError: 'Error executing risk prediction pipeline.',
             errorCategory: 'PREDICTION_EXECUTION_ERROR',
           });
+        } finally {
+          activeInferenceMap.delete(lockKey);
+          if (typeof pipelineResolver === 'function') {
+            pipelineResolver();
+          }
         }
       }
     } else {

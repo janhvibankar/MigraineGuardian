@@ -117,7 +117,8 @@ export async function submitDailyCheckinController(req, res, next) {
 
       let [todayRec, yesterdayRec] = await Promise.all([
         firestoreService.getTodayWeatherRecord(userId, date, 'observed')
-          .then((r) => r || firestoreService.getTodayWeatherRecord(userId, date, 'forecast')),
+          .then((r) => r || firestoreService.getTodayWeatherRecord(userId, date, 'forecast'))
+          .then((r) => r || req.body.weather || req.body.weatherData || null),
         firestoreService.getTodayWeatherRecord(userId, previousDate, 'observed')
           .then((r) => r || firestoreService.getTodayWeatherRecord(userId, previousDate, 'forecast')),
       ]);

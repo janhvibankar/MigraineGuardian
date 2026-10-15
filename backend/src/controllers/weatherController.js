@@ -9,7 +9,7 @@ import { firestoreService } from '../services/firestoreService.js';
 export async function getCurrentWeatherController(req, res, next) {
   try {
     const userId = req.user.uid;
-    const { latitude, longitude, date } = req.body;
+    const { latitude, longitude, date, weatherData: clientWeatherData } = req.body;
 
     if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
       return res.status(400).json({
@@ -38,9 +38,27 @@ export async function getCurrentWeatherController(req, res, next) {
     console.log('[Weather] authenticated UID:', userId);
     console.log('[Weather] received coordinates:', { latitude: lat, longitude: lon });
 
-    // Fetch weather metrics from API provider (with keyless fallback)
-    const weatherData = await weatherApiService.fetchCurrentWeather(lat, lon);
-    console.log('[Weather] weather provider response:', weatherData.weatherCondition, `${weatherData.temperature}°C (Source: ${weatherData.source})`);
+    let weatherData = null;
+
+    // 1. If valid client-provided fallback weather was sent, use it directly
+    if (
+      clientWeatherData &&
+      typeof clientWeatherData === 'object' &&
+      clientWeatherData.temperature !== undefined &&
+      !isNaN(Number(clientWeatherData.temperature))
+    ) {
+      weatherData = {
+        ...clientWeatherData,
+        latitude: lat,
+        longitude: lon,
+        timestamp: clientWeatherData.timestamp || new Date().toISOString(),
+      };
+      console.log('[Weather] using validated client fallback weather record.');
+    } else {
+      // 2. Fetch weather metrics from API providers (OpenWeather -> Open-Meteo -> wttr.in)
+      weatherData = await weatherApiService.fetchCurrentWeather(lat, lon);
+      console.log('[Weather] weather provider response:', weatherData.weatherCondition, `${weatherData.temperature}°C (Source: ${weatherData.source})`);
+    }
 
     // Store under authenticated user's Firestore path: users/{userId}/weather_records/{date}
     const firestorePath = `users/${userId}/weather_records/${targetDate}`;
@@ -198,6 +216,9 @@ export async function getUsualLocationController(req, res, next) {
   try {
     const userId = req.user.uid;
     const usualLocation = await firestoreService.getUsualLocation(userId);
+    res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     return res.status(200).json({
       success: true,
       data: usualLocation,
@@ -242,6 +263,10 @@ export async function updateUsualLocationController(req, res, next) {
       latitude: lat,
       longitude: lon,
     });
+
+    res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     return res.status(200).json({
       success: true,

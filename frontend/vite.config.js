@@ -13,10 +13,10 @@ export default defineConfig({
     port: 3000,
     open: false,
     proxy: {
-      // Proxy /rag-api/* → http://127.0.0.1:5000/*
+      // Proxy /rag-api/* → http://127.0.0.1:5001/*
       // This avoids CORS entirely: the browser only talks to localhost:3000.
       '/rag-api': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://127.0.0.1:5001',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/rag-api/, ''),
       },

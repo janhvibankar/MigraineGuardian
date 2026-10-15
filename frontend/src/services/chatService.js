@@ -166,13 +166,13 @@ export const chatService = {
 
   checkHealth: async () => {
     try {
-      const baseUrl = getRagApiBaseUrl();
-      if (baseUrl) {
-        const response = await apiClient.get(`${baseUrl}/health`);
-        if (response.ok && response.data?.status === 'ok') return true;
+      const gwRes = await apiClient.get('/chat-health');
+      if (gwRes.ok && gwRes.data?.status === 'ok') return true;
+      if (gwRes.status === 503 && gwRes.data?.status === 'warming') {
+        // Cold start in progress on Render free tier
+        return true;
       }
-      const gwRes = await apiClient.get('/health');
-      return gwRes.ok;
+      return false;
     } catch {
       return false;
     }

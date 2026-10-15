@@ -15,6 +15,14 @@ const router = Router();
 // Enforce Firebase Authentication Token for all weather routes
 router.use(verifyFirebaseToken);
 
+// Prevent stale 304 caching on user-specific dynamic weather and location routes
+router.use((req, res, next) => {
+  res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // POST /api/weather/current — Fetch weather for coordinates & save to user's weather_records
 router.post('/current', getCurrentWeatherController);
 

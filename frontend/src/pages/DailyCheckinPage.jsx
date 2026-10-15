@@ -36,6 +36,8 @@ import {
   Navigation,
   Plane,
   X,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useTranslation } from '../hooks/useTranslation';
@@ -168,6 +170,7 @@ export function DailyCheckinPage() {
     if (!loc) {
       setSettingUsualTarget(true);
       setShowLocationModal(true);
+      setWeatherNotice('No usual location saved yet. Please set your home city or use GPS below.');
       return;
     }
 
@@ -192,7 +195,7 @@ export function DailyCheckinPage() {
         setWeatherData(histRes.records[histRes.records.length - 1]);
         setWeatherNotice(null);
       } else {
-        setWeatherNotice(currentRes.message || histRes.message || 'Weather data was unavailable.');
+        setWeatherNotice(currentRes.message || histRes.message || 'Weather data was temporarily unavailable.');
       }
     } catch (wErr) {
       setIsFetchingWeather(false);
@@ -471,6 +474,14 @@ export function DailyCheckinPage() {
       migraine_severity: hadMigraine === 'Yes' ? migraineSeverity : null,
       migraine_duration: hadMigraine === 'Yes' ? migraineDuration : null,
       symptoms: hadMigraine === 'Yes' ? migraineSymptoms : [],
+      location: weatherMode === 'usual'
+        ? (usualLocation || null)
+        : (weatherMode === 'travel' && weatherData
+          ? { name: historicalSummary?.locationName || 'Travel Location', latitude: weatherData.latitude, longitude: weatherData.longitude }
+          : (usualLocation || null)),
+      weather: currentWeatherData || weatherData || null,
+      weather_mode: weatherMode || (currentWeatherData || weatherData ? 'detected' : 'skipped'),
+      historical_summary: historicalSummary || null,
     };
 
     const res = await trackingService.saveDailyCheckin(logData);
@@ -1137,6 +1148,49 @@ export function DailyCheckinPage() {
               </Badge>
             </div>
 
+            {/* LOADING FEEDBACK */}
+            {isFetchingWeather && (
+              <div className="p-3.5 rounded-card-sm bg-brand-sage/15 border border-brand-sage/40 flex items-center gap-3 animate-pulse">
+                <Loader2 className="w-4 h-4 text-brand-teal animate-spin flex-shrink-0" />
+                <span className="text-meta-md text-brand-dark font-medium">
+                  {weatherMode === 'usual' && usualLocation
+                    ? `Fetching environmental metrics for ${usualLocation.name}...`
+                    : 'Retrieving local weather context...'}
+                </span>
+              </div>
+            )}
+
+            {/* ACTIONABLE NOTICE / ERROR FEEDBACK */}
+            {weatherNotice && weatherMode !== 'skip' && !isFetchingWeather && (
+              <div className="p-3.5 rounded-card-sm bg-amber-50/90 border border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-meta-md text-amber-900 animate-in fade-in duration-200">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{weatherNotice}</span>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setSettingUsualTarget(false);
+                      setShowLocationModal(true);
+                    }}
+                    className="text-meta-sm font-semibold text-brand-teal hover:underline cursor-pointer"
+                  >
+                    {t('checkin.searchLocation', 'Search City')}
+                  </button>
+                  <span className="text-muted-border">•</span>
+                  <button
+                    type="button"
+                    onClick={handleSkipWeather}
+                    className="text-meta-sm text-muted-text hover:text-brand-dark cursor-pointer"
+                  >
+                    {t('checkin.skipWeather', 'Skip')}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* THREE PRIVACY-FIRST LOCATION OPTIONS */}
             {!weatherData && weatherMode !== 'skip' && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
@@ -1149,7 +1203,9 @@ export function DailyCheckinPage() {
                   icon={Navigation}
                   className="font-semibold shadow-soft justify-center cursor-pointer"
                 >
-                  {t('checkin.useUsualLocation')}
+                  {usualLocation?.name
+                    ? `${t('checkin.useUsualLocation')} (${usualLocation.name.split(',')[0]})`
+                    : t('checkin.useUsualLocation')}
                 </Button>
 
                 <Button
@@ -1264,6 +1320,13 @@ export function DailyCheckinPage() {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+
+                {settingUsualTarget && !usualLocation && (
+                  <div className="p-2.5 rounded bg-brand-sage/15 border border-brand-sage/35 text-meta-sm text-brand-dark flex items-center gap-2">
+                    <Info className="w-4 h-4 text-brand-teal flex-shrink-0" />
+                    <span>No usual location saved yet. Search for your home city or click GPS below to set it once for 1-click check-ins.</span>
+                  </div>
+                )}
 
                 <div className="flex gap-2">
                   <input

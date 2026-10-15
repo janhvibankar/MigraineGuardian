@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import crypto from 'crypto';
+import { db } from './config/firebaseAdmin.js';
 import userRoutes from './routes/userRoutes.js';
 import checkinRoutes from './routes/checkinRoutes.js';
 import pssRoutes from './routes/pssRoutes.js';
@@ -7,28 +9,76 @@ import { notFoundHandler, globalErrorHandler } from './middleware/errorHandler.j
 
 const app = express();
 
-// CORS Configuration
-const allowedOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
-app.use(
-  cors({
-    origin: allowedOrigin === '*' ? '*' : [allowedOrigin, 'http://localhost:3000', 'http://localhost:5173'],
-    credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
+// Disable default ETag caching to prevent 304 Not Modified on dynamic authenticated API endpoints
+app.set('etag', false);
+
+// CORS Configuration — supports comma-separated list, trailing slash sanitization, and Vercel domains
+const rawOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const defaultDevOrigins = ['http://localhost:3000', 'http://localhost:5173'];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const cleanOrigin = origin.trim().replace(/\/+$/, '');
+    if (
+      rawOrigins.includes('*') ||
+      rawOrigins.includes(cleanOrigin) ||
+      defaultDevOrigins.includes(cleanOrigin) ||
+      /^https:\/\/migraineguardian.*\.vercel\.app$/.test(cleanOrigin)
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+};
+
+app.use(cors(corsOptions));
+
+// Structured Observability Logging Middleware
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || crypto.randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  const start = Date.now();
+
+  res.on('finish', () => {
+    // Avoid noisy logging of frequent polling health checks when healthy
+    const isHealth = req.path.includes('/health');
+    if (isHealth && res.statusCode === 200) return;
+
+    const elapsed = Date.now() - start;
+    const cleanUrl = req.originalUrl ? req.originalUrl.split('?')[0] : req.url;
+    console.log(
+      `[HTTP] reqId=${req.id} method=${req.method} path=${cleanUrl} status=${res.statusCode} elapsed=${elapsed}ms`
+    );
+  });
+
+  next();
+});
 
 // Body Parser Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health Check Endpoint (Public)
+// Health Check Endpoint (Public & Readiness Aware)
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
+  const firebaseReady = Boolean(db);
+  const isHealthy = firebaseReady;
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'OK' : 'DEGRADED',
     service: 'MigraineGuardian Express API Gateway',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    uptime: Math.round(process.uptime()),
+    dependencies: {
+      firebase: firebaseReady ? 'connected' : 'uninitialized',
+    },
   });
 });
 
@@ -111,6 +161,72 @@ app.get('/api/ml-health', async (req, res) => {
       message: isTimeout
         ? `FastAPI ML service request timed out after ${timeoutMs}ms.`
         : `FastAPI ML service unreachable at ${safeHost}. Service may be stopped.`,
+    });
+  }
+});
+
+// RAG Chatbot Service Health Proxy (Public) — proxies external RAG /health without browser CORS issues
+app.get(['/api/chat-health', '/api/rag-health'], async (req, res) => {
+  const rawUrl = process.env.RAG_SERVICE_URL || 'https://migraine-rag-chatbot.onrender.com';
+  const ragBase = rawUrl.replace(/\/api\/chat\/?$/, '').replace(/\/+$/, '');
+  const safeHost = sanitizeUrl(ragBase);
+
+  const requestedTimeout = parseInt(req.query.timeout, 10);
+  const timeoutMs = (!isNaN(requestedTimeout) && requestedTimeout >= 1000 && requestedTimeout <= 60000)
+    ? requestedTimeout
+    : 10000;
+
+  const targetUrl = `${ragBase}/health`;
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(targetUrl, { signal: ctrl.signal });
+    clearTimeout(timer);
+
+    let body = {};
+    try {
+      body = await r.json();
+    } catch {
+      body = { raw_status: r.status };
+    }
+
+    if ([502, 503, 504, 408, 520, 521, 522, 523, 524].includes(r.status)) {
+      return res.status(503).json({
+        status: 'warming',
+        gateway: 'ok',
+        rag_host: safeHost,
+        rag_error: 'cold_start_warming',
+        http_status: r.status,
+        message: 'RAG Chatbot microservice is waking up from idle state. Please retry shortly.',
+      });
+    }
+
+    if (!r.ok || body.status !== 'ok') {
+      return res.status(503).json({
+        status: 'degraded',
+        gateway: 'ok',
+        rag_host: safeHost,
+        message: body.message || 'RAG Chatbot returned non-healthy status.',
+      });
+    }
+
+    return res.status(200).json({
+      status: 'ok',
+      gateway: 'ok',
+      rag_host: safeHost,
+      ...body,
+    });
+  } catch (err) {
+    const isTimeout = err.name === 'AbortError';
+    return res.status(503).json({
+      status: 'unavailable',
+      gateway: 'ok',
+      rag_host: safeHost,
+      rag_error: isTimeout ? 'timeout' : 'connection_refused',
+      message: isTimeout
+        ? `RAG Chatbot request timed out after ${timeoutMs}ms.`
+        : `RAG Chatbot unreachable at ${safeHost}. Service may be stopped.`,
     });
   }
 });

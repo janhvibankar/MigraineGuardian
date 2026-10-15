@@ -1,19 +1,21 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
-const rawApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (process.env || {});
+
+const rawApiKey = env.VITE_FIREBASE_API_KEY;
 
 const firebaseConfig = {
   apiKey: rawApiKey || "AIzaSyDummyApiKeyForLocalDevelopmentOnly",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "migraineguardian.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "migraineguardian",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "migraineguardian.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789:web:abcdef"
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "migraineguardian.firebaseapp.com",
+  projectId: env.VITE_FIREBASE_PROJECT_ID || "migraineguardian",
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "migraineguardian.appspot.com",
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
+  appId: env.VITE_FIREBASE_APP_ID || "1:123456789:web:abcdef"
 };
 
 // Safe development-only diagnostic logging (Never prints actual key value)
-if (import.meta.env.DEV) {
+if (env.DEV) {
   const isPopulated = typeof rawApiKey === 'string' && rawApiKey.trim().length > 0;
   const isDummyKey = rawApiKey === "AIzaSyDummyApiKeyForLocalDevelopmentOnly";
   
