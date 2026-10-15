@@ -42,7 +42,56 @@ function notifyUserChanged(user) {
   }
 }
 
-function formatFirebaseError(err) {
+/**
+ * Detects transient IndexedDB errors thrown by Firebase Auth when a mobile page
+ * loses focus, triggers autofill/keyboards, switches apps, or initiates OAuth popups.
+ */
+export function isTransientDatabaseClosingError(err) {
+  if (!err) return false;
+  const msg = (err.message || '').toLowerCase();
+  return (
+    msg.includes('closing/hidden') ||
+    msg.includes('database is closing') ||
+    msg.includes('ishiding') ||
+    msg.includes('connection is closing') ||
+    (err.name === 'AbortError' && msg.includes('closing')) ||
+    (err.name === 'InvalidStateError' && msg.includes('database'))
+  );
+}
+
+/**
+ * Executes an idempotent authentication operation with brief bounded delay
+ * to allow transient mobile browser IndexedDB connection locks to settle.
+ * Does NOT dispatch synthetic DOM events or alter global persistence state.
+ */
+export async function executeAuthWithRetry(authOp, maxRetries = 2, baseDelayMs = 250) {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await authOp();
+    } catch (err) {
+      if (isTransientDatabaseClosingError(err) && attempt < maxRetries) {
+        attempt++;
+        console.warn(`[authService] Transient DB closing condition detected during sign-in. Retrying attempt ${attempt}/${maxRetries}...`);
+        await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+export function formatFirebaseError(err, context = 'default') {
+  if (isTransientDatabaseClosingError(err)) {
+    if (context === 'google') {
+      return 'Authentication storage was temporarily busy during Google sign-in. Please tap Continue with Google again.';
+    }
+    if (context === 'signup') {
+      return 'Authentication storage is momentarily busy. Please try signing in.';
+    }
+    return 'Authentication storage is momentarily busy. Please tap Sign In again.';
+  }
+
   const code = err?.code || '';
   switch (code) {
     case 'auth/email-already-in-use':
@@ -69,6 +118,8 @@ function formatFirebaseError(err) {
       return 'For security, please log out and log back in before changing your password.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Please try again in a few minutes.';
+    case 'auth/network-request-failed':
+      return 'Network connection issue. Please check your internet connection and try again.';
     default:
       return err?.message || 'Authentication failed. Please try again.';
   }
@@ -86,14 +137,16 @@ export function clearUserScopedData() {
   storageService.removeItem('migraineguardian_read_notifications');
   storageService.removeItem('migraineguardian_preferences');
 
-  localStorage.removeItem('migraineguardian_token');
-  localStorage.removeItem('migraineguardian_user');
-  localStorage.removeItem('migraineguardian_authenticated');
-  localStorage.removeItem('daily_checkin_draft');
-  localStorage.removeItem('daily_checkin_today');
-  localStorage.removeItem('migraineguardian_today_forecast');
-  localStorage.removeItem('pss_score_latest');
-  localStorage.removeItem('migraineguardian_preferences');
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    window.localStorage.removeItem('migraineguardian_token');
+    window.localStorage.removeItem('migraineguardian_user');
+    window.localStorage.removeItem('migraineguardian_authenticated');
+    window.localStorage.removeItem('daily_checkin_draft');
+    window.localStorage.removeItem('daily_checkin_today');
+    window.localStorage.removeItem('migraineguardian_today_forecast');
+    window.localStorage.removeItem('pss_score_latest');
+    window.localStorage.removeItem('migraineguardian_preferences');
+  }
 }
 
 export const authService = {
@@ -150,7 +203,9 @@ export const authService = {
    */
   clearGuestOnboarding: () => {
     storageService.removeItem('migraineguardian_guest_onboarding');
-    localStorage.removeItem('migraineguardian_guest_onboarding');
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+      window.localStorage.removeItem('migraineguardian_guest_onboarding');
+    }
   },
 
   /**
@@ -217,8 +272,10 @@ export const authService = {
       // Clear previous account's cached data before signing in
       clearUserScopedData();
 
-      // 1. Authenticate using Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      // 1. Authenticate using Firebase Auth with mobile lifecycle retry
+      const userCredential = await executeAuthWithRetry(() =>
+        signInWithEmailAndPassword(auth, email, password)
+      );
       const token = await userCredential.user.getIdToken();
       storageService.setItem('migraineguardian_token', token);
       storageService.setItem('migraineguardian_authenticated', true);
@@ -270,7 +327,7 @@ export const authService = {
       console.warn('[authService] Firebase Auth signup error:', err.code || err.message);
       return {
         success: false,
-        error: formatFirebaseError(err),
+        error: formatFirebaseError(err, 'signup'),
       };
     }
   },
@@ -302,7 +359,7 @@ export const authService = {
       console.warn('[authService] Google Auth error:', err.code || err.message);
       return {
         success: false,
-        error: formatFirebaseError(err),
+        error: formatFirebaseError(err, 'google'),
       };
     }
   },

@@ -1,9 +1,14 @@
 const STORAGE_PREFIX = 'mg_v1_';
 
+function isStorageAvailable() {
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+}
+
 export const storageService = {
   getItem: (key, defaultValue = null) => {
+    if (!isStorageAvailable()) return defaultValue;
     try {
-      const item = localStorage.getItem(`${STORAGE_PREFIX}${key}`);
+      const item = window.localStorage.getItem(`${STORAGE_PREFIX}${key}`);
       return item ? JSON.parse(item) : defaultValue;
     } catch (e) {
       console.warn(`Storage read error for key: ${key}`, e);
@@ -12,8 +17,9 @@ export const storageService = {
   },
 
   setItem: (key, value) => {
+    if (!isStorageAvailable()) return false;
     try {
-      localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
+      window.localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
       return true;
     } catch (e) {
       console.warn(`Storage write error for key: ${key}`, e);
@@ -22,8 +28,9 @@ export const storageService = {
   },
 
   removeItem: (key) => {
+    if (!isStorageAvailable()) return false;
     try {
-      localStorage.removeItem(`${STORAGE_PREFIX}${key}`);
+      window.localStorage.removeItem(`${STORAGE_PREFIX}${key}`);
       return true;
     } catch (e) {
       console.warn(`Storage remove error for key: ${key}`, e);
@@ -32,10 +39,11 @@ export const storageService = {
   },
 
   clearAll: () => {
+    if (!isStorageAvailable()) return false;
     try {
-      Object.keys(localStorage)
+      Object.keys(window.localStorage)
         .filter((k) => k.startsWith(STORAGE_PREFIX))
-        .forEach((k) => localStorage.removeItem(k));
+        .forEach((k) => window.localStorage.removeItem(k));
       return true;
     } catch (e) {
       console.warn('Storage clear error', e);

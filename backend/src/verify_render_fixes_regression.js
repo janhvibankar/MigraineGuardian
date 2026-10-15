@@ -625,6 +625,114 @@ async function runRegressionSuite() {
         assert.strictEqual(res.headers['access-control-allow-credentials'], 'true');
       }
     });
+
+    // --- SUITE G: MOBILE AUTHENTICATION LIFECYCLE & TRANSIENT PERSISTENCE RESILIENCE ---
+    console.log('\n--- SUITE G: Mobile Authentication Lifecycle & Persistence Resilience ---');
+
+    test('firebase.js configures initializeAuth with multi-tier persistence and strict error propagation', () => {
+      const firebaseConfigPath = path.resolve(__dirname, '../../frontend/src/config/firebase.js');
+      assert(fs.existsSync(firebaseConfigPath), 'firebase.js must exist');
+      const content = fs.readFileSync(firebaseConfigPath, 'utf8');
+      assert(content.includes('initializeAuth'), 'firebase.js must import and call initializeAuth');
+      assert(content.includes('indexedDBLocalPersistence'), 'firebase.js must include indexedDBLocalPersistence');
+      assert(content.includes('browserLocalPersistence'), 'firebase.js must include browserLocalPersistence');
+      assert(content.includes('inMemoryPersistence'), 'firebase.js must include inMemoryPersistence');
+      assert(content.includes("err?.code === 'auth/already-initialized'"), 'firebase.js must only fall back to getAuth for auth/already-initialized');
+      assert(content.includes('throw err;'), 'firebase.js must rethrow genuine configuration errors');
+    });
+
+    await testAsync('isTransientDatabaseClosingError correctly identifies mobile IndexedDB closing/hidden states', async () => {
+      const { pathToFileURL } = await import('url');
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const { isTransientDatabaseClosingError } = await import(pathToFileURL(authServicePath).href);
+
+      // Positive match cases
+      assert.strictEqual(isTransientDatabaseClosingError(new Error('Database is closing/hidden')), true);
+      assert.strictEqual(isTransientDatabaseClosingError(new Error('database is closing')), true);
+      assert.strictEqual(isTransientDatabaseClosingError(new Error('IndexedDB transaction failed: isHiding')), true);
+      assert.strictEqual(isTransientDatabaseClosingError({ name: 'AbortError', message: 'connection is closing' }), true);
+
+      // Negative non-transient auth error cases
+      assert.strictEqual(isTransientDatabaseClosingError(null), false);
+      assert.strictEqual(isTransientDatabaseClosingError({ code: 'auth/wrong-password', message: 'Incorrect password.' }), false);
+      assert.strictEqual(isTransientDatabaseClosingError({ code: 'auth/invalid-credential', message: 'Invalid credentials.' }), false);
+      assert.strictEqual(isTransientDatabaseClosingError({ code: 'auth/user-not-found', message: 'User not found.' }), false);
+    });
+
+    await testAsync('formatFirebaseError sanitizes Database is closing/hidden with appropriate UX contexts', async () => {
+      const { pathToFileURL } = await import('url');
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const { formatFirebaseError } = await import(pathToFileURL(authServicePath).href);
+
+      const defaultSanitized = formatFirebaseError(new Error('Database is closing/hidden'));
+      assert(!defaultSanitized.includes('Database is closing'), 'Must never leak raw internal Database is closing string');
+      assert(!defaultSanitized.includes('hidden'), 'Must never leak raw internal hidden database state');
+      assert(defaultSanitized.includes('Authentication storage is momentarily busy'), 'Must return helpful, friendly error message');
+
+      const googleSanitized = formatFirebaseError(new Error('Database is closing/hidden'), 'google');
+      assert(googleSanitized.includes('during Google sign-in'), 'Must provide clear Google-specific action guidance');
+
+      const signupSanitized = formatFirebaseError(new Error('Database is closing/hidden'), 'signup');
+      assert(signupSanitized.includes('Please try signing in'), 'Must guide user to sign in if account was already created');
+
+      const networkSanitized = formatFirebaseError({ code: 'auth/network-request-failed' });
+      assert(networkSanitized.includes('Network connection issue'), 'Must map network request failures cleanly');
+    });
+
+    await testAsync('executeAuthWithRetry recovers without synthetic DOM events or global persistence mutation', async () => {
+      const { pathToFileURL } = await import('url');
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const { executeAuthWithRetry } = await import(pathToFileURL(authServicePath).href);
+
+      let attempts = 0;
+      const result = await executeAuthWithRetry(async () => {
+        attempts++;
+        if (attempts < 2) {
+          throw new Error('Database is closing/hidden');
+        }
+        return { success: true, user: { uid: 'recovered_mobile_user' } };
+      }, 2, 20);
+
+      assert.strictEqual(attempts, 2, 'Must have attempted 2 times before succeeding');
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.user.uid, 'recovered_mobile_user');
+    });
+
+    await testAsync('executeAuthWithRetry respects maxRetries and throws bounded error on persistent failure', async () => {
+      const { pathToFileURL } = await import('url');
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const { executeAuthWithRetry } = await import(pathToFileURL(authServicePath).href);
+
+      let attempts = 0;
+      let caughtError = null;
+
+      try {
+        await executeAuthWithRetry(async () => {
+          attempts++;
+          throw new Error('Database is closing/hidden');
+        }, 2, 10);
+      } catch (err) {
+        caughtError = err;
+      }
+
+      assert.strictEqual(attempts, 3, 'Should attempt initial call + 2 retries (total 3 attempts)');
+      assert(caughtError !== null, 'Persistent error must be thrown once retries are exhausted');
+      assert(caughtError.message.includes('Database is closing/hidden'));
+    });
+
+    await testAsync('authService protects against duplicate popups, duplicate signups, and password mismatch', async () => {
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const authContent = fs.readFileSync(authServicePath, 'utf8');
+
+      // Verify signInWithPopup is NOT wrapped in automatic retry (prevents duplicate popup windows)
+      assert(!authContent.includes('executeAuthWithRetry(() =>\n        signInWithPopup'), 'signInWithPopup must not be auto-retried with new popup');
+
+      // Verify createUserWithEmailAndPassword is NOT wrapped in automatic retry (prevents auth/email-already-in-use on retry)
+      assert(!authContent.includes('executeAuthWithRetry(() =>\n        createUserWithEmailAndPassword'), 'createUserWithEmailAndPassword must not be auto-retried');
+
+      // Verify setPersistence is NOT imported or called during authentication retries
+      assert(!authContent.includes('setPersistence(auth'), 'authService must not mutate global auth persistence during retries');
+    });
   } finally {
     if (server) {
       server.close();

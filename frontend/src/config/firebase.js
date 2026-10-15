@@ -1,5 +1,12 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import {
+  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  inMemoryPersistence,
+  GoogleAuthProvider,
+} from 'firebase/auth';
 
 const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : (process.env || {});
 
@@ -28,7 +35,27 @@ if (env.DEV) {
 }
 
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+
+// Initialize Firebase Auth with multi-tier persistence fallback:
+// Primary: indexedDBLocalPersistence (standard web persistence)
+// Fallback: browserLocalPersistence (localStorage when IndexedDB is closing or blocked)
+// Fallback: inMemoryPersistence (in-memory session resilience)
+let authInstance;
+try {
+  authInstance = initializeAuth(app, {
+    persistence: [indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence],
+  });
+} catch (err) {
+  // Only fall back to getAuth if initializeAuth was already called for this App instance (e.g. HMR)
+  if (err?.code === 'auth/already-initialized') {
+    authInstance = getAuth(app);
+  } else {
+    // Never conceal genuine configuration or initialization errors
+    throw err;
+  }
+}
+
+export const auth = authInstance;
 export const googleProvider = new GoogleAuthProvider();
 
 
