@@ -7,6 +7,7 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
+  browserPopupRedirectResolver,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase.js';
 import { apiClient } from './apiClient.js';
@@ -81,6 +82,35 @@ export async function executeAuthWithRetry(authOp, maxRetries = 2, baseDelayMs =
   }
 }
 
+/**
+ * Safe development/production diagnostic logging helper.
+ * Records operation name, failure stage, error code, and error message.
+ * In development/debug mode, records stack trace.
+ * NEVER logs passwords, ID tokens, refresh tokens, API keys, or user credentials.
+ */
+export function logSafeAuthDiagnostic(operation, stage, err) {
+  const isDev =
+    typeof window !== 'undefined' &&
+    ((typeof import.meta !== 'undefined' && import.meta.env?.DEV) ||
+      window.location?.hostname === 'localhost' ||
+      window.location?.hostname === '127.0.0.1');
+
+  const diagnostic = {
+    operation,
+    stage,
+    errorCode: err?.code || 'unknown',
+    errorMessage: err?.message || String(err),
+    errorName: err?.name || 'Error',
+  };
+
+  if (isDev && err?.stack) {
+    diagnostic.stack = err.stack;
+  }
+
+  console.warn(`[authService Diagnostic] ${operation} failed during ${stage}:`, diagnostic);
+  return diagnostic;
+}
+
 export function formatFirebaseError(err, context = 'default') {
   if (isTransientDatabaseClosingError(err)) {
     if (context === 'google') {
@@ -120,6 +150,8 @@ export function formatFirebaseError(err, context = 'default') {
       return 'Too many attempts. Please try again in a few minutes.';
     case 'auth/network-request-failed':
       return 'Network connection issue. Please check your internet connection and try again.';
+    case 'auth/argument-error':
+      return 'Authentication configuration error. Please refresh the page or try another sign-in method.';
     default:
       return err?.message || 'Authentication failed. Please try again.';
   }
@@ -288,7 +320,7 @@ export const authService = {
 
       return { success: true, user: profile };
     } catch (err) {
-      console.warn('[authService] Firebase Auth login error:', err.code || err.message);
+      logSafeAuthDiagnostic('login (email/password)', 'sign-in request', err);
       return {
         success: false,
         error: formatFirebaseError(err),
@@ -324,7 +356,7 @@ export const authService = {
 
       return { success: true, user };
     } catch (err) {
-      console.warn('[authService] Firebase Auth signup error:', err.code || err.message);
+      logSafeAuthDiagnostic('signup (email/password)', 'account creation request', err);
       return {
         success: false,
         error: formatFirebaseError(err, 'signup'),
@@ -337,8 +369,12 @@ export const authService = {
       // Clear previous account's cached data before Google sign-in
       clearUserScopedData();
 
-      // 1. Authenticate via Google OAuth Popup
-      const result = await signInWithPopup(auth, googleProvider);
+      // 1. Authenticate via Google OAuth Popup with explicit popup redirect resolver
+      const resolver =
+        typeof browserPopupRedirectResolver === 'function'
+          ? browserPopupRedirectResolver
+          : undefined;
+      const result = await signInWithPopup(auth, googleProvider, resolver);
       const firebaseUser = result.user;
       const displayName = firebaseUser.displayName || formatNameFromEmail(firebaseUser.email) || 'User';
       const token = await firebaseUser.getIdToken();
@@ -356,7 +392,7 @@ export const authService = {
 
       return { success: true, user };
     } catch (err) {
-      console.warn('[authService] Google Auth error:', err.code || err.message);
+      logSafeAuthDiagnostic('loginWithGoogle (OAuth popup)', 'popup sign-in request', err);
       return {
         success: false,
         error: formatFirebaseError(err, 'google'),
@@ -446,7 +482,7 @@ export const authService = {
         message: 'Password changed successfully.',
       };
     } catch (err) {
-      console.warn('[authService] changePassword error:', err.code || err.message);
+      logSafeAuthDiagnostic('changePassword', 'password change request', err);
       return {
         success: false,
         error: formatFirebaseError(err),

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import app from './app.js';
 import { calculatePssScore, getScoreInterpretation } from './controllers/pssController.js';
 import { getRagServiceUrl } from './controllers/chatController.js';
@@ -11,6 +12,7 @@ import { getMlServiceUrl, mlInferenceService } from './services/mlInferenceServi
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 
 let server;
 let baseUrl;
@@ -626,19 +628,42 @@ async function runRegressionSuite() {
       }
     });
 
-    // --- SUITE G: MOBILE AUTHENTICATION LIFECYCLE & TRANSIENT PERSISTENCE RESILIENCE ---
+    // --- SUITE G: MOBILE AUTHENTICATION LIFECYCLE, POPUP RESOLVER & PERSISTENCE RESILIENCE ---
     console.log('\n--- SUITE G: Mobile Authentication Lifecycle & Persistence Resilience ---');
 
-    test('firebase.js configures initializeAuth with multi-tier persistence and strict error propagation', () => {
+    test('firebase.js configures initializeAuth with browserPopupRedirectResolver, multi-tier persistence and strict error propagation', () => {
       const firebaseConfigPath = path.resolve(__dirname, '../../frontend/src/config/firebase.js');
       assert(fs.existsSync(firebaseConfigPath), 'firebase.js must exist');
       const content = fs.readFileSync(firebaseConfigPath, 'utf8');
       assert(content.includes('initializeAuth'), 'firebase.js must import and call initializeAuth');
+      assert(content.includes('browserPopupRedirectResolver'), 'firebase.js must import browserPopupRedirectResolver');
+      assert(content.includes('popupRedirectResolver'), 'firebase.js must configure popupRedirectResolver');
       assert(content.includes('indexedDBLocalPersistence'), 'firebase.js must include indexedDBLocalPersistence');
       assert(content.includes('browserLocalPersistence'), 'firebase.js must include browserLocalPersistence');
       assert(content.includes('inMemoryPersistence'), 'firebase.js must include inMemoryPersistence');
       assert(content.includes("err?.code === 'auth/already-initialized'"), 'firebase.js must only fall back to getAuth for auth/already-initialized');
       assert(content.includes('throw err;'), 'firebase.js must rethrow genuine configuration errors');
+    });
+
+    test('browserPopupRedirectResolver prevents auth/argument-error during initialization and popup sign-in', () => {
+      const { initializeApp } = require('../../frontend/node_modules/firebase/app');
+      const browserAuth = require('../../frontend/node_modules/firebase/node_modules/@firebase/auth/dist/browser-cjs/index-D1eM-zGc.js');
+
+      // 1. Verify without popupRedirectResolver, auth._popupRedirectResolver is null (root cause of auth/argument-error)
+      const testAppWithout = initializeApp({ apiKey: 'AIzaSyRegressionTestKey1', projectId: 'reg-test-1' }, 'regAppWithoutResolver');
+      const authWithout = browserAuth.initializeAuth(testAppWithout, {
+        persistence: [browserAuth.inMemoryPersistence],
+      });
+      assert.strictEqual(authWithout._popupRedirectResolver, null, 'Without resolver, _popupRedirectResolver must be null');
+
+      // 2. Verify with browserPopupRedirectResolver, auth._popupRedirectResolver is properly populated
+      const testAppWith = initializeApp({ apiKey: 'AIzaSyRegressionTestKey2', projectId: 'reg-test-2' }, 'regAppWithResolver');
+      const authWith = browserAuth.initializeAuth(testAppWith, {
+        persistence: [browserAuth.inMemoryPersistence],
+        popupRedirectResolver: browserAuth.browserPopupRedirectResolver,
+      });
+      assert(authWith._popupRedirectResolver !== null, 'With browserPopupRedirectResolver, _popupRedirectResolver must be populated');
+      assert.strictEqual(typeof authWith._popupRedirectResolver, 'object', '_popupRedirectResolver must be an object instance');
     });
 
     await testAsync('isTransientDatabaseClosingError correctly identifies mobile IndexedDB closing/hidden states', async () => {
@@ -657,13 +682,20 @@ async function runRegressionSuite() {
       assert.strictEqual(isTransientDatabaseClosingError({ code: 'auth/wrong-password', message: 'Incorrect password.' }), false);
       assert.strictEqual(isTransientDatabaseClosingError({ code: 'auth/invalid-credential', message: 'Invalid credentials.' }), false);
       assert.strictEqual(isTransientDatabaseClosingError({ code: 'auth/user-not-found', message: 'User not found.' }), false);
+      assert.strictEqual(isTransientDatabaseClosingError({ code: 'auth/argument-error', message: 'Firebase: Error (auth/argument-error).' }), false);
     });
 
-    await testAsync('formatFirebaseError sanitizes Database is closing/hidden with appropriate UX contexts', async () => {
+    await testAsync('formatFirebaseError sanitizes all auth error codes including auth/argument-error', async () => {
       const { pathToFileURL } = await import('url');
       const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
       const { formatFirebaseError } = await import(pathToFileURL(authServicePath).href);
 
+      // auth/argument-error mapping
+      const argErrorSanitized = formatFirebaseError({ code: 'auth/argument-error', message: 'Firebase: Error (auth/argument-error).' });
+      assert(!argErrorSanitized.includes('argument-error'), 'Must never leak raw internal argument-error string');
+      assert(argErrorSanitized.includes('Authentication configuration error'), 'Must return clean user-friendly configuration message');
+
+      // Transient IndexedDB error mapping
       const defaultSanitized = formatFirebaseError(new Error('Database is closing/hidden'));
       assert(!defaultSanitized.includes('Database is closing'), 'Must never leak raw internal Database is closing string');
       assert(!defaultSanitized.includes('hidden'), 'Must never leak raw internal hidden database state');
@@ -675,8 +707,31 @@ async function runRegressionSuite() {
       const signupSanitized = formatFirebaseError(new Error('Database is closing/hidden'), 'signup');
       assert(signupSanitized.includes('Please try signing in'), 'Must guide user to sign in if account was already created');
 
-      const networkSanitized = formatFirebaseError({ code: 'auth/network-request-failed' });
-      assert(networkSanitized.includes('Network connection issue'), 'Must map network request failures cleanly');
+      // Standard authentication error codes
+      assert(formatFirebaseError({ code: 'auth/wrong-password' }).includes('Incorrect password'));
+      assert(formatFirebaseError({ code: 'auth/invalid-credential' }).includes('Invalid email or password'));
+      assert(formatFirebaseError({ code: 'auth/invalid-email' }).includes('valid email address format'));
+      assert(formatFirebaseError({ code: 'auth/user-not-found' }).includes('No account found'));
+      assert(formatFirebaseError({ code: 'auth/email-already-in-use' }).includes('already registered'));
+      assert(formatFirebaseError({ code: 'auth/network-request-failed' }).includes('Network connection issue'));
+    });
+
+    await testAsync('logSafeAuthDiagnostic safely logs operation, stage, and code without leaking credentials', async () => {
+      const { pathToFileURL } = await import('url');
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const { logSafeAuthDiagnostic } = await import(pathToFileURL(authServicePath).href);
+
+      const fakeError = new Error('Firebase: Error (auth/argument-error).');
+      fakeError.code = 'auth/argument-error';
+
+      const diag = logSafeAuthDiagnostic('testOperation', 'testStage', fakeError);
+      assert.strictEqual(diag.operation, 'testOperation');
+      assert.strictEqual(diag.stage, 'testStage');
+      assert.strictEqual(diag.errorCode, 'auth/argument-error');
+      assert.strictEqual(diag.errorMessage, 'Firebase: Error (auth/argument-error).');
+      assert(!('password' in diag), 'Must never record password');
+      assert(!('token' in diag), 'Must never record token');
+      assert(!('apiKey' in diag), 'Must never record apiKey');
     });
 
     await testAsync('executeAuthWithRetry recovers without synthetic DOM events or global persistence mutation', async () => {
@@ -723,6 +778,13 @@ async function runRegressionSuite() {
     await testAsync('authService protects against duplicate popups, duplicate signups, and password mismatch', async () => {
       const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
       const authContent = fs.readFileSync(authServicePath, 'utf8');
+
+      // Verify signInWithPopup supplies popup redirect resolver
+      assert(
+        authContent.includes('signInWithPopup(auth, googleProvider, resolver)') ||
+          authContent.includes('signInWithPopup(auth, googleProvider, browserPopupRedirectResolver)'),
+        'signInWithPopup must pass popup redirect resolver'
+      );
 
       // Verify signInWithPopup is NOT wrapped in automatic retry (prevents duplicate popup windows)
       assert(!authContent.includes('executeAuthWithRetry(() =>\n        signInWithPopup'), 'signInWithPopup must not be auto-retried with new popup');
