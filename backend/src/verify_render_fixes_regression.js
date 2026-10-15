@@ -379,6 +379,198 @@ async function runRegressionSuite() {
       assert(content.includes('canRetryForecast: !forecastSaved'), 'checkinController must provide canRetryForecast: !forecastSaved');
       assert(content.includes('forecastAvailable: forecastSaved'), 'checkinController must truthfully state forecastAvailable: forecastSaved');
     });
+
+    // --- SUITE F: PRODUCTION CORS PREFLIGHT & ORIGIN SECURITY ---
+    console.log('\n--- SUITE F: Production CORS Preflight & Origin Security ---');
+
+    await testAsync('OPTIONS preflight from production frontend origin allows Cache-Control, Pragma, and Authorization', async () => {
+      const res = await httpRequest({
+        host: '127.0.0.1',
+        port,
+        path: '/api/checkins/today',
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://migraineguardian-frontend.onrender.com',
+          'Access-Control-Request-Method': 'GET',
+          'Access-Control-Request-Headers': 'authorization,cache-control,pragma,content-type',
+        },
+      });
+
+      assert.strictEqual(res.statusCode, 204, 'Preflight must return 204 No Content');
+      assert.strictEqual(
+        res.headers['access-control-allow-origin'],
+        'https://migraineguardian-frontend.onrender.com',
+        'Must allow exact production frontend origin'
+      );
+      assert.strictEqual(res.headers['access-control-allow-credentials'], 'true', 'Must allow credentials');
+      assert(res.headers['access-control-allow-headers'], 'Must return access-control-allow-headers');
+
+      const allowedHeaders = res.headers['access-control-allow-headers'].toLowerCase();
+      assert(allowedHeaders.includes('authorization'), 'Allowed headers must include authorization');
+      assert(allowedHeaders.includes('cache-control'), 'Allowed headers must include cache-control');
+      assert(allowedHeaders.includes('pragma'), 'Allowed headers must include pragma');
+      assert.strictEqual(res.headers['access-control-max-age'], '86400', 'Must specify 86400s maxAge for preflight caching');
+    });
+
+    await testAsync('OPTIONS preflight for POST /api/chat/message succeeds with correct methods and headers', async () => {
+      const res = await httpRequest({
+        host: '127.0.0.1',
+        port,
+        path: '/api/chat/message',
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://migraineguardian-frontend.onrender.com',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'authorization,content-type,x-request-id',
+        },
+      });
+
+      assert.strictEqual(res.statusCode, 204);
+      assert.strictEqual(res.headers['access-control-allow-origin'], 'https://migraineguardian-frontend.onrender.com');
+      const methods = res.headers['access-control-allow-methods'] || '';
+      assert(methods.includes('POST'), 'Must include POST in allowed methods');
+    });
+
+    await testAsync('CORS headers are present on successful 200 responses', async () => {
+      const res = await httpRequest({
+        host: '127.0.0.1',
+        port,
+        path: '/api/health',
+        method: 'GET',
+        headers: {
+          Origin: 'https://migraineguardian-frontend.onrender.com',
+        },
+      });
+
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.headers['access-control-allow-origin'], 'https://migraineguardian-frontend.onrender.com');
+      assert.strictEqual(res.headers['access-control-allow-credentials'], 'true');
+    });
+
+    await testAsync('CORS headers are present on 401 Unauthorized error responses', async () => {
+      const res = await httpRequest({
+        host: '127.0.0.1',
+        port,
+        path: '/api/checkins/today',
+        method: 'GET',
+        headers: {
+          Origin: 'https://migraineguardian-frontend.onrender.com',
+        },
+      });
+
+      assert.strictEqual(res.statusCode, 401);
+      assert.strictEqual(res.headers['access-control-allow-origin'], 'https://migraineguardian-frontend.onrender.com');
+      assert.strictEqual(res.headers['access-control-allow-credentials'], 'true');
+    });
+
+    await testAsync('CORS headers are present on 404 Not Found error responses', async () => {
+      const res = await httpRequest({
+        host: '127.0.0.1',
+        port,
+        path: '/api/nonexistent-endpoint-route',
+        method: 'GET',
+        headers: {
+          Origin: 'https://migraineguardian-frontend.onrender.com',
+        },
+      });
+
+      assert.strictEqual(res.statusCode, 404);
+      assert.strictEqual(res.headers['access-control-allow-origin'], 'https://migraineguardian-frontend.onrender.com');
+    });
+
+    await testAsync('Unauthorized origins are rejected without Access-Control-Allow-Origin headers', async () => {
+      const resPreflight = await httpRequest({
+        host: '127.0.0.1',
+        port,
+        path: '/api/health',
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://evil-attacker.com',
+          'Access-Control-Request-Method': 'GET',
+        },
+      });
+
+      assert(!resPreflight.headers['access-control-allow-origin'], 'Preflight from unauthorized origin must NOT receive allow-origin header');
+
+      const resGet = await httpRequest({
+        host: '127.0.0.1',
+        port,
+        path: '/api/health',
+        method: 'GET',
+        headers: {
+          Origin: 'https://evil-attacker.com',
+        },
+      });
+
+      assert(!resGet.headers['access-control-allow-origin'], 'GET from unauthorized origin must NOT receive allow-origin header');
+    });
+
+    await testAsync('Trailing slashes on Origin are sanitized and accepted', async () => {
+      const res = await httpRequest({
+        host: '127.0.0.1',
+        port,
+        path: '/api/health',
+        method: 'GET',
+        headers: {
+          Origin: 'https://migraineguardian-frontend.onrender.com/',
+        },
+      });
+
+      assert.strictEqual(res.statusCode, 200);
+      assert(res.headers['access-control-allow-origin'].startsWith('https://migraineguardian-frontend.onrender.com'));
+    });
+
+    await testAsync('Arbitrary origins containing migraineguardian are strictly rejected', async () => {
+      const maliciousOrigins = [
+        'https://migraineguardian-malicious.onrender.com',
+        'https://attacker-migraineguardian.onrender.com',
+        'https://evil-migraineguardian.vercel.app',
+        'https://not-migraineguardian.com',
+      ];
+
+      for (const origin of maliciousOrigins) {
+        const res = await httpRequest({
+          host: '127.0.0.1',
+          port,
+          path: '/api/health',
+          method: 'OPTIONS',
+          headers: {
+            Origin: origin,
+            'Access-Control-Request-Method': 'GET',
+          },
+        });
+
+        assert(
+          !res.headers['access-control-allow-origin'],
+          `Arbitrary origin ${origin} containing migraineguardian must be rejected`
+        );
+      }
+    });
+
+    await testAsync('Intended local development origins are permitted', async () => {
+      const devOrigins = [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173',
+      ];
+
+      for (const origin of devOrigins) {
+        const res = await httpRequest({
+          host: '127.0.0.1',
+          port,
+          path: '/api/health',
+          method: 'GET',
+          headers: {
+            Origin: origin,
+          },
+        });
+
+        assert.strictEqual(res.statusCode, 200);
+        assert.strictEqual(res.headers['access-control-allow-origin'], origin);
+        assert.strictEqual(res.headers['access-control-allow-credentials'], 'true');
+      }
+    });
   } finally {
     if (server) {
       server.close();

@@ -101,7 +101,6 @@ async function request(endpoint, options = {}) {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Cache-Control': 'no-cache, no-store',
-      'Pragma': 'no-cache',
       ...(options.headers || {}),
     };
 

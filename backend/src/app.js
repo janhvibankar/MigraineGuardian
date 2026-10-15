@@ -12,36 +12,67 @@ const app = express();
 // Disable default ETag caching to prevent 304 Not Modified on dynamic authenticated API endpoints
 app.set('etag', false);
 
-// CORS Configuration — supports comma-separated list, trailing slash sanitization, and Vercel domains
-const rawOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:3000')
+// Explicit trusted origins for production and development
+const explicitTrustedOrigins = [
+  'https://migraineguardian-frontend.onrender.com',
+  'https://migraineguardian.vercel.app',
+  'https://migraineguardian-frontend.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+];
+
+// Configured origins from environment variable (comma-separated, sanitized, no bare wildcards)
+const configuredOrigins = (process.env.CLIENT_ORIGIN || '')
   .split(',')
   .map((o) => o.trim().replace(/\/+$/, ''))
-  .filter(Boolean);
+  .filter((o) => o && o !== '*');
 
-const defaultDevOrigins = ['http://localhost:3000', 'http://localhost:5173'];
+const trustedOrigins = new Set([...explicitTrustedOrigins, ...configuredOrigins]);
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
+const standardAllowedHeaders = [
+  'Content-Type',
+  'Authorization',
+  'X-Request-Id',
+  'Cache-Control',
+  'Pragma',
+  'Accept',
+  'If-Modified-Since',
+  'If-None-Match',
+  'X-Requested-With',
+];
+
+const corsOptionsDelegate = (req, callback) => {
+  const origin = req.headers.origin;
+  let isAllowed = false;
+
+  if (!origin) {
+    // Non-browser or same-origin requests (e.g. server-side health checks, curl)
+    isAllowed = true;
+  } else {
     const cleanOrigin = origin.trim().replace(/\/+$/, '');
-    if (
-      rawOrigins.includes('*') ||
-      rawOrigins.includes(cleanOrigin) ||
-      defaultDevOrigins.includes(cleanOrigin) ||
-      /^https:\/\/migraineguardian.*\.vercel\.app$/.test(cleanOrigin) ||
-      /^https:\/\/migraineguardian.*\.onrender\.com$/.test(cleanOrigin) ||
-      /^https:\/\/.*migraineguardian.*\.onrender\.com$/.test(cleanOrigin)
-    ) {
-      return callback(null, true);
-    }
-    return callback(null, false);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    isAllowed = trustedOrigins.has(cleanOrigin);
+  }
+
+  if (!isAllowed) {
+    // Disallow untrusted origin — passes through without Access-Control-Allow-Origin header
+    return callback(null, { origin: false });
+  }
+
+  // When origin is trusted, allow requested headers or fallback to standard set
+  const requestedHeaders = req.headers['access-control-request-headers'];
+  callback(null, {
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: requestedHeaders || standardAllowedHeaders,
+    exposedHeaders: ['X-Request-Id'],
+    maxAge: 86400,
+  });
 };
 
-app.use(cors(corsOptions));
+app.use(cors(corsOptionsDelegate));
 
 // Structured Observability Logging Middleware
 app.use((req, res, next) => {
