@@ -127,18 +127,12 @@ export function logSafeAuthDiagnostic(operation, stage, err) {
 }
 
 export function formatFirebaseError(err, context = 'default') {
-  if (isTransientDatabaseClosingError(err)) {
-    if (context === 'google') {
-      return 'Authentication storage was temporarily busy during Google sign-in. Please tap Continue with Google again.';
-    }
-    if (context === 'signup') {
-      return 'Authentication storage is momentarily busy. Please try signing in.';
-    }
-    return 'Authentication storage is momentarily busy. Please tap Sign In again.';
-  }
-
   const code = err?.code || '';
   switch (code) {
+    case 'auth/unauthorized-domain':
+      return 'This domain is not authorized for OAuth operations. Please verify authorized domains in Firebase Console.';
+    case 'auth/web-storage-unsupported':
+      return 'Third-party storage access is restricted in this browser. Please use standard redirect sign-in.';
     case 'auth/email-already-in-use':
       return 'This email is already registered. Please sign in instead.';
     case 'auth/invalid-email':
@@ -168,8 +162,20 @@ export function formatFirebaseError(err, context = 'default') {
     case 'auth/argument-error':
       return 'Authentication configuration error. Please refresh the page or try another sign-in method.';
     default:
-      return err?.message || 'Authentication failed. Please try again.';
+      break;
   }
+
+  if (isTransientDatabaseClosingError(err)) {
+    if (context === 'google') {
+      return 'Authentication storage was temporarily busy during Google sign-in. Please tap Continue with Google again.';
+    }
+    if (context === 'signup') {
+      return 'Authentication storage is momentarily busy. Please try signing in.';
+    }
+    return 'Authentication storage is momentarily busy. Please tap Sign In again.';
+  }
+
+  return err?.message || 'Authentication failed. Please try again.';
 }
 
 export function clearUserScopedData() {
@@ -403,12 +409,44 @@ export const authService = {
             ? browserPopupRedirectResolver
             : undefined;
 
-        const result = await getRedirectResult(auth, resolver);
-        if (!result || !result.user) {
+        let result = null;
+        try {
+          result = await getRedirectResult(auth, resolver);
+        } catch (redirectErr) {
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            try {
+              window.sessionStorage.removeItem('mg_google_redirect_in_flight');
+            } catch (e) {
+              // Ignore storage errors
+            }
+          }
+          logSafeAuthDiagnostic('handleRedirectResult', 'getRedirectResult error', redirectErr);
+          return {
+            success: false,
+            redirectHandled: true,
+            error: formatFirebaseError(redirectErr, 'google'),
+          };
+        }
+
+        const hadRedirectFlag =
+          typeof window !== 'undefined' &&
+          window.sessionStorage &&
+          window.sessionStorage.getItem('mg_google_redirect_in_flight') === 'true';
+
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          try {
+            window.sessionStorage.removeItem('mg_google_redirect_in_flight');
+          } catch (e) {
+            // Ignore storage errors
+          }
+        }
+
+        const firebaseUser = result?.user || (hadRedirectFlag ? auth.currentUser : null);
+
+        if (!firebaseUser) {
           return { success: false, redirectHandled: false };
         }
 
-        const firebaseUser = result.user;
         const displayName =
           firebaseUser.displayName || formatNameFromEmail(firebaseUser.email) || 'User';
         const token = await firebaseUser.getIdToken();
@@ -462,47 +500,49 @@ export const authService = {
             : undefined;
 
         const mobile = isMobileBrowser();
+
+        if (mobile) {
+          // On physical mobile devices (iOS Safari, Android Chrome), popups open in background tabs
+          // that drop IndexedDB connection state ('Database is closing/hidden') or are blocked.
+          // Directly invoke full-page redirect for seamless mobile OAuth completion.
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            try {
+              window.sessionStorage.setItem('mg_google_redirect_in_flight', 'true');
+            } catch (e) {
+              // Ignore sessionStorage error
+            }
+          }
+          logSafeAuthDiagnostic('loginWithGoogle (mobile)', 'initiating full-page OAuth redirect');
+          await signInWithRedirect(auth, googleProvider, resolver);
+          return { success: true, pendingRedirect: true };
+        }
+
+        // On desktop environments, execute popup flow
         let result = null;
+        try {
+          result = await signInWithPopup(auth, googleProvider, resolver);
+        } catch (popupErr) {
+          const code = popupErr?.code || '';
+          const isPopupBlocked =
+            code === 'auth/popup-blocked' ||
+            code === 'auth/cancelled-popup-request' ||
+            code === 'auth/operation-not-supported-in-this-environment' ||
+            code === 'auth/web-storage-unsupported' ||
+            isTransientDatabaseClosingError(popupErr);
 
-        if (!mobile) {
-          // On desktop, prioritize standard non-navigating popup flow
-          try {
-            result = await signInWithPopup(auth, googleProvider, resolver);
-          } catch (popupErr) {
-            const code = popupErr?.code || '';
-            const isPopupBlocked =
-              code === 'auth/popup-blocked' ||
-              code === 'auth/cancelled-popup-request' ||
-              code === 'auth/operation-not-supported-in-this-environment' ||
-              isTransientDatabaseClosingError(popupErr);
-
-            if (isPopupBlocked) {
-              logSafeAuthDiagnostic('loginWithGoogle (desktop)', 'popup blocked, falling back to redirect', popupErr);
-              await signInWithRedirect(auth, googleProvider, resolver);
-              return { success: true, pendingRedirect: true };
+          if (isPopupBlocked) {
+            logSafeAuthDiagnostic('loginWithGoogle (desktop)', 'popup blocked/unavailable, falling back to redirect', popupErr);
+            if (typeof window !== 'undefined' && window.sessionStorage) {
+              try {
+                window.sessionStorage.setItem('mg_google_redirect_in_flight', 'true');
+              } catch (e) {
+                // Ignore sessionStorage error
+              }
             }
-            throw popupErr;
+            await signInWithRedirect(auth, googleProvider, resolver);
+            return { success: true, pendingRedirect: true };
           }
-        } else {
-          // On mobile, try popup first. If blocked or if backgrounding triggers IndexedDB closing/suspension,
-          // seamlessly initiate redirect to avoid locking user out
-          try {
-            result = await signInWithPopup(auth, googleProvider, resolver);
-          } catch (popupErr) {
-            const code = popupErr?.code || '';
-            const isPopupBlocked =
-              code === 'auth/popup-blocked' ||
-              code === 'auth/cancelled-popup-request' ||
-              code === 'auth/operation-not-supported-in-this-environment' ||
-              isTransientDatabaseClosingError(popupErr);
-
-            if (isPopupBlocked) {
-              logSafeAuthDiagnostic('loginWithGoogle (mobile)', 'popup blocked/suspended, falling back to redirect', popupErr);
-              await signInWithRedirect(auth, googleProvider, resolver);
-              return { success: true, pendingRedirect: true };
-            }
-            throw popupErr;
-          }
+          throw popupErr;
         }
 
         if (result && result.user) {
