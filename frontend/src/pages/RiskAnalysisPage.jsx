@@ -55,8 +55,26 @@ export function RiskAnalysisPage() {
   const [showFullMatrix, setShowFullMatrix] = useState(false);
 
   const inFlightRef = useRef(false);
+  const pollTimerRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  // Maximum warming auto-poll attempts: 10 cycles (~80-90s total), accommodating the measured
+  // ~63s Render container cold-start delay while guaranteeing polling is strictly bounded.
+  const MAX_WARMING_RETRIES = 10;
+
+  const clearPollTimer = () => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
 
   const evaluatePrediction = async (isManualRetry = false, retryAttempt = 0) => {
+    // If a manual retry is clicked, clear any scheduled background auto-poll timer
+    if (isManualRetry) {
+      clearPollTimer();
+    }
+
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
@@ -71,40 +89,65 @@ export function RiskAnalysisPage() {
         ? await predictionService.recalculateTodayPrediction()
         : await predictionService.getTodayPrediction();
 
+      if (!isMountedRef.current) return;
+
       const validForecast =
         forecastData && forecastData.score !== undefined && forecastData.score !== null ? forecastData : null;
 
       if (validForecast) {
+        // Valid forecast arrived: stop polling immediately and render forecast
+        clearPollTimer();
         setPrediction(validForecast);
         setForecastStatus('ready');
         setCalculationError(null);
       } else {
         const status = forecastData?.forecastStatus || (forecastData?.mlError?.includes('warming') ? 'warming' : 'error');
+        const retryPermitted = forecastData?.canRetry !== false;
         setForecastStatus(status);
-        setCanRetry(forecastData?.canRetry !== false);
+        setCanRetry(retryPermitted);
         setCalculationError(forecastData?.mlError || t('risk.serviceUnavailable'));
 
-        // Bounded transient backoff: If initial request returned warming, auto-check once after 8 seconds
-        if (!isManualRetry && status === 'warming' && retryAttempt < 1) {
-          setTimeout(() => {
+        const isWarmingState = status === 'warming' || forecastData?.errorCategory === 'FASTAPI_SERVICE_WARMING';
+
+        // Bounded transient backoff: Auto-poll only while service is warming, retries permitted, and under MAX_WARMING_RETRIES
+        if (!isManualRetry && isWarmingState && retryPermitted && retryAttempt < MAX_WARMING_RETRIES) {
+          const pollDelayMs =
+            typeof forecastData?.retryAfterMs === 'number' &&
+            forecastData.retryAfterMs >= 2000 &&
+            forecastData.retryAfterMs <= 30000
+              ? forecastData.retryAfterMs
+              : 8000;
+
+          pollTimerRef.current = setTimeout(() => {
+            pollTimerRef.current = null;
             inFlightRef.current = false;
-            evaluatePrediction(false, retryAttempt + 1);
-          }, 8000);
+            if (isMountedRef.current) {
+              evaluatePrediction(false, retryAttempt + 1);
+            }
+          }, pollDelayMs);
           return;
         }
+
+        // Stop polling on non-retryable error or exhausted attempts; ensure timer is cleared
+        clearPollTimer();
       }
     } catch (err) {
+      if (!isMountedRef.current) return;
       console.warn('[RiskAnalysisPage] Prediction evaluation error:', err.message);
       setForecastStatus('error');
       setCalculationError(t('risk.serviceUnavailable'));
+      clearPollTimer();
     } finally {
-      setIsEvaluating(false);
-      setIsRetrying(false);
+      if (isMountedRef.current) {
+        setIsEvaluating(false);
+        setIsRetrying(false);
+      }
       inFlightRef.current = false;
     }
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
     let isMounted = true;
 
     async function init() {
@@ -139,10 +182,11 @@ export function RiskAnalysisPage() {
     init();
 
     const handleForecastUpdated = (e) => {
-      if (isMounted) {
+      if (isMountedRef.current) {
         const updated = e.detail;
         const valid = updated && updated.score !== undefined && updated.score !== null ? updated : null;
         if (valid) {
+          clearPollTimer();
           setPrediction(valid);
           setForecastStatus('ready');
           setIsEvaluating(false);
@@ -154,6 +198,8 @@ export function RiskAnalysisPage() {
 
     return () => {
       isMounted = false;
+      isMountedRef.current = false;
+      clearPollTimer();
       window.removeEventListener('migraineguardian_forecast_updated', handleForecastUpdated);
     };
   }, []);

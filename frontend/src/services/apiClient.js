@@ -93,14 +93,19 @@ async function request(endpoint, options = {}) {
   const executeCall = async () => {
     const token = await getAuthToken();
     const isAiOperation = url.includes('/predictions') || url.includes('/chat') || url.includes('/checkins');
-    const timeoutMs = options.timeoutMs || (isAiOperation ? 75000 : 30000);
+    const timeoutMs = options.timeoutMs || (isAiOperation ? 85000 : 30000);
     const controller = new AbortController();
     const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
     
+    const clientReqId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Cache-Control': 'no-cache, no-store',
+      'X-Request-Id': clientReqId,
       ...(options.headers || {}),
     };
 

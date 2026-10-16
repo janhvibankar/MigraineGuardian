@@ -19,8 +19,8 @@
  */
 
 // Bounded timing configuration
-const PER_ATTEMPT_TIMEOUT_MS = parseInt(process.env.ML_REQUEST_TIMEOUT_MS, 10) || 65000;
-const TOTAL_DEADLINE_MS = parseInt(process.env.ML_TOTAL_DEADLINE_MS, 10) || 75000;
+const PER_ATTEMPT_TIMEOUT_MS = parseInt(process.env.ML_REQUEST_TIMEOUT_MS, 10) || 70000;
+const TOTAL_DEADLINE_MS = parseInt(process.env.ML_TOTAL_DEADLINE_MS, 10) || 85000;
 const RETRY_MAX = 3;
 const INITIAL_RETRY_DELAY_MS = 2000;
 
@@ -57,16 +57,17 @@ export function sanitizeUrl(rawUrl) {
 }
 
 /**
- * Structured logger for ML inference gateway operations.
+ * Structured logger for ML inference gateway operations with request correlation.
  */
-function logMlEvent({ stage, safeHost, status = null, elapsedMs = 0, attempt = 1, maxAttempts = RETRY_MAX, error = null, details = null }) {
+function logMlEvent({ reqId = null, stage, safeHost, status = null, elapsedMs = 0, attempt = 1, maxAttempts = RETRY_MAX, error = null, details = null }) {
   const parts = [
     `[ML-GATEWAY]`,
+    reqId ? `ReqId: ${reqId}` : null,
     `Stage: ${stage}`,
     `Host: ${safeHost}`,
     `Attempt: ${attempt}/${maxAttempts}`,
     `Elapsed: ${elapsedMs}ms`,
-  ];
+  ].filter(Boolean);
 
   if (status !== null) {
     parts.push(`Status: ${status}`);
@@ -90,20 +91,25 @@ function logMlEvent({ stage, safeHost, status = null, elapsedMs = 0, attempt = 1
 }
 
 /**
- * Single HTTP attempt to call the FastAPI /predict endpoint with strict deadline.
+ * Single HTTP attempt to call the FastAPI /predict endpoint with strict deadline and correlation ID.
  */
-async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, attempt, maxAttempts) {
+async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, attempt, maxAttempts, reqId = null) {
   const controller = new AbortController();
   const startTime = Date.now();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (reqId) {
+      headers['X-Request-Id'] = String(reqId);
+    }
+
     const response = await fetch(fullUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
+      headers,
       body: JSON.stringify(mlPayload),
       signal: controller.signal,
     });
@@ -122,6 +128,7 @@ async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, att
       const isTransient = TRANSIENT_HTTP_STATUSES.has(response.status);
 
       logMlEvent({
+        reqId,
         stage: isTransient ? 'WARMING' : 'HTTP_ERROR',
         safeHost,
         status: response.status,
@@ -154,6 +161,7 @@ async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, att
 
     if (typeof json.score !== 'number' || typeof json.level !== 'string') {
       logMlEvent({
+        reqId,
         stage: 'INVALID_SCHEMA',
         safeHost,
         status: response.status,
@@ -176,6 +184,7 @@ async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, att
     }
 
     logMlEvent({
+      reqId,
       stage: 'SUCCESS',
       safeHost,
       status: response.status,
@@ -195,6 +204,7 @@ async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, att
 
     if (err.name === 'AbortError') {
       logMlEvent({
+        reqId,
         stage: 'TIMEOUT',
         safeHost,
         elapsedMs,
@@ -221,6 +231,7 @@ async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, att
       err.message?.includes('ECONNREFUSED');
 
     logMlEvent({
+      reqId,
       stage: isConnRefused ? 'CONNECTION_REFUSED' : 'NETWORK_ERROR',
       safeHost,
       elapsedMs,
@@ -247,14 +258,14 @@ export const mlInferenceService = {
    * Sends prediction & XAI request to FastAPI POST /predict.
    *
    * Features:
-   *  - Total bounded deadline (75s default or shorter request-specific deadline)
+   *  - Total bounded deadline (85s default or shorter request-specific deadline)
    *  - Automatic bounded exponential backoff for cold-start 502/503/504 and connection refused
    *  - Immediate return on success or non-retryable client error (e.g. 400, 422, invalid schema)
-   *  - Structured logging with safe host and elapsed timings
+   *  - Structured logging with request correlation ID, safe host, and elapsed timings
    *
    * @param {Object} mlPayload  { user_id, latest_log, baseline_stats, recent_episodes_count_7d, ... }
    * @param {string} [overrideUrl]  Optional override for testing
-   * @param {Object} [options]  Optional parameters { deadlineMs?: number }
+   * @param {Object} [options]  Optional parameters { deadlineMs?: number, reqId?: string }
    * @returns {Promise<{success, data?, error?, unavailable?, timeout?, transient?, elapsedMs?}>}
    */
   predictMigraineRisk: async (mlPayload, overrideUrl = null, options = {}) => {
@@ -262,6 +273,7 @@ export const mlInferenceService = {
     const safeHost = sanitizeUrl(baseUrl);
     const fullUrl = `${baseUrl}/predict`;
     const pipelineStartTime = Date.now();
+    const reqId = (options && (options.reqId || options.requestId)) || null;
     const effectiveDeadlineMs = Math.min(
       TOTAL_DEADLINE_MS,
       (options && options.deadlineMs) || TOTAL_DEADLINE_MS
@@ -277,6 +289,7 @@ export const mlInferenceService = {
 
       if (remainingTime <= 2000) {
         logMlEvent({
+          reqId,
           stage: 'DEADLINE_EXCEEDED',
           safeHost,
           elapsedMs: elapsedSoFar,
@@ -285,7 +298,13 @@ export const mlInferenceService = {
           error: `Total operation deadline of ${effectiveDeadlineMs}ms reached`,
         });
 
-        const wasWarming = lastResult?.transient || lastResult?.error?.code === 'FASTAPI_SERVICE_WARMING';
+        const wasWarming = Boolean(
+          lastResult?.transient ||
+          lastResult?.error?.code === 'FASTAPI_SERVICE_WARMING' ||
+          lastResult?.timeout ||
+          lastResult?.error?.code === 'FASTAPI_TIMEOUT' ||
+          (lastResult?.unavailable && elapsedSoFar >= 30000)
+        );
         return {
           success: false,
           timeout: !wasWarming,
@@ -311,7 +330,8 @@ export const mlInferenceService = {
         mlPayload,
         attemptTimeoutMs,
         attempt,
-        'adaptive'
+        'adaptive',
+        reqId
       );
       lastResult = result;
 
@@ -336,6 +356,7 @@ export const mlInferenceService = {
       // Transient 502/503/504 (Render container spinning up) retries across the full deadline
       if (result.unavailable && !result.transient && attempt >= 3) {
         logMlEvent({
+          reqId,
           stage: 'CONN_REFUSED_EXHAUSTED',
           safeHost,
           elapsedMs: currentElapsed,
@@ -357,6 +378,7 @@ export const mlInferenceService = {
       }
 
       logMlEvent({
+        reqId,
         stage: 'RETRYING',
         safeHost,
         status: result.status,
@@ -371,6 +393,7 @@ export const mlInferenceService = {
 
     const totalElapsedMs = Date.now() - pipelineStartTime;
     logMlEvent({
+      reqId,
       stage: 'ALL_ATTEMPTS_EXHAUSTED',
       safeHost,
       elapsedMs: totalElapsedMs,
@@ -379,7 +402,13 @@ export const mlInferenceService = {
       error: `All attempts exhausted or deadline (${effectiveDeadlineMs}ms) exceeded`,
     });
 
-    const isWarming = lastResult?.transient || lastResult?.error?.code === 'FASTAPI_SERVICE_WARMING';
+    const isWarming = Boolean(
+      lastResult?.transient ||
+      lastResult?.error?.code === 'FASTAPI_SERVICE_WARMING' ||
+      lastResult?.timeout ||
+      lastResult?.error?.code === 'FASTAPI_TIMEOUT' ||
+      (lastResult?.unavailable && totalElapsedMs >= 30000)
+    );
 
     return {
       success: false,
@@ -394,6 +423,26 @@ export const mlInferenceService = {
         details: lastResult?.error?.details || null,
       },
     };
+  },
+
+  /**
+   * Non-blocking or short-timeout warm-up ping for FastAPI ML service.
+   * Sends an HTTP request to wake up sleeping Render instance.
+   */
+  warmupMlService: async ({ reqId = null, timeoutMs = 5000, overrideUrl = null } = {}) => {
+    const baseUrl = getMlServiceUrl(overrideUrl);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const headers = { Accept: 'application/json' };
+      if (reqId) headers['X-Request-Id'] = String(reqId);
+      const res = await fetch(`${baseUrl}/ready`, { signal: controller.signal, headers });
+      clearTimeout(timer);
+      return { triggered: true, status: res.status };
+    } catch (err) {
+      clearTimeout(timer);
+      return { triggered: true, error: err.name || err.message };
+    }
   },
 
   /**

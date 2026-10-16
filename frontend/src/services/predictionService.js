@@ -66,6 +66,7 @@ export const predictionService = {
           forecastStatus: res.raw.forecastStatus,
           canRetry: Boolean(res.raw.canRetry),
           checkinExists: Boolean(res.raw.checkinExists),
+          retryAfterMs: res.raw.retryAfterMs || null,
         };
       }
       return null;

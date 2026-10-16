@@ -52,12 +52,42 @@ export async function getTodayPredictionController(req, res, next) {
 
     console.log(`[PREDICTION-GET] User: ${userPrefix}... | Date: ${targetDate} | ForceRecalc: ${forceRecalculate}`);
 
-    // If an on-demand calculation is already in-flight for this user and date, await it to avoid thundering herd
+    // If an on-demand calculation is already in-flight for this user and date, await it with bounded 20s budget
     if (!forceRecalculate && activeInferenceMap.has(lockKey)) {
-      console.log(`[PREDICTION-GET] User: ${userPrefix}... | Awaiting in-flight ML pipeline for ${targetDate}`);
+      console.log(`[PREDICTION-GET] [reqId: ${req.id || 'N/A'}] User: ${userPrefix}... | Awaiting in-flight ML pipeline for ${targetDate} (max 20s budget)`);
+      let inFlightTimedOut = false;
+      let inFlightTimer = null;
       try {
-        await activeInferenceMap.get(lockKey);
-      } catch (_) {}
+        const inFlightPromise = activeInferenceMap.get(lockKey);
+        const timeoutPromise = new Promise((resolve) => {
+          inFlightTimer = setTimeout(() => resolve('IN_FLIGHT_TIMEOUT'), 20000);
+        });
+        const raceResult = await Promise.race([inFlightPromise, timeoutPromise]);
+        if (raceResult === 'IN_FLIGHT_TIMEOUT') {
+          inFlightTimedOut = true;
+        }
+      } catch (_) {
+      } finally {
+        if (inFlightTimer) {
+          clearTimeout(inFlightTimer);
+          inFlightTimer = null;
+        }
+      }
+
+      if (inFlightTimedOut) {
+        console.log(`[PREDICTION-GET] [reqId: ${req.id || 'N/A'}] In-flight pipeline still processing in background after 20s. Returning warming status to client.`);
+        return res.status(200).json({
+          success: true,
+          data: null,
+          checkinExists: true,
+          forecastStatus: 'warming',
+          errorCategory: 'FASTAPI_SERVICE_WARMING',
+          canRetry: true,
+          retryAfterMs: 8000,
+          mlError: 'AI prediction service is warming up. Forecast calculation in progress...',
+          message: 'AI prediction service is warming up. Forecast calculation in progress...',
+        });
+      }
     }
 
     let forecast = forceRecalculate ? null : await firestoreService.getLatestRiskForecast(userId, targetDate);
@@ -145,9 +175,12 @@ export async function getTodayPredictionController(req, res, next) {
             weatherYesterdayBlock
           );
 
-          // 4. Send request to FastAPI ML service (/predict) with bounded 50s deadline
-          //    Guarantees backend returns before frontend 75s timeout to prevent browser aborts
-          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, { deadlineMs: 50000 });
+          // 4. Send request to FastAPI ML service (/predict) with bounded 75s deadline
+          //    Guarantees backend returns before frontend 85s timeout to prevent browser aborts
+          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, {
+            deadlineMs: 75000,
+            reqId: req.id,
+          });
 
           if (mlResult.success && mlResult.data) {
             try {
@@ -175,9 +208,10 @@ export async function getTodayPredictionController(req, res, next) {
             let errorCode = mlResult.error?.code || 'ML_PREDICTION_FAILED';
             let isWarming = false;
 
-            if (mlResult.timeout) {
-              errCategory = 'The AI prediction service timed out. Please click Calculate Forecast to retry.';
-              errorCode = 'FASTAPI_TIMEOUT';
+            if (mlResult.timeout || mlResult.error?.code === 'FASTAPI_TIMEOUT') {
+              errCategory = 'The AI prediction service is warming up. Please click Calculate Forecast in a moment.';
+              errorCode = 'FASTAPI_SERVICE_WARMING';
+              isWarming = true;
             } else if (mlResult.unavailable) {
               errCategory = 'ML prediction service is currently unavailable. Please ensure the service is running.';
               errorCode = 'FASTAPI_UNAVAILABLE';
@@ -201,6 +235,7 @@ export async function getTodayPredictionController(req, res, next) {
               mlError: errCategory,
               errorCategory: errorCode,
               canRetry: isWarming || errorCode === 'FASTAPI_TIMEOUT' || errorCode === 'FASTAPI_UNAVAILABLE',
+              retryAfterMs: isWarming ? 8000 : null,
             });
           }
         } catch (genErr) {

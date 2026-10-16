@@ -1,5 +1,5 @@
 import time
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from app.services.risk_calculator import model_manager
@@ -83,7 +83,7 @@ class PredictResponse(BaseModel):
 
 
 @router.post("/predict", response_model=PredictResponse, status_code=status.HTTP_200_OK)
-async def predict_migraine_risk(request: PredictRequest):
+async def predict_migraine_risk(request: PredictRequest, http_request: Request):
     if not model_manager.is_loaded:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -110,7 +110,8 @@ async def predict_migraine_risk(request: PredictRequest):
             return_meta=True,
         )
         inf_duration = time.perf_counter() - t_inf_start
-        print(f"[ML Service] Risk calculation complete in {inf_duration:.3f}s | model={model_used} | score={score:.1f}% | level={level}")
+        req_id = http_request.headers.get("x-request-id", "none") if http_request else "none"
+        print(f"[ML Service] [ReqId: {req_id}] Risk calculation complete in {inf_duration:.3f}s | model={model_used} | score={score:.1f}% | level={level}")
 
         baseline_dict = request.baseline_stats.model_dump() if request.baseline_stats else None
         latest_dict = request.latest_log.model_dump()

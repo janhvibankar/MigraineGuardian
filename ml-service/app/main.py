@@ -1,5 +1,5 @@
 import time
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from app.core.config import settings
@@ -28,6 +28,14 @@ app = FastAPI(
     version=settings.VERSION,
     lifespan=lifespan
 )
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    req_id = request.headers.get("x-request-id")
+    response = await call_next(request)
+    if req_id:
+        response.headers["X-Request-Id"] = req_id
+    return response
 
 # Register endpoints
 app.include_router(predict_router)

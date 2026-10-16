@@ -101,14 +101,14 @@ async function runRegressionSuite() {
       assert(content.includes('destination: /index.html'), 'render.yaml destination must be /index.html');
     });
 
-    test('apiClient.js normalizes API_BASE_URL to include /api and uses 75s AI timeouts', () => {
+    test('apiClient.js normalizes API_BASE_URL to include /api and uses 85s AI timeouts', () => {
       const apiClientPath = path.resolve(__dirname, '../../frontend/src/services/apiClient.js');
       assert(fs.existsSync(apiClientPath), 'apiClient.js must exist');
       const content = fs.readFileSync(apiClientPath, 'utf8');
       assert(content.includes('function resolveApiBaseUrl()'), 'apiClient.js must normalize API_BASE_URL dynamically');
       assert(content.includes("configured.endsWith('/api') ? configured : `${configured}/api`"), 'apiClient.js must append /api if missing from configured URL');
       assert(content.includes("isAiOperation = url.includes('/predictions') || url.includes('/chat')"), 'apiClient.js must identify both /predictions and /chat as AI operations');
-      assert(content.includes('isAiOperation ? 75000 : 30000'), 'apiClient.js must allocate 75000ms timeout for AI operations');
+      assert(content.includes('isAiOperation ? 85000 : 30000'), 'apiClient.js must allocate 85000ms timeout for AI operations');
     });
 
     // --- SUITE B: PSS-10 ASSESSMENT ---
@@ -367,11 +367,11 @@ async function runRegressionSuite() {
       }
     });
 
-    test('apiClient.js allocates 75s timeout for /checkins alongside /predictions and /chat', () => {
+    test('apiClient.js allocates 85s timeout for /checkins alongside /predictions and /chat', () => {
       const apiClientPath = path.resolve(__dirname, '../../frontend/src/services/apiClient.js');
       const content = fs.readFileSync(apiClientPath, 'utf8');
       assert(content.includes("url.includes('/checkins')"), 'apiClient.js must include /checkins in longer timeout classification');
-      assert(content.includes('isAiOperation ? 75000 : 30000'), 'apiClient.js must allocate 75000ms for isAiOperation');
+      assert(content.includes('isAiOperation ? 85000 : 30000'), 'apiClient.js must allocate 85000ms for isAiOperation');
     });
 
     test('checkinController persists to Firestore first and returns immediately with forecastPending: true', () => {
@@ -394,33 +394,77 @@ async function runRegressionSuite() {
       assert(content.includes('setServerError(errMsg)'), 'DailyCheckinPage must report error and not claim success if save fails');
     });
 
-    test('RiskAnalysisPage.jsx decouples check-in loading from prediction evaluation and displays states', () => {
+    test('RiskAnalysisPage.jsx decouples check-in loading, bounds auto-polling, and cleans up timers on unmount', () => {
       const pagePath = path.resolve(__dirname, '../../frontend/src/pages/RiskAnalysisPage.jsx');
       const content = fs.readFileSync(pagePath, 'utf8');
       assert(content.includes('initialCheckinLoading'), 'RiskAnalysisPage must track initialCheckinLoading separately');
       assert(content.includes('isEvaluating'), 'RiskAnalysisPage must track isEvaluating state');
       assert(content.includes('evaluatePrediction'), 'RiskAnalysisPage must run evaluatePrediction asynchronously');
       assert(content.includes('inFlightRef'), 'RiskAnalysisPage must prevent concurrent duplicate prediction evaluations');
+      assert(content.includes('pollTimerRef'), 'RiskAnalysisPage must track auto-poll timer in a ref');
+      assert(content.includes('MAX_WARMING_RETRIES = 10'), 'RiskAnalysisPage must define bounded MAX_WARMING_RETRIES of 10');
+      assert(content.includes('isMountedRef.current = true;'), 'RiskAnalysisPage must reset isMountedRef to true on mount');
+      assert(content.includes('isMountedRef.current = false;'), 'RiskAnalysisPage must set isMountedRef to false on unmount');
+      assert(content.includes('clearPollTimer()'), 'RiskAnalysisPage must invoke clearPollTimer on unmount, valid forecast, manual retry, and terminal error');
       assert(content.includes('checkinRecordedTitle'), 'RiskAnalysisPage must render recorded checkin status banner');
       assert(content.includes('evaluatePrediction(true)'), 'RiskAnalysisPage must provide working manual retry action');
     });
 
-    test('predictionController enforces 50s bounded deadline and strict user/date validation', () => {
+    test('predictionController enforces 75s bounded deadline, 20s in-flight race, and strict user/date validation', () => {
       const controllerPath = path.resolve(__dirname, './controllers/predictionController.js');
       const content = fs.readFileSync(controllerPath, 'utf8');
-      assert(content.includes('deadlineMs: 50000'), 'predictionController must bound on-demand ML deadline to 50000ms');
+      assert(content.includes('deadlineMs: 75000'), 'predictionController must bound on-demand ML deadline to 75000ms');
+      assert(content.includes('IN_FLIGHT_TIMEOUT') && content.includes('20000'), 'predictionController must race in-flight pipeline against 20s budget');
+      assert(content.includes('clearTimeout(inFlightTimer)'), 'predictionController must clear inFlightTimer in finally block');
       assert(content.includes('forecastDateMatches'), 'predictionController must verify forecastDate matches targetDate');
       assert(content.includes('forecastScoreValid'), 'predictionController must verify forecast score is a valid number');
       assert(content.includes("forecastStatus: 'ready'"), 'predictionController must return forecastStatus: ready when valid');
       assert(content.includes("forecastStatus: isWarming ? 'warming' : 'error'"), 'predictionController must return accurate forecastStatus');
     });
 
-    test('predictionService.js validates targetDate and numeric score, rejecting stale cross-date forecasts', () => {
+    await testAsync('activeInferenceMap races in-flight pipeline, clears timeout handle, and prevents duplicate requests', async () => {
+      const lockKey = 'test_user_race_2026-10-16';
+      let resolvedEarly = false;
+      let timerCleared = false;
+
+      // Case A: In-flight promise resolves early (warm instance, 50ms)
+      const earlyPromise = new Promise((resolve) => setTimeout(() => {
+        resolvedEarly = true;
+        resolve({ score: 45.0, level: 'Moderate' });
+      }, 50));
+
+      activeInferenceMap.set(lockKey, earlyPromise);
+
+      let inFlightTimer = null;
+      let timedOut = false;
+      try {
+        const p = activeInferenceMap.get(lockKey);
+        const t = new Promise((resolve) => {
+          inFlightTimer = setTimeout(() => resolve('IN_FLIGHT_TIMEOUT'), 20000);
+        });
+        const res = await Promise.race([p, t]);
+        if (res === 'IN_FLIGHT_TIMEOUT') timedOut = true;
+      } finally {
+        if (inFlightTimer) {
+          clearTimeout(inFlightTimer);
+          timerCleared = true;
+        }
+        activeInferenceMap.delete(lockKey);
+      }
+
+      assert.strictEqual(resolvedEarly, true, 'Early promise must resolve');
+      assert.strictEqual(timedOut, false, 'Must not time out when pipeline resolves early');
+      assert.strictEqual(timerCleared, true, 'Race timeout handle must be cleared in finally block');
+      assert.strictEqual(activeInferenceMap.has(lockKey), false, 'Lock key must be cleaned up from map');
+    });
+
+    test('predictionService.js validates targetDate, propagates retryAfterMs, and evicts stale cached forecasts', () => {
       const servicePath = path.resolve(__dirname, '../../frontend/src/services/predictionService.js');
       const content = fs.readFileSync(servicePath, 'utf8');
       assert(content.includes('forecastDate === dateQuery'), 'predictionService must check forecastDate against dateQuery');
       assert(content.includes("typeof res.data.score === 'number'"), 'predictionService must verify numeric score');
       assert(content.includes('forecastStatus: res.raw.forecastStatus'), 'predictionService must pass forecastStatus to caller');
+      assert(content.includes('retryAfterMs: res.raw.retryAfterMs'), 'predictionService must forward retryAfterMs to caller');
       assert(content.includes('storageService.removeItem'), 'predictionService must evict stale or invalid cached forecasts');
     });
 
@@ -434,6 +478,29 @@ async function runRegressionSuite() {
       assert(mainContent.includes('@app.get("/ready")'), 'ml-service main.py must define /ready endpoint');
       assert(mainContent.includes('Model loading completed in'), 'ml-service main.py must log model loading duration');
       assert(predictContent.includes('Risk calculation complete in'), 'ml-service predict.py must log inference duration');
+    });
+
+    test('ML pipeline instruments end-to-end request correlation ID, pre-warming ping, and warmupMlService', () => {
+      const mlMainPath = path.resolve(__dirname, '../../ml-service/app/main.py');
+      const mlPredictPath = path.resolve(__dirname, '../../ml-service/app/api/predict.py');
+      const checkinPagePath = path.resolve(__dirname, '../../frontend/src/pages/DailyCheckinPage.jsx');
+      const mlServicePath = path.resolve(__dirname, './services/mlInferenceService.js');
+      const checkinCtrlPath = path.resolve(__dirname, './controllers/checkinController.js');
+      const predCtrlPath = path.resolve(__dirname, './controllers/predictionController.js');
+
+      const mlMain = fs.readFileSync(mlMainPath, 'utf8');
+      const mlPredict = fs.readFileSync(mlPredictPath, 'utf8');
+      const checkinPage = fs.readFileSync(checkinPagePath, 'utf8');
+      const mlService = fs.readFileSync(mlServicePath, 'utf8');
+      const checkinCtrl = fs.readFileSync(checkinCtrlPath, 'utf8');
+      const predCtrl = fs.readFileSync(predCtrlPath, 'utf8');
+
+      assert(mlMain.includes('request_id_middleware') && mlMain.includes('X-Request-Id'), 'FastAPI main.py must define request_id_middleware for X-Request-Id');
+      assert(mlPredict.includes('ReqId:'), 'FastAPI predict.py must log request correlation ID');
+      assert(checkinPage.includes('/ml-health?timeout=5000'), 'DailyCheckinPage must trigger background wake-up ping on mount');
+      assert(mlService.includes('warmupMlService:'), 'mlInferenceService must provide warmupMlService');
+      assert(checkinCtrl.includes('reqId: req.id'), 'checkinController must forward req.id to ML inference');
+      assert(predCtrl.includes('reqId: req.id'), 'predictionController must forward req.id to ML inference');
     });
 
     // --- SUITE F: PRODUCTION CORS PREFLIGHT & ORIGIN SECURITY ---

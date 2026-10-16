@@ -9,6 +9,7 @@ import { ROUTES } from '../utils/constants';
 import { storageService } from '../services/storageService';
 import { trackingService } from '../services/trackingService';
 import { weatherService } from '../services/weatherService';
+import { apiClient } from '../services/apiClient';
 import {
   Moon,
   Brain,
@@ -99,6 +100,12 @@ export function DailyCheckinPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState(null);
+
+  // Event-driven ML microservice wake-up: trigger background warm-up ping on mount
+  // Non-blocking request to /api/ml-health initiates Render container boot while user completes form (~30-60s)
+  useEffect(() => {
+    apiClient.get('/ml-health?timeout=5000', null, { bypassCache: true }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let isMounted = true;

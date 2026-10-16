@@ -165,8 +165,11 @@ export async function submitDailyCheckinController(req, res, next) {
             weatherYesterdayBlock
           );
 
-          console.log(`[CHECKIN-ASYNC] Running background ML inference for User: ${userPrefix}... | Date: ${date}`);
-          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+          console.log(`[CHECKIN-ASYNC] [reqId: ${req.id || 'N/A'}] Running background ML inference for User: ${userPrefix}... | Date: ${date}`);
+          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, {
+            reqId: req.id,
+            deadlineMs: 75000,
+          });
 
           if (mlResult.success && mlResult.data) {
             // Guard: ensure delayed background prediction does not overwrite a newer forecast
