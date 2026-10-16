@@ -5,6 +5,7 @@ import {
   browserPopupRedirectResolver,
   indexedDBLocalPersistence,
   browserLocalPersistence,
+  browserSessionPersistence,
   inMemoryPersistence,
   GoogleAuthProvider,
 } from 'firebase/auth';
@@ -40,17 +41,26 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Auth with multi-tier persistence fallback:
 // Primary: indexedDBLocalPersistence (standard web persistence)
 // Fallback: browserLocalPersistence (localStorage when IndexedDB is closing or blocked)
+// Session: browserSessionPersistence (sessionStorage required for OAuth redirect/popup state)
 // Fallback: inMemoryPersistence (in-memory session resilience)
 // Resolver: browserPopupRedirectResolver (required for popup/redirect OAuth & mobile session restoration)
+const isBrowser = typeof window !== 'undefined';
 const popupResolver =
-  typeof browserPopupRedirectResolver === 'function'
+  isBrowser &&
+  (typeof browserPopupRedirectResolver === 'function' ||
+    (browserPopupRedirectResolver && typeof browserPopupRedirectResolver === 'object' && !('code' in browserPopupRedirectResolver)))
     ? browserPopupRedirectResolver
     : undefined;
 
 let authInstance;
 try {
   const authConfig = {
-    persistence: [indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence],
+    persistence: [
+      indexedDBLocalPersistence,
+      browserLocalPersistence,
+      browserSessionPersistence,
+      inMemoryPersistence,
+    ],
   };
   if (popupResolver) {
     authConfig.popupRedirectResolver = popupResolver;

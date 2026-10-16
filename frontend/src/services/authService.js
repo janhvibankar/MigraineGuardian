@@ -2,6 +2,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   updateProfile,
   updatePassword,
@@ -13,6 +15,19 @@ import { auth, googleProvider } from '../config/firebase.js';
 import { apiClient } from './apiClient.js';
 import { storageService } from './storageService.js';
 import { pssService } from './pssService.js';
+
+export function isMobileBrowser() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const isTouchScreen = Boolean(
+    typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0
+  );
+  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
+  return mobileRegex.test(ua) || (isTouchScreen && /Macintosh/i.test(ua));
+}
+
+let googleSignInPromise = null;
+let redirectResultPromise = null;
 
 export function computeInitials(name) {
   if (!name || typeof name !== 'string') return 'MG';
@@ -364,40 +379,166 @@ export const authService = {
     }
   },
 
-  loginWithGoogle: async () => {
-    try {
-      // Clear previous account's cached data before Google sign-in
-      clearUserScopedData();
-
-      // 1. Authenticate via Google OAuth Popup with explicit popup redirect resolver
-      const resolver =
-        typeof browserPopupRedirectResolver === 'function'
-          ? browserPopupRedirectResolver
-          : undefined;
-      const result = await signInWithPopup(auth, googleProvider, resolver);
-      const firebaseUser = result.user;
-      const displayName = firebaseUser.displayName || formatNameFromEmail(firebaseUser.email) || 'User';
-      const token = await firebaseUser.getIdToken();
-      storageService.setItem('migraineguardian_token', token);
-      storageService.setItem('migraineguardian_authenticated', true);
-
-      // 2. Sync profile name with backend
-      await apiClient.patch('/user/profile', { name: displayName });
-
-      // 3. Fetch full authenticated user profile from Express backend
-      const user = await authService.fetchUserProfile();
-
-      // 4. Migrate any guest onboarding data to the account
-      await authService.transferGuestOnboardingToUser();
-
-      return { success: true, user };
-    } catch (err) {
-      logSafeAuthDiagnostic('loginWithGoogle (OAuth popup)', 'popup sign-in request', err);
-      return {
-        success: false,
-        error: formatFirebaseError(err, 'google'),
-      };
+  handleRedirectResult: async () => {
+    if (typeof window === 'undefined') {
+      return { success: false, redirectHandled: false };
     }
+    if (redirectResultPromise) {
+      return redirectResultPromise;
+    }
+
+    redirectResultPromise = (async () => {
+      try {
+        if (!auth) {
+          return { success: false, redirectHandled: false };
+        }
+
+        if (typeof auth.authStateReady === 'function') {
+          await auth.authStateReady();
+        }
+
+        const resolver =
+          typeof browserPopupRedirectResolver === 'function' ||
+          (browserPopupRedirectResolver && typeof browserPopupRedirectResolver === 'object' && !('code' in browserPopupRedirectResolver))
+            ? browserPopupRedirectResolver
+            : undefined;
+
+        const result = await getRedirectResult(auth, resolver);
+        if (!result || !result.user) {
+          return { success: false, redirectHandled: false };
+        }
+
+        const firebaseUser = result.user;
+        const displayName =
+          firebaseUser.displayName || formatNameFromEmail(firebaseUser.email) || 'User';
+        const token = await firebaseUser.getIdToken();
+        storageService.setItem('migraineguardian_token', token);
+        storageService.setItem('migraineguardian_authenticated', true);
+
+        // Sync profile name with backend
+        await apiClient.patch('/user/profile', { name: displayName });
+
+        // Fetch full authenticated user profile from Express backend
+        const user = await authService.fetchUserProfile();
+
+        // Migrate any guest onboarding data to the account
+        await authService.transferGuestOnboardingToUser();
+        notifyUserChanged(user);
+
+        return { success: true, redirectHandled: true, user };
+      } catch (err) {
+        logSafeAuthDiagnostic('handleRedirectResult', 'redirect result processing', err);
+        return {
+          success: false,
+          redirectHandled: true,
+          error: formatFirebaseError(err, 'google'),
+        };
+      }
+    })();
+
+    return redirectResultPromise;
+  },
+
+  loginWithGoogle: async () => {
+    // Serialize Google sign-in to prevent concurrent requests or race conditions
+    if (googleSignInPromise) {
+      return googleSignInPromise;
+    }
+
+    googleSignInPromise = (async () => {
+      try {
+        if (!auth) {
+          return { success: false, error: 'Authentication service is not initialized.' };
+        }
+
+        if (typeof auth.authStateReady === 'function') {
+          await auth.authStateReady();
+        }
+
+        const resolver =
+          typeof browserPopupRedirectResolver === 'function' ||
+          (browserPopupRedirectResolver && typeof browserPopupRedirectResolver === 'object' && !('code' in browserPopupRedirectResolver))
+            ? browserPopupRedirectResolver
+            : undefined;
+
+        const mobile = isMobileBrowser();
+        let result = null;
+
+        if (!mobile) {
+          // On desktop, prioritize standard non-navigating popup flow
+          try {
+            result = await signInWithPopup(auth, googleProvider, resolver);
+          } catch (popupErr) {
+            const code = popupErr?.code || '';
+            const isPopupBlocked =
+              code === 'auth/popup-blocked' ||
+              code === 'auth/cancelled-popup-request' ||
+              code === 'auth/operation-not-supported-in-this-environment' ||
+              isTransientDatabaseClosingError(popupErr);
+
+            if (isPopupBlocked) {
+              logSafeAuthDiagnostic('loginWithGoogle (desktop)', 'popup blocked, falling back to redirect', popupErr);
+              await signInWithRedirect(auth, googleProvider, resolver);
+              return { success: true, pendingRedirect: true };
+            }
+            throw popupErr;
+          }
+        } else {
+          // On mobile, try popup first. If blocked or if backgrounding triggers IndexedDB closing/suspension,
+          // seamlessly initiate redirect to avoid locking user out
+          try {
+            result = await signInWithPopup(auth, googleProvider, resolver);
+          } catch (popupErr) {
+            const code = popupErr?.code || '';
+            const isPopupBlocked =
+              code === 'auth/popup-blocked' ||
+              code === 'auth/cancelled-popup-request' ||
+              code === 'auth/operation-not-supported-in-this-environment' ||
+              isTransientDatabaseClosingError(popupErr);
+
+            if (isPopupBlocked) {
+              logSafeAuthDiagnostic('loginWithGoogle (mobile)', 'popup blocked/suspended, falling back to redirect', popupErr);
+              await signInWithRedirect(auth, googleProvider, resolver);
+              return { success: true, pendingRedirect: true };
+            }
+            throw popupErr;
+          }
+        }
+
+        if (result && result.user) {
+          const firebaseUser = result.user;
+          const displayName =
+            firebaseUser.displayName || formatNameFromEmail(firebaseUser.email) || 'User';
+          const token = await firebaseUser.getIdToken();
+          storageService.setItem('migraineguardian_token', token);
+          storageService.setItem('migraineguardian_authenticated', true);
+
+          // Sync profile name with backend
+          await apiClient.patch('/user/profile', { name: displayName });
+
+          // Fetch full authenticated user profile from Express backend
+          const user = await authService.fetchUserProfile();
+
+          // Migrate any guest onboarding data to the account
+          await authService.transferGuestOnboardingToUser();
+          notifyUserChanged(user);
+
+          return { success: true, user };
+        }
+
+        return { success: false, error: 'Authentication did not return a user.' };
+      } catch (err) {
+        logSafeAuthDiagnostic('loginWithGoogle', 'sign-in request', err);
+        return {
+          success: false,
+          error: formatFirebaseError(err, 'google'),
+        };
+      } finally {
+        googleSignInPromise = null;
+      }
+    })();
+
+    return googleSignInPromise;
   },
 
   logout: async () => {

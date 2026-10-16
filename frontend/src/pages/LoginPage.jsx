@@ -56,6 +56,32 @@ export function LoginPage() {
     return location.state?.redirectTo || location.state?.from?.pathname || ROUTES.DASHBOARD;
   };
 
+  useEffect(() => {
+    let isMounted = true;
+    async function checkRedirect() {
+      try {
+        const res = await authService.handleRedirectResult();
+        if (!isMounted) return;
+        if (res && res.success && res.redirectHandled) {
+          const dest = getTargetDestination();
+          navigate(dest, {
+            replace: true,
+            state: { fromOnboarding: Boolean(location.state?.fromOnboarding) },
+          });
+        } else if (res && res.error && res.redirectHandled) {
+          setServerError(res.error);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('[LoginPage] Redirect result handling error:', err);
+      }
+    }
+    checkRedirect();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError(null);
@@ -88,6 +114,10 @@ export function LoginPage() {
     setServerError(null);
     try {
       const res = await authService.loginWithGoogle();
+      if (res && res.pendingRedirect) {
+        // Browser is navigating to Google OAuth; retain loading indicator
+        return;
+      }
       if (res && res.success) {
         const dest = getTargetDestination();
         navigate(dest, {

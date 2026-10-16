@@ -191,11 +191,43 @@ export function OnboardingPage() {
     });
   };
 
+  useEffect(() => {
+    let isMounted = true;
+    async function checkRedirect() {
+      try {
+        const res = await authService.handleRedirectResult();
+        if (!isMounted) return;
+        if (res && res.success && res.redirectHandled) {
+          setShowAuthChoiceModal(false);
+          const stateRedirect = location.state?.redirectTo;
+          if (stateRedirect) {
+            navigate(stateRedirect, { state: { fromOnboarding: true } });
+          } else {
+            navigate(ROUTES.DASHBOARD);
+          }
+        } else if (res && res.error && res.redirectHandled) {
+          setAuthError(res.error);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('[OnboardingPage] Redirect result check error:', err);
+      }
+    }
+    checkRedirect();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleGoogleSignIn = async () => {
     setIsSubmittingAuth(true);
     setAuthError(null);
     try {
       const res = await authService.loginWithGoogle();
+      if (res && res.pendingRedirect) {
+        // Browser is redirecting to Google OAuth; retain loading state
+        return;
+      }
       setIsSubmittingAuth(false);
       if (res.success) {
         setShowAuthChoiceModal(false);

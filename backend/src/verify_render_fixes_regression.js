@@ -862,6 +862,63 @@ async function runRegressionSuite() {
       // Verify setPersistence is NOT imported or called during authentication retries
       assert(!authContent.includes('setPersistence(auth'), 'authService must not mutate global auth persistence during retries');
     });
+
+    await testAsync('mobile Google sign-in serializes repeated taps and prevents duplicate requests', async () => {
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const authContent = fs.readFileSync(authServicePath, 'utf8');
+
+      assert(authContent.includes('googleSignInPromise'), 'Must maintain in-flight promise to serialize Google sign-in');
+      assert(authContent.includes('if (googleSignInPromise)'), 'Must return existing in-flight promise on rapid repeated taps');
+      assert(authContent.includes('redirectResultPromise'), 'Must memoize redirect result processing');
+    });
+
+    await testAsync('mobile Google sign-in supports seamless fallback to signInWithRedirect when popup blocked/unsupported', async () => {
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const authContent = fs.readFileSync(authServicePath, 'utf8');
+
+      assert(authContent.includes('signInWithRedirect'), 'Must import and support signInWithRedirect');
+      assert(authContent.includes('getRedirectResult'), 'Must import and support getRedirectResult');
+      assert(authContent.includes('isMobileBrowser'), 'Must include mobile browser detection');
+      assert(authContent.includes('handleRedirectResult'), 'Must export handleRedirectResult handler');
+      assert(authContent.includes('isPopupBlocked'), 'Must detect blocked or unsupported popup states');
+    });
+
+    await testAsync('firebase.js defines full 4-tier persistence hierarchy including browserSessionPersistence', () => {
+      const firebaseConfigPath = path.resolve(__dirname, '../../frontend/src/config/firebase.js');
+      const content = fs.readFileSync(firebaseConfigPath, 'utf8');
+
+      assert(content.includes('indexedDBLocalPersistence'), 'Must include indexedDBLocalPersistence');
+      assert(content.includes('browserLocalPersistence'), 'Must include browserLocalPersistence');
+      assert(content.includes('browserSessionPersistence'), 'Must include browserSessionPersistence');
+      assert(content.includes('inMemoryPersistence'), 'Must include inMemoryPersistence');
+    });
+
+    await testAsync('LoginPage, SignupPage, and OnboardingPage handle redirect results and pendingRedirect', () => {
+      const loginPath = path.resolve(__dirname, '../../frontend/src/pages/LoginPage.jsx');
+      const signupPath = path.resolve(__dirname, '../../frontend/src/pages/SignupPage.jsx');
+      const onboardingPath = path.resolve(__dirname, '../../frontend/src/pages/OnboardingPage.jsx');
+
+      const loginContent = fs.readFileSync(loginPath, 'utf8');
+      const signupContent = fs.readFileSync(signupPath, 'utf8');
+      const onboardingContent = fs.readFileSync(onboardingPath, 'utf8');
+
+      assert(loginContent.includes('handleRedirectResult'), 'LoginPage must check handleRedirectResult on mount');
+      assert(loginContent.includes('pendingRedirect'), 'LoginPage must handle pendingRedirect');
+
+      assert(signupContent.includes('handleRedirectResult'), 'SignupPage must check handleRedirectResult on mount');
+      assert(signupContent.includes('pendingRedirect'), 'SignupPage must handle pendingRedirect');
+
+      assert(onboardingContent.includes('handleRedirectResult'), 'OnboardingPage must check handleRedirectResult on mount');
+      assert(onboardingContent.includes('pendingRedirect'), 'OnboardingPage must handle pendingRedirect');
+    });
+
+    await testAsync('email/password authentication flows remain isolated and unchanged', () => {
+      const authServicePath = path.resolve(__dirname, '../../frontend/src/services/authService.js');
+      const authContent = fs.readFileSync(authServicePath, 'utf8');
+
+      assert(authContent.includes('signInWithEmailAndPassword(auth, email, password)'), 'login must use signInWithEmailAndPassword');
+      assert(authContent.includes('createUserWithEmailAndPassword(auth, cleanEmail, password)'), 'signup must use createUserWithEmailAndPassword');
+    });
   } finally {
     if (server) {
       server.close();
