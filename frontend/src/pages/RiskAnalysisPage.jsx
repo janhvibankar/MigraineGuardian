@@ -58,8 +58,8 @@ export function RiskAnalysisPage() {
   const pollTimerRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  // Maximum warming auto-poll attempts: 10 cycles (~80-90s total), accommodating the measured
-  // ~63s Render container cold-start delay while guaranteeing polling is strictly bounded.
+  // Maximum warming auto-poll attempts: 10 cycles (~80-90s total), accommodating full
+  // Render container cold-start delay while guaranteeing polling is strictly bounded.
   const MAX_WARMING_RETRIES = 10;
 
   const clearPollTimer = () => {
@@ -102,15 +102,15 @@ export function RiskAnalysisPage() {
         setCalculationError(null);
       } else {
         const status = forecastData?.forecastStatus || (forecastData?.mlError?.includes('warming') ? 'warming' : 'error');
-        const retryPermitted = forecastData?.canRetry !== false;
+        const retryPermitted = forecastData?.canRetry !== false && status !== 'no_checkin';
         setForecastStatus(status);
         setCanRetry(retryPermitted);
         setCalculationError(forecastData?.mlError || t('risk.serviceUnavailable'));
 
-        const isWarmingState = status === 'warming' || forecastData?.errorCategory === 'FASTAPI_SERVICE_WARMING';
+        const isWarmingOrPending = status === 'warming' || status === 'pending' || forecastData?.errorCategory === 'FASTAPI_SERVICE_WARMING';
 
-        // Bounded transient backoff: Auto-poll only while service is warming, retries permitted, and under MAX_WARMING_RETRIES
-        if (!isManualRetry && isWarmingState && retryPermitted && retryAttempt < MAX_WARMING_RETRIES) {
+        // Bounded transient backoff: Auto-poll while service is warming, pending, or retryable, and within bounded 90s window
+        if (!isManualRetry && (isWarmingOrPending || retryPermitted) && retryAttempt < MAX_WARMING_RETRIES) {
           const pollDelayMs =
             typeof forecastData?.retryAfterMs === 'number' &&
             forecastData.retryAfterMs >= 2000 &&
@@ -355,18 +355,24 @@ export function RiskAnalysisPage() {
         </div>
       ) : !hasForecast ? (
         todayCheckin ? (
-          isEvaluating ? (
-            /* ACTIVE EVALUATION IN PROGRESS (NON-BLOCKING) */
+          isEvaluating || forecastStatus === 'warming' || forecastStatus === 'pending' ? (
+            /* ACTIVE EVALUATION / COLD-START WARMING IN PROGRESS (NON-BLOCKING) */
             <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-5 animate-in fade-in duration-200">
               <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
                 <Loader2 className="w-7 h-7 text-brand-teal animate-spin" />
               </div>
               <div className="space-y-2">
                 <h2 className="text-section-lg font-bold text-brand-dark">
-                  {t('risk.runningEvaluation')}
+                  {forecastStatus === 'warming'
+                    ? 'Our prediction service is waking up. This may take a little longer.'
+                    : forecastStatus === 'pending'
+                    ? 'Your risk analysis is being generated. Please wait...'
+                    : 'Preparing your migraine risk prediction...'}
                 </h2>
                 <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
-                  {t('risk.loadingForecast')}
+                  {forecastStatus === 'warming'
+                    ? 'Connecting to our secure AI inference engine on Render. Please keep this page open while your personalized forecast is generated.'
+                    : 'Analyzing your recent sleep, stress, screen time, and physiological indicators...'}
                 </p>
               </div>
               <div className="max-w-xs mx-auto h-1.5 bg-brand-sage/30 rounded-full overflow-hidden">
@@ -374,7 +380,7 @@ export function RiskAnalysisPage() {
               </div>
             </Card>
           ) : (
-            /* CHECK-IN COMPLETED: FORECAST PENDING, WARMING, OR TIMED OUT */
+            /* CHECK-IN COMPLETED: FAILED PERMANENTLY OR MANUALLY RETRYABLE */
             <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-5 animate-in fade-in duration-200">
               <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
                 <Sparkles className="w-7 h-7 text-brand-teal" />
@@ -390,7 +396,7 @@ export function RiskAnalysisPage() {
               {calculationError && (
                 <div className="p-4 rounded-xl bg-[#8F443B]/10 border border-[#8F443B]/30 text-[#8F443B] flex items-center justify-center gap-2 max-w-md mx-auto text-body-sm font-medium">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 text-[#8F443B]" />
-                  <span>{calculationError}</span>
+                  <span>Unable to generate your prediction right now. Please try again.</span>
                 </div>
               )}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">

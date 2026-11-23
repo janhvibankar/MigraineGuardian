@@ -52,11 +52,13 @@ export function DashboardPage() {
   const [morningMood, setMorningMood] = useState(4);
   const [submittingMorning, setSubmittingMorning] = useState(false);
   const [morningError, setMorningError] = useState(null);
+  const [morningWarming, setMorningWarming] = useState(false);
 
   const handleMorningPredictionSubmit = async (e) => {
     e.preventDefault();
     setSubmittingMorning(true);
     setMorningError(null);
+    setMorningWarming(false);
 
     let lat = undefined;
     let lon = undefined;
@@ -82,8 +84,20 @@ export function DashboardPage() {
       };
 
       const result = await predictionService.submitMorningPrediction(payload);
-      if (result) {
+      if (result && typeof result.score === 'number') {
         setPrediction(result);
+        setMorningWarming(false);
+        setMorningError(null);
+        setTodayLog((prev) => ({
+          ...prev,
+          sleep_hours: Number(morningSleep),
+          sleep_quality: Number(morningSleepQuality),
+          daily_stress: Number(morningStress),
+          mood: Number(morningMood),
+        }));
+      } else if (result && (result.forecastStatus === 'warming' || result.canRetry)) {
+        setMorningWarming(true);
+        setMorningError(null);
         setTodayLog((prev) => ({
           ...prev,
           sleep_hours: Number(morningSleep),
@@ -92,9 +106,11 @@ export function DashboardPage() {
           mood: Number(morningMood),
         }));
       } else {
-        setMorningError(t('risk.serviceUnavailable'));
+        setMorningWarming(false);
+        setMorningError(result?.message || t('risk.serviceUnavailable'));
       }
     } catch (err) {
+      setMorningWarming(false);
       setMorningError(err.message || 'An error occurred.');
     } finally {
       setSubmittingMorning(false);
@@ -352,6 +368,16 @@ export function DashboardPage() {
               {t('dashboard.noForecastDesc')}
             </p>
           </div>
+
+          {morningWarming && (
+            <div className="p-3.5 rounded-xl bg-brand-sage/20 border border-brand-sage/40 text-meta-sm text-brand-dark flex items-start gap-2.5">
+              <Loader2 className="w-4 h-4 text-brand-teal animate-spin flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-brand-dark">Our prediction service is waking up. Your morning check-in has been saved.</p>
+                <p className="text-[#555B55]">Your risk forecast is being prepared. You can view live progress on the <Link to={ROUTES.RISK_ANALYSIS} className="text-brand-teal underline font-medium">Risk Analysis</Link> page.</p>
+              </div>
+            </div>
+          )}
 
           {morningError && (
             <div className="p-3 rounded-lg bg-alert-muted/15 border border-alert-muted/30 text-meta-sm text-[#8F443B] flex items-center gap-2">

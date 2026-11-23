@@ -18,11 +18,12 @@
  *  - Sensitive data protection: URLs are sanitized to exclude any secrets or parameters.
  */
 
-// Bounded timing configuration
-const PER_ATTEMPT_TIMEOUT_MS = parseInt(process.env.ML_REQUEST_TIMEOUT_MS, 10) || 70000;
-const TOTAL_DEADLINE_MS = parseInt(process.env.ML_TOTAL_DEADLINE_MS, 10) || 85000;
+// Bounded timing configuration (configurable via environment variables)
+const TOTAL_DEADLINE_MS = parseInt(process.env.ML_RETRY_MAX_DURATION_MS || process.env.ML_TOTAL_DEADLINE_MS, 10) || 70000;
+const PER_ATTEMPT_TIMEOUT_MS = parseInt(process.env.ML_REQUEST_TIMEOUT_MS, 10) || 65000;
+const INITIAL_RETRY_DELAY_MS = parseInt(process.env.ML_RETRY_INITIAL_DELAY_MS, 10) || 2000;
+const MAX_RETRY_DELAY_MS = parseInt(process.env.ML_RETRY_MAX_DELAY_MS, 10) || 5000;
 const RETRY_MAX = 3;
-const INITIAL_RETRY_DELAY_MS = 2000;
 
 // Transient HTTP error status codes (Render spin-up / Cloudflare proxy cold start)
 const TRANSIENT_HTTP_STATUSES = new Set([408, 502, 503, 504, 520, 521, 522, 523, 524]);
@@ -227,12 +228,23 @@ async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, att
     const isConnRefused =
       err.code === 'ECONNREFUSED' ||
       err.cause?.code === 'ECONNREFUSED' ||
+      err.code === 'ECONNRESET' ||
+      err.cause?.code === 'ECONNRESET' ||
+      err.code === 'ETIMEDOUT' ||
+      err.cause?.code === 'ETIMEDOUT' ||
+      err.code === 'EHOSTUNREACH' ||
+      err.cause?.code === 'EHOSTUNREACH' ||
+      err.code === 'ENETUNREACH' ||
+      err.cause?.code === 'ENETUNREACH' ||
       err.message?.includes('fetch failed') ||
-      err.message?.includes('ECONNREFUSED');
+      err.message?.includes('ECONNREFUSED') ||
+      err.message?.includes('ECONNRESET') ||
+      err.message?.includes('UND_ERR_CONNECT_TIMEOUT') ||
+      err.message?.includes('UND_ERR_SOCKET');
 
     logMlEvent({
       reqId,
-      stage: isConnRefused ? 'CONNECTION_REFUSED' : 'NETWORK_ERROR',
+      stage: isConnRefused ? 'WARMING' : 'NETWORK_ERROR',
       safeHost,
       elapsedMs,
       attempt,
@@ -243,10 +255,14 @@ async function callMlPredictAttempt(fullUrl, safeHost, mlPayload, timeoutMs, att
     return {
       success: false,
       unavailable: true,
+      transient: isConnRefused,
       elapsedMs,
       error: {
-        code: 'FASTAPI_UNAVAILABLE',
-        message: 'Unable to connect to FastAPI ML microservice.',
+        code: isConnRefused ? 'FASTAPI_SERVICE_WARMING' : 'FASTAPI_UNAVAILABLE',
+        status: 503,
+        message: isConnRefused
+          ? 'FastAPI ML microservice is waking up from idle state. Please retry shortly.'
+          : 'Unable to connect to FastAPI ML microservice.',
         details: err.cause?.code || err.code || err.message,
       },
     };
@@ -258,8 +274,8 @@ export const mlInferenceService = {
    * Sends prediction & XAI request to FastAPI POST /predict.
    *
    * Features:
-   *  - Total bounded deadline (85s default or shorter request-specific deadline)
-   *  - Automatic bounded exponential backoff for cold-start 502/503/504 and connection refused
+   *  - Total bounded deadline (70s default or request-specific deadline)
+   *  - Automatic bounded exponential backoff with jitter for cold-start 502/503/504 and connection errors
    *  - Immediate return on success or non-retryable client error (e.g. 400, 422, invalid schema)
    *  - Structured logging with request correlation ID, safe host, and elapsed timings
    *
@@ -303,12 +319,12 @@ export const mlInferenceService = {
           lastResult?.error?.code === 'FASTAPI_SERVICE_WARMING' ||
           lastResult?.timeout ||
           lastResult?.error?.code === 'FASTAPI_TIMEOUT' ||
-          (lastResult?.unavailable && elapsedSoFar >= 30000)
+          lastResult?.unavailable
         );
         return {
           success: false,
           timeout: !wasWarming,
-          unavailable: false,
+          unavailable: !wasWarming,
           transient: wasWarming,
           elapsedMs: elapsedSoFar,
           error: {
@@ -342,8 +358,8 @@ export const mlInferenceService = {
 
       // Non-retryable errors (400, 422 validation, 404, 401, 403, invalid schema) fail immediately
       const isRetryable =
-        result.unavailable ||
         result.transient ||
+        result.unavailable ||
         (result.timeout && (Date.now() - pipelineStartTime) < effectiveDeadlineMs - 5000);
 
       if (!isRetryable) {
@@ -352,28 +368,16 @@ export const mlInferenceService = {
 
       const currentElapsed = Date.now() - pipelineStartTime;
 
-      // Connection refused (port completely closed/offline) fails fast after 3 attempts;
-      // Transient 502/503/504 (Render container spinning up) retries across the full deadline
-      if (result.unavailable && !result.transient && attempt >= 3) {
-        logMlEvent({
-          reqId,
-          stage: 'CONN_REFUSED_EXHAUSTED',
-          safeHost,
-          elapsedMs: currentElapsed,
-          attempt,
-          maxAttempts: attempt,
-          error: 'Connection refused after 3 attempts; service is not running on target port.',
-        });
-        break;
-      }
-
-      // Compute bounded exponential backoff delay (2s, 3s, 4.5s, max 5s)
-      const delay = Math.min(
+      // Compute bounded exponential backoff delay with jitter
+      const baseDelay = Math.min(
         INITIAL_RETRY_DELAY_MS * Math.pow(1.5, attempt - 1),
-        5000
+        MAX_RETRY_DELAY_MS
       );
-      if (currentElapsed + delay >= effectiveDeadlineMs - 2000) {
-        // Not enough budget to wait and retry
+      const jitter = Math.floor(Math.random() * 500); // 0-500ms jitter
+      const delay = baseDelay + jitter;
+
+      if (currentElapsed + delay >= effectiveDeadlineMs - 1500) {
+        // Not enough budget to wait and retry before deadline
         break;
       }
 
@@ -407,7 +411,7 @@ export const mlInferenceService = {
       lastResult?.error?.code === 'FASTAPI_SERVICE_WARMING' ||
       lastResult?.timeout ||
       lastResult?.error?.code === 'FASTAPI_TIMEOUT' ||
-      (lastResult?.unavailable && totalElapsedMs >= 30000)
+      lastResult?.unavailable
     );
 
     return {

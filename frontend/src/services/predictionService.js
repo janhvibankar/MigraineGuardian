@@ -62,11 +62,12 @@ export const predictionService = {
         return {
           score: null,
           mlError: res.raw.mlError || res.raw.message,
+          message: res.raw.message || res.raw.mlError,
           errorCategory: res.raw.errorCategory,
-          forecastStatus: res.raw.forecastStatus,
-          canRetry: Boolean(res.raw.canRetry),
+          forecastStatus: res.raw.forecastStatus || (res.raw.canRetry !== false ? 'warming' : 'error'),
+          canRetry: res.raw.canRetry !== false,
           checkinExists: Boolean(res.raw.checkinExists),
-          retryAfterMs: res.raw.retryAfterMs || null,
+          retryAfterMs: res.raw.retryAfterMs || 8000,
         };
       }
       return null;
@@ -96,9 +97,20 @@ export const predictionService = {
   submitMorningPrediction: async (predictionData) => {
     const res = await apiClient.post('/predictions/morning', predictionData);
     if (res.ok && res.data) {
-      const forecast = res.data.forecast || res.data;
-      syncRiskForecastState(forecast);
-      return forecast;
+      if (res.data.forecast && typeof res.data.forecast.score === 'number') {
+        syncRiskForecastState(res.data.forecast);
+        return res.data.forecast;
+      }
+      return {
+        score: null,
+        forecastAvailable: false,
+        forecastStatus: res.data.forecastStatus || (res.data.canRetry !== false ? 'warming' : 'error'),
+        errorCategory: res.data.errorCategory,
+        canRetry: res.data.canRetry !== false,
+        retryAfterMs: res.data.retryAfterMs || 8000,
+        message: res.data.message || res.data.mlWarning || null,
+        entry: res.data.entry || null,
+      };
     }
     return null;
   },

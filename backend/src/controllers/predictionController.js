@@ -52,11 +52,13 @@ export async function getTodayPredictionController(req, res, next) {
 
     console.log(`[PREDICTION-GET] User: ${userPrefix}... | Date: ${targetDate} | ForceRecalc: ${forceRecalculate}`);
 
-    // If an on-demand calculation is already in-flight for this user and date, await it with bounded 20s budget
-    if (!forceRecalculate && activeInferenceMap.has(lockKey)) {
+    // Helper to race in-flight pipeline with bounded wait budget (20s)
+    const awaitInFlightPipeline = async () => {
+      if (!activeInferenceMap.has(lockKey)) return { inFlightTimedOut: false, pipelineResult: null };
       console.log(`[PREDICTION-GET] [reqId: ${req.id || 'N/A'}] User: ${userPrefix}... | Awaiting in-flight ML pipeline for ${targetDate} (max 20s budget)`);
       let inFlightTimedOut = false;
       let inFlightTimer = null;
+      let pipelineResult = null;
       try {
         const inFlightPromise = activeInferenceMap.get(lockKey);
         const timeoutPromise = new Promise((resolve) => {
@@ -65,6 +67,8 @@ export async function getTodayPredictionController(req, res, next) {
         const raceResult = await Promise.race([inFlightPromise, timeoutPromise]);
         if (raceResult === 'IN_FLIGHT_TIMEOUT') {
           inFlightTimedOut = true;
+        } else {
+          pipelineResult = raceResult;
         }
       } catch (_) {
       } finally {
@@ -73,7 +77,12 @@ export async function getTodayPredictionController(req, res, next) {
           inFlightTimer = null;
         }
       }
+      return { inFlightTimedOut, pipelineResult };
+    };
 
+    // If an on-demand calculation is already in-flight for this user and date, await it with bounded 20s budget
+    if (!forceRecalculate && activeInferenceMap.has(lockKey)) {
+      const { inFlightTimedOut } = await awaitInFlightPipeline();
       if (inFlightTimedOut) {
         console.log(`[PREDICTION-GET] [reqId: ${req.id || 'N/A'}] In-flight pipeline still processing in background after 20s. Returning warming status to client.`);
         return res.status(200).json({
@@ -108,164 +117,173 @@ export async function getTodayPredictionController(req, res, next) {
       console.log(`[PREDICTION-GET] User: ${userPrefix}... | Check-in found: ${Boolean(todayCheckin)}`);
 
       if (todayCheckin) {
-        console.log(`[PREDICTION-GET] Running on-demand ML pipeline for ${targetDate}...`);
-        let pipelineResolver;
-        const pipelinePromise = new Promise((resolve) => {
-          pipelineResolver = resolve;
-        });
-        activeInferenceMap.set(lockKey, pipelinePromise);
-
-        try {
-          // 1. Fetch baseline stats & recent 7-day episode count
-          const [baselineStats, recentEpisodesCount] = await Promise.all([
-            firestoreService.getUserBaselineStats(userId),
-            firestoreService.getRecentEpisodesCount(userId, 7),
-          ]);
-
-          // 2. Attempt weather records retrieval for target date and previous date
-          let weatherTodayBlock = null;
-          let weatherYesterdayBlock = null;
-
-          try {
-            const checkinDateObj = new Date(`${targetDate}T12:00:00Z`);
-            checkinDateObj.setDate(checkinDateObj.getDate() - 1);
-            const previousDate = checkinDateObj.toISOString().split('T')[0];
-
-            let [todayRec, yesterdayRec] = await Promise.all([
-              firestoreService.getTodayWeatherRecord(userId, targetDate, 'observed')
-                .then((r) => r || firestoreService.getTodayWeatherRecord(userId, targetDate, 'forecast')),
-              firestoreService.getTodayWeatherRecord(userId, previousDate, 'observed')
-                .then((r) => r || firestoreService.getTodayWeatherRecord(userId, previousDate, 'forecast')),
-            ]);
-
-            const isValidNum = (v) => v !== undefined && v !== null && !isNaN(Number(v)) && isFinite(Number(v));
-
-            if (
-              todayRec &&
-              yesterdayRec &&
-              isValidNum(todayRec.temperature) &&
-              isValidNum(todayRec.humidity) &&
-              isValidNum(todayRec.pressure) &&
-              isValidNum(yesterdayRec.pressure) &&
-              isValidNum(yesterdayRec.temperature)
-            ) {
-              weatherTodayBlock = {
-                temperature: Number(todayRec.temperature),
-                humidity: Number(todayRec.humidity),
-                pressure: Number(todayRec.pressure),
-                precipitation: Number(todayRec.precipitation || 0),
-                wind_speed: Number(todayRec.windSpeed || todayRec.wind_speed || 0),
-              };
-              weatherYesterdayBlock = {
-                pressure: Number(yesterdayRec.pressure),
-                temperature: Number(yesterdayRec.temperature),
-              };
-            }
-          } catch (wErr) {
-            console.warn('[PREDICTION-GET] Weather retrieval skipped:', wErr.message);
-          }
-
-          // 3. Construct normalized FastAPI ML payload
-          const mlPayload = buildNormalizedMlPayload(
-            userId,
-            todayCheckin,
-            baselineStats,
-            recentEpisodesCount,
-            weatherTodayBlock,
-            weatherYesterdayBlock
-          );
-
-          // 4. Send request to FastAPI ML service (/predict) with bounded 75s deadline
-          //    Guarantees backend returns before frontend 85s timeout to prevent browser aborts
-          const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, {
-            deadlineMs: 75000,
-            reqId: req.id,
-          });
-
-          if (mlResult.success && mlResult.data) {
+        // Only launch a new task if one is not already actively running
+        if (!activeInferenceMap.has(lockKey)) {
+          console.log(`[PREDICTION-GET] Running on-demand async ML pipeline for ${targetDate}...`);
+          const asyncPipeline = (async () => {
             try {
-              const forecastSaveResult = await firestoreService.saveRiskForecast(userId, targetDate, mlResult.data);
-              forecast = forecastSaveResult.forecast;
-              const totalElapsed = Date.now() - startTime;
-              console.log(
-                `[PREDICTION-GET] Success: score=${forecast.score}%, level=${forecast.level} | Saved: true | Elapsed: ${totalElapsed}ms`
+              // 1. Fetch baseline stats & recent 7-day episode count
+              const [baselineStats, recentEpisodesCount] = await Promise.all([
+                firestoreService.getUserBaselineStats(userId),
+                firestoreService.getRecentEpisodesCount(userId, 7),
+              ]);
+
+              // 2. Attempt weather records retrieval for target date and previous date
+              let weatherTodayBlock = null;
+              let weatherYesterdayBlock = null;
+
+              try {
+                const checkinDateObj = new Date(`${targetDate}T12:00:00Z`);
+                checkinDateObj.setDate(checkinDateObj.getDate() - 1);
+                const previousDate = checkinDateObj.toISOString().split('T')[0];
+
+                let [todayRec, yesterdayRec] = await Promise.all([
+                  firestoreService.getTodayWeatherRecord(userId, targetDate, 'observed')
+                    .then((r) => r || firestoreService.getTodayWeatherRecord(userId, targetDate, 'forecast')),
+                  firestoreService.getTodayWeatherRecord(userId, previousDate, 'observed')
+                    .then((r) => r || firestoreService.getTodayWeatherRecord(userId, previousDate, 'forecast')),
+                ]);
+
+                const isValidNum = (v) => v !== undefined && v !== null && !isNaN(Number(v)) && isFinite(Number(v));
+
+                if (
+                  todayRec &&
+                  yesterdayRec &&
+                  isValidNum(todayRec.temperature) &&
+                  isValidNum(todayRec.humidity) &&
+                  isValidNum(todayRec.pressure) &&
+                  isValidNum(yesterdayRec.pressure) &&
+                  isValidNum(yesterdayRec.temperature)
+                ) {
+                  weatherTodayBlock = {
+                    temperature: Number(todayRec.temperature),
+                    humidity: Number(todayRec.humidity),
+                    pressure: Number(todayRec.pressure),
+                    precipitation: Number(todayRec.precipitation || 0),
+                    wind_speed: Number(todayRec.windSpeed || todayRec.wind_speed || 0),
+                  };
+                  weatherYesterdayBlock = {
+                    pressure: Number(yesterdayRec.pressure),
+                    temperature: Number(yesterdayRec.temperature),
+                  };
+                }
+              } catch (wErr) {
+                console.warn('[PREDICTION-GET] Weather retrieval skipped:', wErr.message);
+              }
+
+              // 3. Construct normalized FastAPI ML payload
+              const mlPayload = buildNormalizedMlPayload(
+                userId,
+                todayCheckin,
+                baselineStats,
+                recentEpisodesCount,
+                weatherTodayBlock,
+                weatherYesterdayBlock
               );
-            } catch (persistErr) {
-              console.error(`[PREDICTION-GET] Firestore persistence failure:`, persistErr.message);
-              return res.status(200).json({
-                success: true,
-                data: null,
-                checkinExists: true,
-                forecastStatus: 'error',
-                mlError: 'Failed to save risk forecast to database.',
-                errorCategory: 'FIRESTORE_PERSISTENCE_ERROR',
-                canRetry: true,
+
+              // 4. Send request to FastAPI ML service (/predict) with bounded 75s deadline
+              const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, {
+                deadlineMs: 75000,
+                reqId: req.id,
               });
-            }
-          } else {
-            console.warn(`[PREDICTION-GET] ML request failed:`, mlResult.error);
-            let errCategory = 'Prediction service error. Please try again.';
-            let errorCode = mlResult.error?.code || 'ML_PREDICTION_FAILED';
-            let isWarming = false;
 
-            if (mlResult.timeout || mlResult.error?.code === 'FASTAPI_TIMEOUT') {
-              errCategory = 'The AI prediction service is warming up. Please click Calculate Forecast in a moment.';
-              errorCode = 'FASTAPI_SERVICE_WARMING';
-              isWarming = true;
-            } else if (mlResult.unavailable) {
-              errCategory = 'ML prediction service is currently unavailable. Please ensure the service is running.';
-              errorCode = 'FASTAPI_UNAVAILABLE';
-            } else if (mlResult.error?.code === 'FASTAPI_SERVICE_WARMING' || mlResult.transient) {
-              errCategory = 'The AI model service is warming up. Please click Calculate Forecast in a moment.';
-              errorCode = 'FASTAPI_SERVICE_WARMING';
-              isWarming = true;
-            } else if (mlResult.error?.code === 'FASTAPI_HTTP_ERROR') {
-              errCategory = 'The check-in data could not be processed.';
-              errorCode = 'FASTAPI_HTTP_ERROR';
-            } else if (mlResult.error?.code === 'INVALID_ML_RESPONSE') {
-              errCategory = 'ML prediction service returned an invalid response structure.';
-              errorCode = 'INVALID_ML_RESPONSE';
+              if (mlResult.success && mlResult.data) {
+                try {
+                  const forecastSaveResult = await firestoreService.saveRiskForecast(userId, targetDate, mlResult.data);
+                  const totalElapsed = Date.now() - startTime;
+                  console.log(
+                    `[PREDICTION-GET] Success: score=${forecastSaveResult.forecast.score}%, level=${forecastSaveResult.forecast.level} | Saved: true | Elapsed: ${totalElapsed}ms`
+                  );
+                  return forecastSaveResult.forecast;
+                } catch (persistErr) {
+                  console.error(`[PREDICTION-GET] Firestore persistence failure:`, persistErr.message);
+                  return { error: { message: 'Failed to save risk forecast to database.' } };
+                }
+              } else {
+                console.warn(`[PREDICTION-GET] ML request failed:`, mlResult.error);
+                return { error: mlResult.error, transient: mlResult.transient };
+              }
+            } catch (genErr) {
+              console.error('[PREDICTION-GET] Error executing on-demand prediction:', genErr.message);
+              return { error: { message: genErr.message } };
+            } finally {
+              activeInferenceMap.delete(lockKey);
             }
+          })();
 
-            return res.status(200).json({
-              success: true,
-              data: null,
-              checkinExists: true,
-              forecastStatus: isWarming ? 'warming' : 'error',
-              mlError: errCategory,
-              errorCategory: errorCode,
-              canRetry: isWarming || errorCode === 'FASTAPI_TIMEOUT' || errorCode === 'FASTAPI_UNAVAILABLE',
-              retryAfterMs: isWarming ? 8000 : null,
-            });
-          }
-        } catch (genErr) {
-          console.error('[PREDICTION-GET] Error executing on-demand prediction:', genErr.message);
+          activeInferenceMap.set(lockKey, asyncPipeline);
+        }
+
+        // Await the pipeline for up to 20s
+        const { inFlightTimedOut, pipelineResult } = await awaitInFlightPipeline();
+        if (inFlightTimedOut) {
+          console.log(`[PREDICTION-GET] [reqId: ${req.id || 'N/A'}] Pipeline still running in background. Returning warming status.`);
           return res.status(200).json({
             success: true,
             data: null,
             checkinExists: true,
-            forecastStatus: 'error',
-            mlError: 'Error executing risk prediction pipeline.',
-            errorCategory: 'PREDICTION_EXECUTION_ERROR',
+            forecastStatus: 'warming',
+            errorCategory: 'FASTAPI_SERVICE_WARMING',
             canRetry: true,
+            retryAfterMs: 8000,
+            mlError: 'AI prediction service is warming up. Forecast calculation in progress...',
+            message: 'AI prediction service is warming up. Forecast calculation in progress...',
           });
-        } finally {
-          activeInferenceMap.delete(lockKey);
-          if (typeof pipelineResolver === 'function') {
-            pipelineResolver();
-          }
         }
+
+        if (pipelineResult?.error) {
+          const err = pipelineResult.error;
+          const isWarming = Boolean(
+            pipelineResult.transient ||
+            err?.code === 'FASTAPI_SERVICE_WARMING' ||
+            pipelineResult.timeout
+          );
+          const errCategory = isWarming
+            ? 'The AI model service is warming up. Please click Calculate Forecast in a moment.'
+            : (err?.message || 'Prediction service error. Please try again.');
+          const errorCode = err?.code || (isWarming ? 'FASTAPI_SERVICE_WARMING' : 'ML_PREDICTION_FAILED');
+
+          return res.status(200).json({
+            success: true,
+            data: null,
+            checkinExists: true,
+            forecastStatus: isWarming ? 'warming' : 'error',
+            mlError: errCategory,
+            errorCategory: errorCode,
+            canRetry: isWarming || errorCode === 'FASTAPI_TIMEOUT' || errorCode === 'FASTAPI_UNAVAILABLE',
+            retryAfterMs: isWarming ? 8000 : null,
+          });
+        }
+
+        // Pipeline resolved within budget — re-check Firestore for forecast
+        forecast = await firestoreService.getLatestRiskForecast(userId, targetDate);
       }
     } else {
       console.log(`[PREDICTION-GET] Existing forecast found: score=${forecast.score}%, level=${forecast.level}`);
     }
 
     if (!forecast) {
+      const todayCheckin = await firestoreService.getTodayCheckin(userId, targetDate);
+      if (!todayCheckin) {
+        return res.status(200).json({
+          success: true,
+          data: null,
+          checkinExists: false,
+          forecastStatus: 'no_checkin',
+        });
+      }
+
+      // Check-in exists but forecast not yet available (service warming up in background)
       return res.status(200).json({
         success: true,
         data: null,
-        checkinExists: false,
-        forecastStatus: 'no_checkin',
+        checkinExists: true,
+        forecastStatus: 'warming',
+        errorCategory: 'FASTAPI_SERVICE_WARMING',
+        canRetry: true,
+        retryAfterMs: 8000,
+        mlError: 'AI prediction service is warming up. Forecast calculation in progress...',
+        message: 'AI prediction service is warming up. Forecast calculation in progress...',
       });
     }
 
@@ -438,8 +456,11 @@ export async function submitMorningPredictionController(req, res, next) {
       mlPayload.weather_yesterday = weatherYesterdayBlock;
     }
 
-    // 7. Call the ML service (/predict)
-    const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload);
+    // 7. Call the ML service (/predict) with request correlation
+    const mlResult = await mlInferenceService.predictMigraineRisk(mlPayload, null, {
+      reqId: req.id,
+      deadlineMs: 70000,
+    });
 
     let forecastDoc = null;
     let forecastSaved = false;
@@ -463,12 +484,26 @@ export async function submitMorningPredictionController(req, res, next) {
     };
     const inputSaveResult = await firestoreService.saveMorningPredictionInput(userId, targetDate, predictionInputData);
 
+    const isWarming = Boolean(
+      mlResult.transient ||
+      mlResult.error?.code === 'FASTAPI_SERVICE_WARMING' ||
+      mlResult.timeout
+    );
+
     return res.status(200).json({
       success: true,
       timestamp: new Date().toISOString(),
-      message: forecastSaved ? 'Morning prediction input and risk forecast recorded.' : 'Morning prediction input recorded; ML prediction service unavailable.',
+      message: forecastSaved
+        ? 'Morning prediction input and risk forecast recorded.'
+        : isWarming
+        ? 'AI prediction service is warming up. Your morning check-in has been saved. Please check back shortly.'
+        : 'Morning prediction input recorded; ML prediction service unavailable.',
       entry: inputSaveResult.input,
       forecastAvailable: forecastSaved,
+      forecastStatus: forecastSaved ? 'ready' : isWarming ? 'warming' : 'error',
+      errorCategory: forecastSaved ? null : (mlResult.error?.code || (isWarming ? 'FASTAPI_SERVICE_WARMING' : 'FASTAPI_UNAVAILABLE')),
+      canRetry: !forecastSaved,
+      retryAfterMs: isWarming ? 8000 : null,
       forecast: forecastDoc,
       mlWarning: !forecastSaved ? (mlResult.error?.message || 'ML prediction service unavailable') : null,
     });
