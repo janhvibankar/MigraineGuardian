@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { I18nProvider } from './context/I18nContext';
 import { ChatProvider } from './context/ChatContext';
+import { triggerBackgroundWarmup } from './services/warmupService';
+import { Loader2 } from 'lucide-react';
 
 // Layouts & Route Guards
 import { PublicLayout } from './layouts/PublicLayout';
@@ -10,7 +12,7 @@ import { AuthLayout } from './layouts/AuthLayout';
 import { AppLayout } from './layouts/AppLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 
-// Public Pages
+// Public & Fast-Path Pages (Eagerly Loaded)
 import { LandingPage } from './pages/LandingPage';
 import { HowItWorksPage } from './pages/HowItWorksPage';
 import { PssAssessmentPage } from './pages/PssAssessmentPage';
@@ -24,20 +26,36 @@ import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 
-// Application Workspace Pages (Protected)
+// Core Dashboard & Daily Tracking (Fast Load)
 import { DashboardPage } from './pages/DashboardPage';
 import { DailyCheckinPage } from './pages/DailyCheckinPage';
-import { RiskAnalysisPage } from './pages/RiskAnalysisPage';
-import { InsightsPage } from './pages/InsightsPage';
-import { AnalyticsPage } from './pages/AnalyticsPage';
-import { ReportsPage } from './pages/ReportsPage';
-import { ChatPage } from './pages/ChatPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 
+// Heavy Pages (Code-Split via React.lazy to reduce initial bundle and speed up initial page load)
+const RiskAnalysisPage = React.lazy(() => import('./pages/RiskAnalysisPage').then((m) => ({ default: m.RiskAnalysisPage })));
+const InsightsPage = React.lazy(() => import('./pages/InsightsPage').then((m) => ({ default: m.InsightsPage })));
+const AnalyticsPage = React.lazy(() => import('./pages/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage })));
+const ReportsPage = React.lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const ChatPage = React.lazy(() => import('./pages/ChatPage').then((m) => ({ default: m.ChatPage })));
+
 import { ROUTES } from './utils/constants';
 
+function PageLoadingFallback() {
+  return (
+    <div className="min-h-[50vh] flex flex-col items-center justify-center space-y-3 py-16">
+      <Loader2 className="w-8 h-8 text-brand-teal animate-spin" />
+      <span className="text-body-sm font-medium text-brand-dark">Loading...</span>
+    </div>
+  );
+}
+
 export function App() {
+  useEffect(() => {
+    // Non-blocking parallel service warmup on app launch
+    triggerBackgroundWarmup();
+  }, []);
+
   return (
     <ErrorBoundary>
       <I18nProvider>
@@ -66,14 +84,51 @@ export function App() {
                 <Route element={<AppLayout />}>
                   <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
                   <Route path={ROUTES.DAILY_CHECKIN} element={<DailyCheckinPage />} />
-                  <Route path={ROUTES.RISK_ANALYSIS} element={<RiskAnalysisPage />} />
-                  <Route path={ROUTES.INSIGHTS} element={<InsightsPage />} />
-                  <Route path={ROUTES.ANALYTICS} element={<AnalyticsPage />} />
-                  <Route path={ROUTES.REPORTS} element={<ReportsPage />} />
-                  <Route path={ROUTES.CHAT} element={<ChatPage />} />
                   <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
                   <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
                   <Route path={ROUTES.PSS_ASSESSMENT} element={<PssAssessmentPage />} />
+
+                  {/* Heavy routes with Suspense code splitting */}
+                  <Route
+                    path={ROUTES.RISK_ANALYSIS}
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <RiskAnalysisPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path={ROUTES.INSIGHTS}
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <InsightsPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path={ROUTES.ANALYTICS}
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <AnalyticsPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path={ROUTES.REPORTS}
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <ReportsPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path={ROUTES.CHAT}
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <ChatPage />
+                      </Suspense>
+                    }
+                  />
                 </Route>
               </Route>
             </Routes>

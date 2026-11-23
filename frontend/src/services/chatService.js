@@ -141,6 +141,27 @@ export const chatService = {
   },
 
   /**
+   * Non-blocking background persistence of chat history with retry.
+   * Ensures the UI response is displayed without awaiting network roundtrips to Firestore.
+   */
+  savePersistedHistoryNonBlocking: (sessionId, messages, title = null, retries = 2) => {
+    chatService.savePersistedHistory(sessionId, messages, title).then((ok) => {
+      if (!ok && retries > 0) {
+        setTimeout(() => {
+          chatService.savePersistedHistoryNonBlocking(sessionId, messages, title, retries - 1);
+        }, 2000);
+      }
+    }).catch((err) => {
+      console.warn('[chatService] Background savePersistedHistory failed:', err.message);
+      if (retries > 0) {
+        setTimeout(() => {
+          chatService.savePersistedHistoryNonBlocking(sessionId, messages, title, retries - 1);
+        }, 2000);
+      }
+    });
+  },
+
+  /**
    * Deletes a specific conversation session.
    */
   deleteSession: async (sessionId) => {
@@ -209,12 +230,18 @@ export const chatService = {
     // Primary route: Express gateway proxy (immune to CORS restrictions)
     const primaryEndpoint = '/chat/message';
 
+    console.time('[Chat] RAG sendMessage');
     try {
-      const response = await apiClient.post(primaryEndpoint, {
+      const payload = {
         message: query,
         sessionId,
         language,
-      });
+      };
+      if (options.context && Array.isArray(options.context)) {
+        payload.context = options.context.slice(-10);
+      }
+
+      const response = await apiClient.post(primaryEndpoint, payload);
 
       if (response.ok && response.data && typeof response.data.answer === 'string' && response.data.answer.trim()) {
         return {
@@ -261,6 +288,8 @@ export const chatService = {
         isError: true,
         errorKey,
       };
+    } finally {
+      console.timeEnd('[Chat] RAG sendMessage');
     }
   },
 };

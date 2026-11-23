@@ -207,17 +207,20 @@ export function ChatProvider({ children }) {
     }
 
     try {
+      // Window context to the last 10 messages for prompt efficiency and fast response
+      const recentContext = updatedWithUser.slice(-10);
+
       const reply = await chatService.sendMessage(query, {
         language: chatLanguage,
         sessionId,
+        context: recentContext,
       });
 
       const updatedWithReply = [...updatedWithUser, reply];
       setMessages(updatedWithReply);
 
-      // Persist transcript to backend for authenticated user
-      await chatService.savePersistedHistory(sessionId, updatedWithReply, currentTitle);
-      // Refresh conversation list in background to update title/timestamp
+      // Non-blocking background persistence with retry: UI displays reply immediately
+      chatService.savePersistedHistoryNonBlocking(sessionId, updatedWithReply, currentTitle);
       refreshSessionsList();
     } catch (err) {
       console.error('[ChatContext] Exception sending message:', err);

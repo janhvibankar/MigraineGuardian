@@ -122,6 +122,12 @@ export function DashboardPage() {
 
     async function loadDashboardData() {
       try {
+        // 0. Immediate render: populate cached forecast if present
+        const cachedForecast = predictionService.getCachedTodayForecast();
+        if (cachedForecast && isMounted) {
+          setPrediction(cachedForecast);
+        }
+
         // Priority 1: Fetch core daily checkin & forecast concurrently (critical path for rendering UI)
         const [forecastData, logData] = await Promise.all([
           predictionService.getTodayPrediction(),

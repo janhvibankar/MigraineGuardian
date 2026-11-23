@@ -1,10 +1,17 @@
 import { apiClient } from './apiClient.js';
 import { storageService } from './storageService.js';
 
-export function syncRiskForecastState(forecast) {
+export function getForecastCacheKey(uid = null) {
+  const currentUid = uid || storageService.getItem('migraineguardian_user', null)?.uid;
+  return currentUid ? `migraineguardian_forecast_${currentUid}` : 'migraineguardian_today_forecast';
+}
+
+export function syncRiskForecastState(forecast, uid = null) {
   if (typeof window === 'undefined') return;
+  const cacheKey = getForecastCacheKey(uid);
 
   if (forecast && forecast.score !== undefined && forecast.score !== null) {
+    storageService.setItem(cacheKey, forecast);
     storageService.setItem('migraineguardian_today_forecast', forecast);
 
     const currentUser = storageService.getItem('migraineguardian_user', null);
@@ -19,6 +26,7 @@ export function syncRiskForecastState(forecast) {
     }
     window.dispatchEvent(new CustomEvent('migraineguardian_forecast_updated', { detail: forecast }));
   } else if (forecast === null) {
+    storageService.removeItem(cacheKey);
     storageService.removeItem('migraineguardian_today_forecast');
     const currentUser = storageService.getItem('migraineguardian_user', null);
     if (currentUser && currentUser.currentRiskScore !== null) {
@@ -35,15 +43,37 @@ export function syncRiskForecastState(forecast) {
 
 export const predictionService = {
   /**
+   * Retrieves today's cached forecast instantly from local storage if valid.
+   */
+  getCachedTodayForecast: (targetDate = null, uid = null) => {
+    const dateQuery = targetDate || new Date().toLocaleDateString('en-CA');
+    const cacheKey = getForecastCacheKey(uid);
+    const cachedForecast = storageService.getItem(cacheKey, null) || storageService.getItem('migraineguardian_today_forecast', null);
+    if (cachedForecast) {
+      const forecastDate = cachedForecast.forecastDate || cachedForecast.date || cachedForecast.id;
+      const isValidDate = !forecastDate || forecastDate === dateQuery;
+      const isValidScore = typeof cachedForecast.score === 'number' && !isNaN(cachedForecast.score);
+      if (isValidDate && isValidScore) {
+        return cachedForecast;
+      }
+      storageService.removeItem(cacheKey);
+      storageService.removeItem('migraineguardian_today_forecast');
+    }
+    return null;
+  },
+
+  /**
    * Fetches today's AI risk forecast from Node.js Express API gateway (`GET /api/predictions/today`).
    * Pass `recalculate = true` to force an on-demand recalculation even if an older forecast exists.
    * Returns `null` if no forecast exists for the current user today.
    */
   getTodayPrediction: async (targetDate = null, recalculate = false) => {
+    console.time('[Prediction] getTodayPrediction');
     const dateQuery = targetDate || new Date().toLocaleDateString('en-CA');
     const recalcQuery = recalculate ? '&recalculate=true' : '';
     const query = `?date=${encodeURIComponent(dateQuery)}${recalcQuery}`;
     const res = await apiClient.get(`/predictions/today${query}`);
+    console.timeEnd('[Prediction] getTodayPrediction');
     if (res.ok) {
       if (res.data) {
         const forecastDate = res.data.forecastDate || res.data.date || res.data.id;
@@ -74,15 +104,9 @@ export const predictionService = {
     }
 
     // Only return cached forecast if it strictly matches dateQuery and has a valid score
-    const cachedForecast = storageService.getItem('migraineguardian_today_forecast', null);
+    const cachedForecast = predictionService.getCachedTodayForecast(dateQuery);
     if (cachedForecast) {
-      const forecastDate = cachedForecast.forecastDate || cachedForecast.date || cachedForecast.id;
-      const isValidDate = !forecastDate || forecastDate === dateQuery;
-      const isValidScore = typeof cachedForecast.score === 'number' && !isNaN(cachedForecast.score);
-      if (isValidDate && isValidScore) {
-        return cachedForecast;
-      }
-      storageService.removeItem('migraineguardian_today_forecast');
+      return cachedForecast;
     }
     return null;
   },

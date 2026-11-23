@@ -110,11 +110,12 @@ export function RiskAnalysisPage() {
         const isWarmingOrPending = status === 'warming' || status === 'pending' || forecastData?.errorCategory === 'FASTAPI_SERVICE_WARMING';
 
         // Bounded transient backoff: Auto-poll while service is warming, pending, or retryable, and within bounded 90s window
-        if (!isManualRetry && (isWarmingOrPending || retryPermitted) && retryAttempt < MAX_WARMING_RETRIES) {
+        // (Permits manual retry to poll during cold-start warming instead of failing prematurely on attempt 1)
+        if ((isWarmingOrPending || retryPermitted) && retryAttempt < MAX_WARMING_RETRIES) {
           const pollDelayMs =
             typeof forecastData?.retryAfterMs === 'number' &&
-            forecastData.retryAfterMs >= 2000 &&
-            forecastData.retryAfterMs <= 30000
+              forecastData.retryAfterMs >= 2000 &&
+              forecastData.retryAfterMs <= 30000
               ? forecastData.retryAfterMs
               : 8000;
 
@@ -151,6 +152,13 @@ export function RiskAnalysisPage() {
     let isMounted = true;
 
     async function init() {
+      // 0. Fast-path: display cached forecast instantly if available for today
+      const cached = predictionService.getCachedTodayForecast();
+      if (cached && isMounted) {
+        setPrediction(cached);
+        setForecastStatus('ready');
+      }
+
       try {
         // Fast path: load basic check-in record and weekly summary first (sub-second)
         const [checkinData, summaryData] = await Promise.all([
@@ -366,8 +374,8 @@ export function RiskAnalysisPage() {
                   {forecastStatus === 'warming'
                     ? 'Our prediction service is waking up. This may take a little longer.'
                     : forecastStatus === 'pending'
-                    ? 'Your risk analysis is being generated. Please wait...'
-                    : 'Preparing your migraine risk prediction...'}
+                      ? 'Your risk analysis is being generated. Please wait...'
+                      : 'Preparing your migraine risk prediction...'}
                 </h2>
                 <p className="text-body-md text-[#555B55] max-w-md mx-auto leading-relaxed">
                   {forecastStatus === 'warming'
@@ -467,8 +475,8 @@ export function RiskAnalysisPage() {
                     {currentLevel === 'High'
                       ? t('risk.headlineHigh')
                       : currentLevel === 'Low'
-                      ? t('risk.headlineLow')
-                      : t('risk.headlineModerate')}
+                        ? t('risk.headlineLow')
+                        : t('risk.headlineModerate')}
                   </h2>
                 </div>
               </div>

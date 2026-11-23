@@ -15,6 +15,7 @@ import { auth, googleProvider } from '../config/firebase.js';
 import { apiClient } from './apiClient.js';
 import { storageService } from './storageService.js';
 import { pssService } from './pssService.js';
+import { triggerBackgroundWarmup } from './warmupService.js';
 
 export function isMobileBrowser() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
@@ -50,6 +51,19 @@ export function formatNameFromEmail(email) {
   return words
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');
+}
+
+export function buildLocalUserFromFirebase(firebaseUser) {
+  if (!firebaseUser) return null;
+  const displayName = firebaseUser.displayName || formatNameFromEmail(firebaseUser.email) || 'User';
+  return {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    name: displayName,
+    displayName,
+    photoURL: firebaseUser.photoURL || null,
+    initials: computeInitials(displayName),
+  };
 }
 
 function notifyUserChanged(user) {
@@ -199,6 +213,18 @@ export function clearUserScopedData() {
     window.localStorage.removeItem('migraineguardian_today_forecast');
     window.localStorage.removeItem('pss_score_latest');
     window.localStorage.removeItem('migraineguardian_preferences');
+
+    // Clean any user-specific forecast cache keys
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith('migraineguardian_forecast_')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((k) => window.localStorage.removeItem(k));
+    } catch (_) {}
   }
 }
 
@@ -280,21 +306,60 @@ export const authService = {
       if (guestData.usesMedication !== undefined) updates.usesMedication = guestData.usesMedication;
       if (guestData.selectedFactors) updates.selectedFactors = guestData.selectedFactors;
 
+      let profileOk = true;
       if (Object.keys(updates).length > 0) {
-        await apiClient.patch('/user/profile', updates);
+        const res = await apiClient.patch('/user/profile', updates);
+        profileOk = Boolean(res && res.ok);
       }
 
+      let pssOk = true;
       if (guestData.pssAnswers) {
-        await pssService.submitAssessment(guestData.pssAnswers);
+        const pssRes = await pssService.submitAssessment(guestData.pssAnswers);
+        pssOk = Boolean(pssRes);
       }
 
       // Re-fetch profile to sync state
       await authService.fetchUserProfile();
 
-      // Clean up guest draft once transferred
-      authService.clearGuestOnboarding();
+      // Clean up guest draft only once transfer succeeds
+      if (profileOk && pssOk) {
+        authService.clearGuestOnboarding();
+        return true;
+      }
+      return false;
     } catch (err) {
       console.warn('[authService] Error transferring guest onboarding data to user profile:', err.message);
+      return false;
+    }
+  },
+
+  /**
+   * Background synchronization of user profile, server sync, and guest onboarding transfer.
+   * Runs non-blockingly so the user navigates immediately to the Dashboard without waiting
+   * on sleeping Render backend cold-starts.
+   */
+  syncUserInBackground: async (initialUser, retryAttempts = 2) => {
+    try {
+      // Trigger service wake-up immediately after sign-in
+      triggerBackgroundWarmup(true);
+
+      if (initialUser?.name) {
+        await apiClient.patch('/user/profile', { name: initialUser.name, email: initialUser.email }).catch(() => {});
+      }
+      await authService.transferGuestOnboardingToUser();
+      const updatedProfile = await authService.fetchUserProfile();
+      if (updatedProfile) {
+        notifyUserChanged(updatedProfile);
+      }
+      return updatedProfile || initialUser;
+    } catch (err) {
+      console.warn('[authService] Background user profile sync attempt failed:', err.message);
+      if (retryAttempts > 0) {
+        setTimeout(() => {
+          authService.syncUserInBackground(initialUser, retryAttempts - 1);
+        }, 3000);
+      }
+      return initialUser;
     }
   },
 
@@ -321,6 +386,7 @@ export const authService = {
 
   login: async (emailInput, password) => {
     const email = emailInput?.trim() || '';
+    console.time('[Auth] Email Login');
     try {
       // Clear previous account's cached data before signing in
       clearUserScopedData();
@@ -333,14 +399,17 @@ export const authService = {
       storageService.setItem('migraineguardian_token', token);
       storageService.setItem('migraineguardian_authenticated', true);
 
-      // 2. Fetch authenticated profile from Express API gateway
-      const profile = await authService.fetchUserProfile();
+      const initialUser = buildLocalUserFromFirebase(userCredential.user);
+      storageService.setItem('migraineguardian_user', initialUser);
+      notifyUserChanged(initialUser);
 
-      // 3. Migrate any guest onboarding data to the authenticated account
-      await authService.transferGuestOnboardingToUser();
+      // Background synchronization (non-blocking)
+      authService.syncUserInBackground(initialUser);
 
-      return { success: true, user: profile };
+      console.timeEnd('[Auth] Email Login');
+      return { success: true, user: initialUser };
     } catch (err) {
+      console.timeEnd('[Auth] Email Login');
       logSafeAuthDiagnostic('login (email/password)', 'sign-in request', err);
       return {
         success: false,
@@ -447,23 +516,17 @@ export const authService = {
           return { success: false, redirectHandled: false };
         }
 
-        const displayName =
-          firebaseUser.displayName || formatNameFromEmail(firebaseUser.email) || 'User';
+        const initialUser = buildLocalUserFromFirebase(firebaseUser);
         const token = await firebaseUser.getIdToken();
         storageService.setItem('migraineguardian_token', token);
         storageService.setItem('migraineguardian_authenticated', true);
+        storageService.setItem('migraineguardian_user', initialUser);
+        notifyUserChanged(initialUser);
 
-        // Sync profile name with backend
-        await apiClient.patch('/user/profile', { name: displayName });
+        // Run profile patch, fetch & guest transfer non-blockingly in background
+        authService.syncUserInBackground(initialUser);
 
-        // Fetch full authenticated user profile from Express backend
-        const user = await authService.fetchUserProfile();
-
-        // Migrate any guest onboarding data to the account
-        await authService.transferGuestOnboardingToUser();
-        notifyUserChanged(user);
-
-        return { success: true, redirectHandled: true, user };
+        return { success: true, redirectHandled: true, user: initialUser };
       } catch (err) {
         logSafeAuthDiagnostic('handleRedirectResult', 'redirect result processing', err);
         return {
@@ -484,6 +547,7 @@ export const authService = {
     }
 
     googleSignInPromise = (async () => {
+      console.time('[Auth] Google Sign-In');
       try {
         if (!auth) {
           return { success: false, error: 'Authentication service is not initialized.' };
@@ -547,23 +611,18 @@ export const authService = {
 
         if (result && result.user) {
           const firebaseUser = result.user;
-          const displayName =
-            firebaseUser.displayName || formatNameFromEmail(firebaseUser.email) || 'User';
+          const initialUser = buildLocalUserFromFirebase(firebaseUser);
           const token = await firebaseUser.getIdToken();
           storageService.setItem('migraineguardian_token', token);
           storageService.setItem('migraineguardian_authenticated', true);
+          storageService.setItem('migraineguardian_user', initialUser);
+          notifyUserChanged(initialUser);
 
-          // Sync profile name with backend
-          await apiClient.patch('/user/profile', { name: displayName });
+          // Run profile patch, fetch & guest transfer non-blockingly in background
+          authService.syncUserInBackground(initialUser);
 
-          // Fetch full authenticated user profile from Express backend
-          const user = await authService.fetchUserProfile();
-
-          // Migrate any guest onboarding data to the account
-          await authService.transferGuestOnboardingToUser();
-          notifyUserChanged(user);
-
-          return { success: true, user };
+          console.timeEnd('[Auth] Google Sign-In');
+          return { success: true, user: initialUser };
         }
 
         return { success: false, error: 'Authentication did not return a user.' };
