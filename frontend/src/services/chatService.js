@@ -82,7 +82,7 @@ export const chatService = {
       if (newSid) {
         sessionStorage.setItem(SESSION_STORAGE_KEY, newSid);
       }
-    } catch (_) {}
+    } catch (_) { }
   },
 
   /**

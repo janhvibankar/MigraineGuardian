@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient.js';
 import { storageService } from './storageService.js';
-import { syncRiskForecastState } from './predictionService.js';
+import { syncRiskForecastState, getForecastCacheKey } from './predictionService.js';
 
 export const trackingService = {
   /**
@@ -54,6 +54,13 @@ export const trackingService = {
     };
 
     storageService.setItem('daily_checkin_today', newEntry);
+
+    // Invalidate cached forecast for today so new check-in data triggers fresh calculation
+    try {
+      const currentCacheKey = getForecastCacheKey();
+      storageService.removeItem(currentCacheKey);
+      storageService.removeItem('migraineguardian_today_forecast');
+    } catch (_) {}
 
     const res = await apiClient.post('/checkins/today', newEntry);
 

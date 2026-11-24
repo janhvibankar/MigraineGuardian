@@ -180,7 +180,7 @@ export async function submitDailyCheckinController(req, res, next) {
               await firestoreService.saveRiskForecast(userId, date, mlResult.data);
               const elapsed = Date.now() - startTime;
               console.log(
-                `[CHECKIN-ASYNC] Success: score=${mlResult.data.score}%, level=${mlResult.data.level} | Saved: true | Elapsed: ${elapsed}ms`
+                `[Prediction Saved] [CHECKIN-ASYNC] User: ${userPrefix}... | Score: ${mlResult.data.score}%, level=${mlResult.data.level} | Saved: true | Elapsed: ${elapsed}ms`
               );
             } else {
               console.log(`[CHECKIN-ASYNC] Skipping save; newer forecast already recorded for ${date}`);

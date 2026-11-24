@@ -171,17 +171,22 @@ export async function proxyChatMessageController(req, res, next) {
         try {
           const ragUrl = getRagServiceUrl();
           console.log(`[RAG Proxy] Calling external RAG service (attempt ${attempt}, budget remaining ${remainingBudget}ms): ${ragUrl}`);
+          const ragPayload = {
+            message: message.trim(),
+            sessionId: cleanSessionId,
+            language: lang,
+          };
+          if (Array.isArray(req.body.context)) {
+            ragPayload.context = req.body.context.slice(-10);
+          }
+
           const ragRes = await fetch(ragUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Accept: 'application/json',
             },
-            body: JSON.stringify({
-              message: message.trim(),
-              sessionId: cleanSessionId,
-              language: lang,
-            }),
+            body: JSON.stringify(ragPayload),
             signal: controller.signal,
           });
 

@@ -192,7 +192,7 @@ export async function getTodayPredictionController(req, res, next) {
                   const forecastSaveResult = await firestoreService.saveRiskForecast(userId, targetDate, mlResult.data);
                   const totalElapsed = Date.now() - startTime;
                   console.log(
-                    `[PREDICTION-GET] Success: score=${forecastSaveResult.forecast.score}%, level=${forecastSaveResult.forecast.level} | Saved: true | Elapsed: ${totalElapsed}ms`
+                    `[Prediction Saved] [PREDICTION-GET] User: ${userPrefix}... | Score: ${forecastSaveResult.forecast.score}%, level=${forecastSaveResult.forecast.level} | Saved: true | Elapsed: ${totalElapsed}ms`
                   );
                   return forecastSaveResult.forecast;
                 } catch (persistErr) {

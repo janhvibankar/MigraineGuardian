@@ -104,6 +104,23 @@ class ShapExplainerService:
             self._explainer_model_b = shap.LinearExplainer(lr_model, zero_background)
         return self._explainer_model_b
 
+    def init_explainers(self):
+        """Pre-initialize and cache SHAP LinearExplainers at application startup."""
+        if model_manager.is_loaded and model_manager.model is not None:
+            try:
+                lr_model_a = model_manager.model.named_steps.get("model")
+                if lr_model_a is not None:
+                    self._get_explainer_model_a(lr_model_a)
+            except Exception as e:
+                print(f"[SHAP] Pre-warming Model A explainer warning: {e}")
+        if model_manager.is_experimental_loaded and model_manager.experimental_model is not None:
+            try:
+                lr_model_b = model_manager.experimental_model.named_steps.get("model")
+                if lr_model_b is not None:
+                    self._get_explainer_model_b(lr_model_b)
+            except Exception as e:
+                print(f"[SHAP] Pre-warming Model B explainer warning: {e}")
+
     def explain(
         self,
         raw_features: Dict[str, Any],

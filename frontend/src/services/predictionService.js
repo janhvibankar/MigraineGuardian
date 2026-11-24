@@ -68,12 +68,17 @@ export const predictionService = {
    * Returns `null` if no forecast exists for the current user today.
    */
   getTodayPrediction: async (targetDate = null, recalculate = false) => {
-    console.time('[Prediction] getTodayPrediction');
+    const reqStart = Date.now();
     const dateQuery = targetDate || new Date().toLocaleDateString('en-CA');
     const recalcQuery = recalculate ? '&recalculate=true' : '';
     const query = `?date=${encodeURIComponent(dateQuery)}${recalcQuery}`;
-    const res = await apiClient.get(`/predictions/today${query}`);
+    console.log(`[Prediction] Request start: date=${dateQuery}, recalculate=${recalculate} at ${new Date().toISOString()}`);
+    console.time('[Prediction] getTodayPrediction');
+    const res = await apiClient.get(`/predictions/today${query}`, null, { bypassCache: true });
     console.timeEnd('[Prediction] getTodayPrediction');
+    const elapsed = Date.now() - reqStart;
+    console.log(`[Prediction] Request completed in ${elapsed}ms: ok=${res.ok}, status=${res.status}`);
+
     if (res.ok) {
       if (res.data) {
         const forecastDate = res.data.forecastDate || res.data.date || res.data.id;
@@ -81,13 +86,22 @@ export const predictionService = {
         const isValidScore = typeof res.data.score === 'number' && !isNaN(res.data.score);
 
         if (isValidDate && isValidScore) {
+          console.log(`[Prediction] Valid forecast received: score=${res.data.score}%, level=${res.data.level}`);
           syncRiskForecastState(res.data);
           return res.data;
         }
       }
 
-      // Explicitly clear stale cached forecast if backend returned null for user
-      syncRiskForecastState(null);
+      // Do NOT clear cached forecast if service is in transient warming/pending state
+      const isTransient = res.raw && (
+        res.raw.forecastStatus === 'warming' ||
+        res.raw.forecastStatus === 'pending' ||
+        res.raw.errorCategory === 'FASTAPI_SERVICE_WARMING'
+      );
+      if (!isTransient) {
+        syncRiskForecastState(null);
+      }
+
       if (res.raw && (res.raw.mlError || res.raw.message || res.raw.forecastStatus)) {
         return {
           score: null,

@@ -11,10 +11,17 @@ from app.api.explain import router as explain_router
 async def lifespan(app: FastAPI):
     # Startup: Load trained scikit-learn model pipeline once into memory
     t0 = time.perf_counter()
+    shap_status = "SHAP pre-initialized"
     try:
         model_manager.load_model()
+        try:
+            from app.services.shap_explainer import shap_explainer_service
+            shap_explainer_service.init_explainers()
+        except Exception as shap_err:
+            shap_status = f"SHAP fallback to lazy init: {shap_err}"
+            print(f"[ML Service Startup Warning] SHAP pre-initialization failed, will lazily initialize: {shap_err}")
         duration = time.perf_counter() - t0
-        print(f"[ML Service Startup] Model loading completed in {duration:.3f}s. Service ready.")
+        print(f"[ML Service Startup] Model loading completed in {duration:.3f}s ({shap_status}). Service ready.")
     except Exception as e:
         duration = time.perf_counter() - t0
         print(f"[ML Service Startup Warning] Model loading failed after {duration:.3f}s: {e}")

@@ -70,6 +70,7 @@ export function RiskAnalysisPage() {
   };
 
   const evaluatePrediction = async (isManualRetry = false, retryAttempt = 0) => {
+    const evalStartTime = Date.now();
     // If a manual retry is clicked, clear any scheduled background auto-poll timer
     if (isManualRetry) {
       clearPollTimer();
@@ -85,6 +86,7 @@ export function RiskAnalysisPage() {
     setIsEvaluating(true);
 
     try {
+      console.log(`[RiskAnalysisPage] Evaluating prediction (manual=${isManualRetry}, attempt=${retryAttempt + 1}/${MAX_WARMING_RETRIES}) at ${new Date().toISOString()}`);
       const forecastData = isManualRetry
         ? await predictionService.recalculateTodayPrediction()
         : await predictionService.getTodayPrediction();
@@ -100,6 +102,7 @@ export function RiskAnalysisPage() {
         setPrediction(validForecast);
         setForecastStatus('ready');
         setCalculationError(null);
+        console.log(`[Prediction Displayed] Score=${validForecast.score}% | Level=${validForecast.level} in ${Date.now() - evalStartTime}ms`);
       } else {
         const status = forecastData?.forecastStatus || (forecastData?.mlError?.includes('warming') ? 'warming' : 'error');
         const retryPermitted = forecastData?.canRetry !== false && status !== 'no_checkin';
@@ -119,6 +122,7 @@ export function RiskAnalysisPage() {
               ? forecastData.retryAfterMs
               : 8000;
 
+          console.log(`[Prediction Polling] Attempt ${retryAttempt + 1}/${MAX_WARMING_RETRIES} (status=${status}, pollDelayMs=${pollDelayMs}ms)`);
           pollTimerRef.current = setTimeout(() => {
             pollTimerRef.current = null;
             inFlightRef.current = false;
@@ -131,6 +135,12 @@ export function RiskAnalysisPage() {
 
         // Stop polling on non-retryable error or exhausted attempts; ensure timer is cleared
         clearPollTimer();
+        if (retryAttempt >= MAX_WARMING_RETRIES) {
+          console.warn('[RiskAnalysisPage] Polling deadline exceeded MAX_WARMING_RETRIES. Showing timeout recovery state.');
+          setForecastStatus('timeout');
+          setCanRetry(true);
+          setCalculationError('Our prediction service is taking longer than usual to wake up. Please click below to recalculate.');
+        }
       }
     } catch (err) {
       if (!isMountedRef.current) return;
@@ -363,7 +373,7 @@ export function RiskAnalysisPage() {
         </div>
       ) : !hasForecast ? (
         todayCheckin ? (
-          isEvaluating || forecastStatus === 'warming' || forecastStatus === 'pending' ? (
+          (isEvaluating || forecastStatus === 'warming' || forecastStatus === 'pending') && forecastStatus !== 'error' && forecastStatus !== 'timeout' ? (
             /* ACTIVE EVALUATION / COLD-START WARMING IN PROGRESS (NON-BLOCKING) */
             <Card variant="warm" className="p-8 sm:p-12 border-2 border-brand-sage/60 rounded-[28px] text-center space-y-5 animate-in fade-in duration-200">
               <div className="w-14 h-14 rounded-2xl bg-brand-sage/25 border border-brand-sage/50 flex items-center justify-center mx-auto text-brand-dark">
@@ -404,7 +414,7 @@ export function RiskAnalysisPage() {
               {calculationError && (
                 <div className="p-4 rounded-xl bg-[#8F443B]/10 border border-[#8F443B]/30 text-[#8F443B] flex items-center justify-center gap-2 max-w-md mx-auto text-body-sm font-medium">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 text-[#8F443B]" />
-                  <span>Unable to generate your prediction right now. Please try again.</span>
+                  <span>{calculationError || 'Unable to generate your prediction right now. Please try again.'}</span>
                 </div>
               )}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">

@@ -224,7 +224,7 @@ export function clearUserScopedData() {
         }
       }
       keysToRemove.forEach((k) => window.localStorage.removeItem(k));
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -344,7 +344,7 @@ export const authService = {
       triggerBackgroundWarmup(true);
 
       if (initialUser?.name) {
-        await apiClient.patch('/user/profile', { name: initialUser.name, email: initialUser.email }).catch(() => {});
+        await apiClient.patch('/user/profile', { name: initialUser.name, email: initialUser.email }).catch(() => { });
       }
       await authService.transferGuestOnboardingToUser();
       const updatedProfile = await authService.fetchUserProfile();
@@ -474,7 +474,7 @@ export const authService = {
 
         const resolver =
           typeof browserPopupRedirectResolver === 'function' ||
-          (browserPopupRedirectResolver && typeof browserPopupRedirectResolver === 'object' && !('code' in browserPopupRedirectResolver))
+            (browserPopupRedirectResolver && typeof browserPopupRedirectResolver === 'object' && !('code' in browserPopupRedirectResolver))
             ? browserPopupRedirectResolver
             : undefined;
 
@@ -559,7 +559,7 @@ export const authService = {
 
         const resolver =
           typeof browserPopupRedirectResolver === 'function' ||
-          (browserPopupRedirectResolver && typeof browserPopupRedirectResolver === 'object' && !('code' in browserPopupRedirectResolver))
+            (browserPopupRedirectResolver && typeof browserPopupRedirectResolver === 'object' && !('code' in browserPopupRedirectResolver))
             ? browserPopupRedirectResolver
             : undefined;
 
