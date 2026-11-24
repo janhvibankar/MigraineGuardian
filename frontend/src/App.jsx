@@ -1,9 +1,10 @@
 import React, { useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { I18nProvider } from './context/I18nContext';
 import { ChatProvider } from './context/ChatContext';
 import { triggerBackgroundWarmup } from './services/warmupService';
+import { authService } from './services/authService';
 import { Loader2 } from 'lucide-react';
 
 // Layouts & Route Guards
@@ -50,6 +51,40 @@ function PageLoadingFallback() {
   );
 }
 
+function AuthRedirectHandler() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function checkGlobalRedirect() {
+      try {
+        const res = await authService.handleRedirectResult();
+        if (!isMounted) return;
+        if (res && res.success && res.redirectHandled) {
+          // If redirect completed and user is on an auth or public page, navigate to dashboard
+          const currentPath = window.location.pathname;
+          if (
+            currentPath === ROUTES.LOGIN ||
+            currentPath === ROUTES.SIGNUP ||
+            currentPath === ROUTES.HOME ||
+            currentPath === '/'
+          ) {
+            navigate(ROUTES.DASHBOARD, { replace: true });
+          }
+        }
+      } catch (err) {
+        console.warn('[AuthRedirectHandler] Error resolving OAuth redirect:', err);
+      }
+    }
+    checkGlobalRedirect();
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
+
+  return null;
+}
+
 export function App() {
   useEffect(() => {
     // Non-blocking parallel service warmup on app launch
@@ -61,6 +96,7 @@ export function App() {
       <I18nProvider>
         <ChatProvider>
           <BrowserRouter>
+            <AuthRedirectHandler />
             <Routes>
               {/* Public Informational Routes */}
               <Route element={<PublicLayout />}>

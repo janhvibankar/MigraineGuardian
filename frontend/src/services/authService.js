@@ -27,6 +27,19 @@ export function isMobileBrowser() {
   return mobileRegex.test(ua) || (isTouchScreen && /Macintosh/i.test(ua));
 }
 
+/**
+ * Detects if the web page is running inside an embedded in-app browser/webview
+ * (e.g. WhatsApp, Instagram, Facebook Messenger, WeChat, Twitter/X, LinkedIn).
+ * Google OAuth explicitly blocks requests with 403 'disallowed_useragent' inside embedded webviews.
+ */
+export function isInAppBrowser() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  // Check for common in-app browser tokens
+  const inAppRegex = /FBAN|FBAV|Instagram|WhatsApp|Line\/|MicroMessenger|Twitter|LinkedInApp|Snapchat/i;
+  return inAppRegex.test(ua);
+}
+
 let googleSignInPromise = null;
 let redirectResultPromise = null;
 
@@ -568,6 +581,16 @@ export const authService = {
             (browserPopupRedirectResolver && typeof browserPopupRedirectResolver === 'object' && !('code' in browserPopupRedirectResolver))
             ? browserPopupRedirectResolver
             : undefined;
+
+        // Check for embedded in-app browsers (WhatsApp, Instagram, etc.) where Google blocks sign-in
+        if (isInAppBrowser()) {
+          const inAppMsg = 'Google sign-in is not supported inside in-app browsers. Please tap the menu (...) and select "Open in Chrome" or "Open in Safari".';
+          logSafeAuthDiagnostic('loginWithGoogle', 'in-app browser detected', new Error(inAppMsg));
+          return {
+            success: false,
+            error: inAppMsg,
+          };
+        }
 
         const mobile = isMobileBrowser();
 
