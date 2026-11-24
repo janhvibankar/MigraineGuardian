@@ -39,11 +39,11 @@ import {
 export function DashboardPage() {
   const currentUser = useCurrentUser();
   const { t, language } = useTranslation();
-  const [prediction, setPrediction] = useState(null);
-  const [todayLog, setTodayLog] = useState(null);
+  const [prediction, setPrediction] = useState(() => predictionService.getCachedTodayForecast());
+  const [todayLog, setTodayLog] = useState(() => trackingService.getTodayLog());
   const [reportSummary, setReportSummary] = useState(null);
   const [weeklyInsights, setWeeklyInsights] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Morning Prediction States
   const [morningSleep, setMorningSleep] = useState(7.5);
@@ -122,12 +122,6 @@ export function DashboardPage() {
 
     async function loadDashboardData() {
       try {
-        // 0. Immediate render: populate cached forecast if present
-        const cachedForecast = predictionService.getCachedTodayForecast();
-        if (cachedForecast && isMounted) {
-          setPrediction(cachedForecast);
-        }
-
         // Priority 1: Fetch core daily checkin & forecast concurrently (critical path for rendering UI)
         const [forecastData, logData] = await Promise.all([
           predictionService.getTodayPrediction(),
@@ -135,9 +129,8 @@ export function DashboardPage() {
         ]);
 
         if (isMounted) {
-          setPrediction(forecastData);
-          setTodayLog(logData);
-          setLoading(false); // Unblock main dashboard render immediately
+          if (forecastData) setPrediction(forecastData);
+          if (logData) setTodayLog(logData);
         }
 
         // Priority 2: Fetch history once and compute background summary / insights without re-fetching
@@ -153,7 +146,6 @@ export function DashboardPage() {
         }
       } catch (err) {
         console.warn('[DashboardPage] Error loading user dashboard data:', err.message);
-        if (isMounted) setLoading(false);
       }
     }
 
@@ -207,16 +199,6 @@ export function DashboardPage() {
     return null;
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center space-y-3 py-12">
-        <Loader2 className="w-8 h-8 text-brand-teal animate-spin" />
-        <span className="text-body-md font-semibold text-brand-dark">
-          {t('dashboard.loadingData')}
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-9 py-2 pb-12 animate-in fade-in duration-200">

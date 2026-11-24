@@ -2,14 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { auth } from '../../config/firebase';
 import { authService } from '../../services/authService';
+import { storageService } from '../../services/storageService';
 import { ROUTES } from '../../utils/constants';
 import { Loader2 } from 'lucide-react';
 
 export function ProtectedRoute() {
   const location = useLocation();
-  const [authState, setAuthState] = useState({
-    isLoading: true,
-    isAuthenticated: false,
+  const [authState, setAuthState] = useState(() => {
+    const isAuthed = Boolean(
+      (auth && auth.currentUser) ||
+      storageService.getItem('migraineguardian_authenticated')
+    );
+    return {
+      isLoading: !isAuthed && Boolean(auth),
+      isAuthenticated: isAuthed,
+    };
   });
 
   useEffect(() => {

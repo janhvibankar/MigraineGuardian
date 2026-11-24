@@ -32,13 +32,9 @@ export function TopBar() {
   useEffect(() => {
     let isMounted = true;
 
-    // Fetch latest check-in and forecast
+    // Fetch latest check-in
     trackingService.fetchTodayLog().then((log) => {
       if (isMounted) setTodayLog(log);
-    });
-
-    predictionService.getTodayPrediction().then((forecast) => {
-      if (isMounted) setTodayForecast(forecast);
     });
 
     const handleForecastUpdate = (e) => {

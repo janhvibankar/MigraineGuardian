@@ -24,13 +24,6 @@ export function Sidebar({ className }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Fetch latest today forecast on mount
-    predictionService.getTodayPrediction().then((forecast) => {
-      if (isMounted && forecast) {
-        setTodayForecast(forecast);
-      }
-    });
-
     const handleForecastUpdate = (e) => {
       if (isMounted) {
         setTodayForecast(e.detail || null);

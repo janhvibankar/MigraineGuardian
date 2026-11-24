@@ -340,13 +340,19 @@ export const authService = {
    */
   syncUserInBackground: async (initialUser, retryAttempts = 2) => {
     try {
-      // Trigger service wake-up immediately after sign-in
-      triggerBackgroundWarmup(true);
+      // Defer warm-up pings slightly (1500ms) so critical login profile sync and dashboard data load first
+      setTimeout(() => {
+        triggerBackgroundWarmup(true);
+      }, 1500);
 
-      if (initialUser?.name) {
-        await apiClient.patch('/user/profile', { name: initialUser.name, email: initialUser.email }).catch(() => { });
-      }
-      await authService.transferGuestOnboardingToUser();
+      // Run profile patch and guest onboarding transfer concurrently
+      const profilePromise = initialUser?.name
+        ? apiClient.patch('/user/profile', { name: initialUser.name, email: initialUser.email }).catch(() => { })
+        : Promise.resolve();
+
+      const guestPromise = authService.transferGuestOnboardingToUser();
+
+      await Promise.allSettled([profilePromise, guestPromise]);
       const updatedProfile = await authService.fetchUserProfile();
       if (updatedProfile) {
         notifyUserChanged(updatedProfile);
