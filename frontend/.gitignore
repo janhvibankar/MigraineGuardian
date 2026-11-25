@@ -9,6 +9,7 @@ build/
 .env
 .env.*
 !.env.example
+.firebase/
 
 # Logs
 *.log
