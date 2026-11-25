@@ -9,14 +9,6 @@ services:
       - key: VITE_API_BASE_URL
         value: https://migraineguardian-backend.onrender.com/api
     routes:
-      # Firebase Authentication handler and helper proxies (placed BEFORE SPA catch-all):
-      # Rewrites /__/auth/* to the default Firebase project auth domain
-      - type: rewrite
-        source: /__/auth/*
-        destination: https://migraineguardian.firebaseapp.com/__/auth/*
-      - type: rewrite
-        source: /__/firebase/init.json
-        destination: https://migraineguardian.firebaseapp.com/__/firebase/init.json
       # Single Page Application (SPA) rewrite rule:
       # Serves index.html for all client-side routes (e.g. /chat, /dashboard, /checkin, /pss-assessment)
       # Precedence: physical assets (like /assets/*, /favicon.svg) are automatically served first.

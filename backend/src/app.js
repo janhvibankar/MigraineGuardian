@@ -18,6 +18,8 @@ app.set('etag', false);
 // Explicit trusted origins for production and development
 const explicitTrustedOrigins = [
   'https://migraineguardian-frontend.onrender.com',
+  'https://migraineguardian.web.app',
+  'https://migraineguardian.firebaseapp.com',
   'https://migraineguardian.vercel.app',
   'https://migraineguardian-frontend.vercel.app',
   'http://localhost:3000',

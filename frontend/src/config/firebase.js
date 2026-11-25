@@ -14,18 +14,40 @@ const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.met
 
 const rawApiKey = env.VITE_FIREBASE_API_KEY;
 
-// On localhost / dev environments, retain default firebaseapp.com domain.
-// In production, allow VITE_FIREBASE_AUTH_DOMAIN to point to custom app domain or custom auth subdomain.
-const isLocalhost =
-  typeof window !== 'undefined' &&
-  (window.location?.hostname === 'localhost' ||
-    window.location?.hostname === '127.0.0.1' ||
-    window.location?.hostname === '[::1]');
-
+// Domain resolution strategy:
+// 1. On Firebase Hosting domains (<project-id>.web.app or <project-id>.firebaseapp.com),
+//    authDomain matches window.location.hostname so auth handlers and app share the same origin.
+// 2. On localhost / dev environments, retain default migraineguardian.firebaseapp.com.
+// 3. On Render or other external domains, use default migraineguardian.firebaseapp.com
+//    (or explicit VITE_FIREBASE_AUTH_DOMAIN override if provided).
 const defaultAuthDomain = "migraineguardian.firebaseapp.com";
-const resolvedAuthDomain = isLocalhost
-  ? defaultAuthDomain
-  : (env.VITE_FIREBASE_AUTH_DOMAIN || defaultAuthDomain);
+
+function resolveAuthDomain() {
+  if (typeof window === 'undefined' || !window.location) {
+    return env.VITE_FIREBASE_AUTH_DOMAIN || defaultAuthDomain;
+  }
+  const hostname = window.location.hostname || '';
+
+  // Local development
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
+    return defaultAuthDomain;
+  }
+
+  // Firebase Hosting native domains: same-origin auth handler
+  if (
+    hostname === 'migraineguardian.web.app' ||
+    hostname === 'migraineguardian.firebaseapp.com' ||
+    hostname.endsWith('.web.app') ||
+    hostname.endsWith('.firebaseapp.com')
+  ) {
+    return hostname;
+  }
+
+  // Render or other hosting
+  return env.VITE_FIREBASE_AUTH_DOMAIN || defaultAuthDomain;
+}
+
+const resolvedAuthDomain = resolveAuthDomain();
 
 const firebaseConfig = {
   apiKey: rawApiKey || "AIzaSyDummyApiKeyForLocalDevelopmentOnly",
