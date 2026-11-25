@@ -216,6 +216,29 @@ export function ChatProvider({ children }) {
         context: recentContext,
       });
 
+      // If service is warming up, auto-retry once after a short delay
+      if (reply.isWarming && reply.canRetry) {
+        setMessages([...updatedWithUser, reply]);
+        const retryDelay = Math.min(Math.max(reply.retryAfterMs || 8000, 3000), 12000);
+        console.log(`[ChatContext] RAG service warming up. Retrying in ${retryDelay}ms...`);
+        setTimeout(async () => {
+          try {
+            const secondReply = await chatService.sendMessage(query, {
+              language: chatLanguage,
+              sessionId,
+              context: recentContext,
+            });
+            const finalMessages = [...updatedWithUser, secondReply];
+            setMessages(finalMessages);
+            if (!secondReply.isWarming && !secondReply.isError) {
+              chatService.savePersistedHistoryNonBlocking(sessionId, finalMessages, currentTitle);
+              refreshSessionsList();
+            }
+          } catch (_) {}
+        }, retryDelay);
+        return;
+      }
+
       const updatedWithReply = [...updatedWithUser, reply];
       setMessages(updatedWithReply);
 

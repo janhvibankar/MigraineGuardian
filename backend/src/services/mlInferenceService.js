@@ -19,14 +19,14 @@
  */
 
 // Bounded timing configuration (configurable via environment variables)
-const TOTAL_DEADLINE_MS = parseInt(process.env.ML_RETRY_MAX_DURATION_MS || process.env.ML_TOTAL_DEADLINE_MS, 10) || 70000;
-const PER_ATTEMPT_TIMEOUT_MS = parseInt(process.env.ML_REQUEST_TIMEOUT_MS, 10) || 65000;
+const TOTAL_DEADLINE_MS = parseInt(process.env.ML_RETRY_MAX_DURATION_MS || process.env.ML_TOTAL_DEADLINE_MS, 10) || 85000;
+const PER_ATTEMPT_TIMEOUT_MS = parseInt(process.env.ML_REQUEST_TIMEOUT_MS, 10) || 80000;
 const INITIAL_RETRY_DELAY_MS = parseInt(process.env.ML_RETRY_INITIAL_DELAY_MS, 10) || 2000;
 const MAX_RETRY_DELAY_MS = parseInt(process.env.ML_RETRY_MAX_DELAY_MS, 10) || 5000;
-const RETRY_MAX = 3;
+const RETRY_MAX = 4;
 
-// Transient HTTP error status codes (Render spin-up / Cloudflare proxy cold start)
-const TRANSIENT_HTTP_STATUSES = new Set([408, 502, 503, 504, 520, 521, 522, 523, 524]);
+// Transient HTTP error status codes (Render spin-up / Cloudflare proxy cold start / Render 429 during boot)
+const TRANSIENT_HTTP_STATUSES = new Set([408, 429, 502, 503, 504, 520, 521, 522, 523, 524]);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

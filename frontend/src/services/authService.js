@@ -497,41 +497,72 @@ export const authService = {
             ? browserPopupRedirectResolver
             : undefined;
 
+        let redirectInFlight = false;
+        try {
+          redirectInFlight =
+            (typeof window !== 'undefined' && window.sessionStorage?.getItem('mg_google_redirect_in_flight') === 'true') ||
+            (typeof window !== 'undefined' && window.localStorage?.getItem('mg_google_redirect_in_flight') === 'true');
+        } catch (_) { }
+
         let result = null;
         try {
           result = await getRedirectResult(auth, resolver);
         } catch (redirectErr) {
-          if (typeof window !== 'undefined' && window.sessionStorage) {
+          if (typeof window !== 'undefined') {
             try {
-              window.sessionStorage.removeItem('mg_google_redirect_in_flight');
+              window.sessionStorage?.removeItem('mg_google_redirect_in_flight');
+              window.localStorage?.removeItem('mg_google_redirect_in_flight');
             } catch (e) {
               // Ignore storage errors
             }
           }
+          console.error(`[authService] getRedirectResult failed (code: ${redirectErr?.code || 'unknown'}):`, redirectErr?.message);
           logSafeAuthDiagnostic('handleRedirectResult', 'getRedirectResult error', redirectErr);
           return {
             success: false,
             redirectHandled: true,
             error: formatFirebaseError(redirectErr, 'google'),
+            errorCode: redirectErr?.code || 'unknown',
           };
         }
 
-        const hadRedirectFlag =
-          typeof window !== 'undefined' &&
-          window.sessionStorage &&
-          window.sessionStorage.getItem('mg_google_redirect_in_flight') === 'true';
+        let hadRedirectFlag = false;
+        try {
+          hadRedirectFlag =
+            (typeof window !== 'undefined' &&
+              window.sessionStorage &&
+              window.sessionStorage.getItem('mg_google_redirect_in_flight') === 'true') ||
+            (typeof window !== 'undefined' &&
+              window.localStorage &&
+              window.localStorage.getItem('mg_google_redirect_in_flight') === 'true');
+        } catch (_) { }
 
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          try {
-            window.sessionStorage.removeItem('mg_google_redirect_in_flight');
-          } catch (e) {
-            // Ignore storage errors
+        // Clean up redirect flags
+        try {
+          if (typeof window !== 'undefined') {
+            window.sessionStorage?.removeItem('mg_google_redirect_in_flight');
+            window.localStorage?.removeItem('mg_google_redirect_in_flight');
           }
-        }
+        } catch (_) { }
 
         const firebaseUser = result?.user || (hadRedirectFlag ? auth.currentUser : null);
 
         if (!firebaseUser) {
+          if (hadRedirectFlag) {
+            // User went through the redirect flow, returned, but Firebase did not produce a user
+            const noUserErr = new Error(
+              'Sign-in was not completed or your browser blocked the authentication session. If using Safari or Chrome on mobile, ensure cross-site tracking is allowed or try using standard email sign-in.'
+            );
+            noUserErr.code = 'auth/no-user-returned';
+            console.error('[authService] Google redirect returned without user credentials (code: auth/no-user-returned).');
+            logSafeAuthDiagnostic('handleRedirectResult', 'no user in redirect result', noUserErr);
+            return {
+              success: false,
+              redirectHandled: true,
+              error: formatFirebaseError(noUserErr, 'google'),
+              errorCode: 'auth/no-user-returned',
+            };
+          }
           return { success: false, redirectHandled: false };
         }
 
@@ -597,12 +628,13 @@ export const authService = {
         if (mobile) {
           // On physical mobile devices (iOS Safari, Android Chrome), popups open in background tabs
           // that drop IndexedDB connection state ('Database is closing/hidden') or are blocked.
-          // Directly invoke full-page redirect for seamless mobile OAuth completion.
-          if (typeof window !== 'undefined' && window.sessionStorage) {
+          // Store flag in both sessionStorage and localStorage for iOS Safari lifecycle resilience.
+          if (typeof window !== 'undefined') {
             try {
-              window.sessionStorage.setItem('mg_google_redirect_in_flight', 'true');
+              window.sessionStorage?.setItem('mg_google_redirect_in_flight', 'true');
+              window.localStorage?.setItem('mg_google_redirect_in_flight', 'true');
             } catch (e) {
-              // Ignore sessionStorage error
+              // Ignore storage errors
             }
           }
           logSafeAuthDiagnostic('loginWithGoogle (mobile)', 'initiating full-page OAuth redirect');
@@ -625,11 +657,12 @@ export const authService = {
 
           if (isPopupBlocked) {
             logSafeAuthDiagnostic('loginWithGoogle (desktop)', 'popup blocked/unavailable, falling back to redirect', popupErr);
-            if (typeof window !== 'undefined' && window.sessionStorage) {
+            if (typeof window !== 'undefined') {
               try {
-                window.sessionStorage.setItem('mg_google_redirect_in_flight', 'true');
+                window.sessionStorage?.setItem('mg_google_redirect_in_flight', 'true');
+                window.localStorage?.setItem('mg_google_redirect_in_flight', 'true');
               } catch (e) {
-                // Ignore sessionStorage error
+                // Ignore storage errors
               }
             }
             await signInWithRedirect(auth, googleProvider, resolver);

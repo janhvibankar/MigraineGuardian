@@ -258,8 +258,26 @@ export const chatService = {
       // If gateway returns non-ok status or malformed response
       const status = response.status || 0;
       const isMalformed = response.ok && (!response.data || typeof response.data.answer !== 'string');
-      const errorKey = isMalformed ? 'chat.errorMalformedResponse' : getErrorKeyForStatus(status);
-      const errorText = translate(language, errorKey);
+      
+      const isWarming =
+        status === 503 ||
+        status === 504 ||
+        response.data?.serviceStatus === 'warming' ||
+        response.data?.error?.code === 'RAG_SERVICE_WARMING';
+
+      const errorKey = isMalformed
+        ? 'chat.errorMalformedResponse'
+        : isWarming
+        ? 'chat.serviceWarming'
+        : getErrorKeyForStatus(status);
+
+      const errorText = isWarming
+        ? (language === 'hi'
+            ? 'स्वास्थ्य सहायक सेवा सक्रिय हो रही है। कृपया कुछ सेकंड प्रतीक्षा करें...'
+            : language === 'mr'
+            ? 'आरोग्य सहाय्यक सेवा सुरू होत आहे. कृपया काही सेकंद थांबा...'
+            : 'Assistant service is waking up from idle state. Please wait a moment...')
+        : translate(language, errorKey);
 
       console.warn(`[chatService] API request returned status ${status}. ErrorKey: ${errorKey}`);
 
@@ -270,7 +288,10 @@ export const chatService = {
         language,
         sources: [],
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isError: true,
+        isError: !isWarming,
+        isWarming,
+        canRetry: isWarming || status === 429,
+        retryAfterMs: response.data?.retryAfterMs || 8000,
         errorKey,
       };
     } catch (error) {

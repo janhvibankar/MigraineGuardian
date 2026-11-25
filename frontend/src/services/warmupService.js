@@ -1,39 +1,121 @@
 import { apiClient } from './apiClient.js';
+import { auth } from '../config/firebase.js';
 
-let warmupTriggered = false;
-let lastWarmupTime = 0;
+let isPolling = false;
+let pollingTimer = null;
+let pollStartTime = 0;
+const MAX_POLL_DURATION_MS = 120000; // Poll for at most 2 minutes (~120s)
+const POLL_INTERVAL_MS = 10000; // Check every 10 seconds
+
+let mlOnline = false;
+let ragOnline = false;
+
+async function checkServiceHealth() {
+  const checks = [];
+
+  if (!mlOnline) {
+    checks.push(
+      apiClient
+        .get('/ml-health?timeout=8000', null, { bypassCache: true })
+        .then((res) => {
+          if (res.ok && res.data?.status === 'ok') {
+            mlOnline = true;
+            console.log('[WarmupService] ML prediction microservice is ONLINE.');
+          }
+        })
+        .catch(() => {})
+    );
+  }
+
+  if (!ragOnline) {
+    checks.push(
+      apiClient
+        .get('/chat-health?timeout=8000', null, { bypassCache: true })
+        .then((res) => {
+          if (res.ok && res.data?.status === 'ok') {
+            ragOnline = true;
+            console.log('[WarmupService] RAG Chatbot assistant service is ONLINE.');
+          }
+        })
+        .catch(() => {})
+    );
+  }
+
+  await Promise.allSettled(checks);
+}
+
+function stopPolling() {
+  if (pollingTimer) {
+    clearTimeout(pollingTimer);
+    pollingTimer = null;
+  }
+  isPolling = false;
+}
+
+function runPollingLoop() {
+  if (!isPolling) return;
+
+  const elapsed = Date.now() - pollStartTime;
+  if (elapsed >= MAX_POLL_DURATION_MS || (mlOnline && ragOnline)) {
+    console.log(
+      `[WarmupService] Polling loop completed after ${Math.round(elapsed / 1000)}s (ML=${mlOnline ? 'online' : 'warming'}, RAG=${ragOnline ? 'online' : 'warming'}).`
+    );
+    stopPolling();
+    return;
+  }
+
+  // Continue checking only while page is visible
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    pollingTimer = setTimeout(runPollingLoop, POLL_INTERVAL_MS);
+    return;
+  }
+
+  checkServiceHealth().finally(() => {
+    if (mlOnline && ragOnline) {
+      stopPolling();
+      return;
+    }
+    if (isPolling) {
+      pollingTimer = setTimeout(runPollingLoop, POLL_INTERVAL_MS);
+    }
+  });
+}
 
 /**
  * Triggers non-blocking background wake-up pings to:
  * 1. Express Backend Gateway: /health
- * 2. FastAPI ML Microservice: /ml-health?timeout=5000
+ * 2. FastAPI ML Microservice: /ml-health
  * 3. RAG Chatbot Service: /chat-health
  *
- * Runs strictly in the background without blocking UI render or navigation.
- * Bounded by debounce so rapid page switches do not spam Render endpoints.
- * Does NOT run 24/7 background cron tasks to conserve free tier hours.
+ * If either ML or RAG responds as warming/503/timeout, continues polling every ~10s
+ * for at most 2 minutes, ensuring services wake up smoothly in the background.
  */
 export function triggerBackgroundWarmup(force = false) {
-  const now = Date.now();
-  // Throttle warmup pings to at most once every 3 minutes
-  if (!force && warmupTriggered && now - lastWarmupTime < 180000) {
+  // Always ping the Express backend gateway once
+  apiClient.get('/health', null, { bypassCache: true }).catch(() => {});
+
+  if (force) {
+    mlOnline = false;
+    ragOnline = false;
+  }
+
+  if (mlOnline && ragOnline && !force) {
     return;
   }
-  warmupTriggered = true;
-  lastWarmupTime = now;
 
-  console.log('[WarmupService] Initiating parallel background service warm-up pings...');
+  if (isPolling) {
+    return;
+  }
 
-  Promise.allSettled([
-    apiClient.get('/health', null, { bypassCache: true }).catch(() => {}),
-    apiClient.get('/ml-health?timeout=5000', null, { bypassCache: true }).catch(() => {}),
-    apiClient.get('/chat-health', null, { bypassCache: true }).catch(() => {}),
-  ]).then((results) => {
-    const statuses = results.map((r, i) => {
-      const name = ['Backend', 'ML Service', 'RAG Chatbot'][i];
-      const ok = r.status === 'fulfilled' && r.value && r.value.ok;
-      return `${name}: ${ok ? 'online' : 'warming/pending'}`;
-    });
-    console.log('[WarmupService] Service states:', statuses.join(' | '));
-  }).catch(() => {});
+  isPolling = true;
+  pollStartTime = Date.now();
+  console.log('[WarmupService] Starting smart warmup & readiness monitoring loop...');
+
+  checkServiceHealth().finally(() => {
+    if (mlOnline && ragOnline) {
+      isPolling = false;
+      return;
+    }
+    pollingTimer = setTimeout(runPollingLoop, POLL_INTERVAL_MS);
+  });
 }

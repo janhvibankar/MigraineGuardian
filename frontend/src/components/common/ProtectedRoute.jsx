@@ -9,12 +9,17 @@ import { Loader2 } from 'lucide-react';
 export function ProtectedRoute() {
   const location = useLocation();
   const [authState, setAuthState] = useState(() => {
+    // If a Google redirect is in flight, remain in loading state so route guard does not eject prematurely
+    const redirectInFlight =
+      (typeof window !== 'undefined' && window.sessionStorage?.getItem('mg_google_redirect_in_flight') === 'true') ||
+      (typeof window !== 'undefined' && window.localStorage?.getItem('mg_google_redirect_in_flight') === 'true');
+
     const isAuthed = Boolean(
       (auth && auth.currentUser) ||
       storageService.getItem('migraineguardian_authenticated')
     );
     return {
-      isLoading: !isAuthed && Boolean(auth),
+      isLoading: redirectInFlight || (!isAuthed && Boolean(auth)),
       isAuthenticated: isAuthed,
     };
   });
@@ -22,25 +27,53 @@ export function ProtectedRoute() {
   useEffect(() => {
     let isMounted = true;
 
-    if (!auth) {
-      setAuthState({
-        isLoading: false,
-        isAuthenticated: false,
+    async function checkAuthWithRedirect() {
+      if (!auth) {
+        if (isMounted) {
+          setAuthState({
+            isLoading: false,
+            isAuthenticated: false,
+          });
+        }
+        return;
+      }
+
+      // Check if redirect result is resolving in background
+      try {
+        const res = await authService.handleRedirectResult();
+        if (!isMounted) return;
+        if (res && res.success && res.user) {
+          setAuthState({
+            isLoading: false,
+            isAuthenticated: true,
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('[ProtectedRoute] Redirect check error:', err);
+      }
+
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        if (!isMounted) return;
+        setAuthState({
+          isLoading: false,
+          isAuthenticated: Boolean(user),
+        });
       });
-      return;
+
+      return unsubscribe;
     }
 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (!isMounted) return;
-      setAuthState({
-        isLoading: false,
-        isAuthenticated: Boolean(user),
-      });
+    let unsubFn;
+    checkAuthWithRedirect().then((fn) => {
+      unsubFn = fn;
     });
 
     return () => {
       isMounted = false;
-      unsubscribe();
+      if (typeof unsubFn === 'function') {
+        unsubFn();
+      }
     };
   }, []);
 

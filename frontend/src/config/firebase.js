@@ -14,9 +14,22 @@ const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.met
 
 const rawApiKey = env.VITE_FIREBASE_API_KEY;
 
+// On localhost / dev environments, retain default firebaseapp.com domain.
+// In production, allow VITE_FIREBASE_AUTH_DOMAIN to point to custom app domain or custom auth subdomain.
+const isLocalhost =
+  typeof window !== 'undefined' &&
+  (window.location?.hostname === 'localhost' ||
+    window.location?.hostname === '127.0.0.1' ||
+    window.location?.hostname === '[::1]');
+
+const defaultAuthDomain = "migraineguardian.firebaseapp.com";
+const resolvedAuthDomain = isLocalhost
+  ? defaultAuthDomain
+  : (env.VITE_FIREBASE_AUTH_DOMAIN || defaultAuthDomain);
+
 const firebaseConfig = {
   apiKey: rawApiKey || "AIzaSyDummyApiKeyForLocalDevelopmentOnly",
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "migraineguardian.firebaseapp.com",
+  authDomain: resolvedAuthDomain,
   projectId: env.VITE_FIREBASE_PROJECT_ID || "migraineguardian",
   storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "migraineguardian.appspot.com",
   messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",

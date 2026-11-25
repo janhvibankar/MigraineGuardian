@@ -12,8 +12,8 @@ export function getRagServiceUrl() {
   return clean;
 }
 
-const RAG_TIMEOUT_MS = 45000;
-const RAG_TOTAL_BUDGET_MS = 55000;
+const RAG_TIMEOUT_MS = 85000;
+const RAG_TOTAL_BUDGET_MS = 90000;
 const activeChatRequests = new Map();
 
 export async function listChatSessionsController(req, res, next) {
@@ -195,10 +195,11 @@ export async function proxyChatMessageController(req, res, next) {
           if (!ragRes.ok) {
             console.warn(`[RAG Proxy] External RAG returned HTTP ${ragRes.status}`);
 
-            // Only retry transient 502/503/504 (cold-start spin-up on Render free tier)
-            const isTransient = [502, 503, 504].includes(ragRes.status);
+            // Retry transient spin-up/cold-start statuses on Render free tier (502, 503, 504, 408, 429)
+            // Note: Render's free tier gateway returns 429 or 502/503 during container spin-up when waking
+            const isTransient = [408, 429, 502, 503, 504, 520, 521, 522, 523, 524].includes(ragRes.status);
             if (!isTransient) {
-              // Non-retryable permanent errors (400, 401, 403, 404, 422, 429) fail immediately
+              // Non-retryable permanent client errors (400, 401, 403, 404, 422) fail immediately
               return res.status(ragRes.status).json({
                 success: false,
                 error: {
@@ -210,7 +211,7 @@ export async function proxyChatMessageController(req, res, next) {
             }
 
             wasWarming = true;
-            const delay = Math.min(2000 * Math.pow(1.5, attempt - 1), 5000);
+            const delay = Math.min(2500 * Math.pow(1.5, attempt - 1), 6000);
             if (Date.now() - startTime + delay >= RAG_TOTAL_BUDGET_MS - 2000) {
               break;
             }
@@ -259,15 +260,18 @@ export async function proxyChatMessageController(req, res, next) {
       }
 
       const isTimeout = lastError?.name === 'AbortError' && !wasWarming;
-      return res.status(isTimeout ? 504 : 503).json({
+      return res.status(503).json({
         success: false,
+        serviceStatus: 'warming',
+        canRetry: true,
+        retryAfterMs: 8000,
         error: {
           code: wasWarming ? 'RAG_SERVICE_WARMING' : (isTimeout ? 'RAG_SERVICE_TIMEOUT' : 'RAG_SERVICE_UNAVAILABLE'),
           message: wasWarming
-            ? 'Assistant service is warming up. Please send your message again shortly.'
+            ? 'Assistant service is waking up from idle state. Please wait a moment while it finishes booting.'
             : (isTimeout
-              ? 'Assistant request timed out. Please try again.'
-              : 'Unable to connect to assistant service. Please try again.'),
+              ? 'Assistant request timed out during startup. Please try again in a moment.'
+              : 'Assistant service is warming up. Please try again shortly.'),
         },
       });
     } finally {

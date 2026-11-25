@@ -9,6 +9,9 @@ import { notFoundHandler, globalErrorHandler } from './middleware/errorHandler.j
 
 const app = express();
 
+// Enable trust proxy for Render reverse-proxy environment
+app.set('trust proxy', 1);
+
 // Disable default ETag caching to prevent 304 Not Modified on dynamic authenticated API endpoints
 app.set('etag', false);
 
